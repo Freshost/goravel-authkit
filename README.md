@@ -60,16 +60,21 @@ go get github.com/freshost/goravel-auth
 ./artisan auth:create-user --email=admin@example.com --password=change-me
 ```
 
-`package:install` registers `auth.ServiceProvider` into your app and writes the
-config files (`config/auth.go` — the session `admin` guard, `config/authkit.go`
-— package settings, `config/hashing.go` — bcrypt cost 12). You don't append
-migrations or register routes by hand — the provider does it at boot.
+`package:install` makes four small, additive edits to your app:
 
-> **Already have a `config/auth.go` / other guards?** `package:install`
-> overwrites those config files, which is right for a fresh app but not for one
-> with existing auth. In that case follow the
-> [adoption skill](.claude/skills/adopt-goravel-auth/SKILL.md) (merge the guard,
-> migrate `admin_users → users`) instead of the plain install.
+1. registers `auth.ServiceProvider` in `bootstrap/providers.go`;
+2. writes `config/authkit.go` (the package's own settings file);
+3. adds a session `admin` guard + `users` orm provider into your existing
+   `config/auth.go` (your other guards are left untouched);
+4. sets bcrypt cost 12 in your existing `config/hashing.go`.
+
+You don't append migrations or register routes by hand — the provider does it at
+boot.
+
+> **Existing auth already?** The install is additive, but if your app already has
+> an `admin` guard, a `users` table, or its own login code, follow the
+> [adoption skill](.claude/skills/adopt-goravel-auth/SKILL.md) (reconcile the
+> guard, migrate `admin_users → users`) instead of the plain install.
 
 For local development before the repo is public, add a `replace` directive
 (`replace github.com/freshost/goravel-auth => ../goravel-auth`) and register the

@@ -18,12 +18,19 @@ That's the whole integration. `auth:create-user` also reads `ADMIN_EMAIL` /
 
 ### What `package:install` does
 
-1. Registers `auth.ServiceProvider` into your provider list (`bootstrap/providers.go`).
-2. Writes three config files into your app's `config/`:
-   - **`config/auth.go`** — the session `admin` guard → `users` ORM provider.
-   - **`config/authkit.go`** — package settings (route prefix, rate limit,
-     feature toggles; see [configuration](configuration.md)).
-   - **`config/hashing.go`** — bcrypt cost 12.
+It makes four small, **additive** edits (it does not overwrite your existing
+guards or hashing settings):
+
+1. Registers `auth.ServiceProvider` into `bootstrap/providers.go`.
+2. Writes a new **`config/authkit.go`** — package settings (route prefix, rate
+   limit, feature toggles; see [configuration](configuration.md)).
+3. Adds a session **`admin` guard** + a **`users` orm provider** into your
+   existing `config/auth.go` (via `modify.AddConfig`, leaving other guards alone).
+4. Sets **bcrypt `rounds: 12`** in your existing `config/hashing.go`.
+
+> Both `config/auth.go` and `config/hashing.go` ship in a fresh Goravel app, so
+> the install just edits them in place. If they are missing, copy the guard /
+> bcrypt-12 settings from this README by hand.
 
 ### What the ServiceProvider does at boot
 
@@ -35,7 +42,7 @@ The provider wires everything else itself — you do **not** edit
 - **Routes** — mounts the auth + user-management endpoints from the `authkit.*`
   config (via `app.MakeRoute()`).
 - **Commands** — registers `auth:create-user`.
-- **Publish** — exposes the config files for `./artisan vendor:publish --tag=authkit`.
+- **Publish** — exposes `config/authkit.go` for `./artisan vendor:publish --tag=authkit`.
 
 After install you have `POST /api/v1/auth/login`, `/auth/me`, `/auth/logout`,
 `/auth/password`, and the `/users` CRUD. See the [API reference](api-reference.md).
@@ -65,8 +72,10 @@ import auth "github.com/freshost/goravel-auth"
 // ... &auth.ServiceProvider{},
 ```
 
-Then add `config/auth.go`, `config/authkit.go`, `config/hashing.go` (copy from
-the package's `setup/config/`), `./artisan migrate`, and create the admin.
+Then do by hand what `package:install` would have done: add an `admin` session
+guard → `users` orm provider to `config/auth.go`, set bcrypt `rounds: 12` in
+`config/hashing.go`, and add a `config/authkit.go` (copy from the package's
+`setup/config/authkit.go`). Then `./artisan migrate` and create the admin.
 
 The package exposes **only** `auth.ServiceProvider`; everything else
 (migrations, routes, controllers, services) lives under `internal/` and is not

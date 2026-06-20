@@ -26,8 +26,9 @@ guarantees, the operator responsibilities, and the known v1 limitations.
 
 ## Operator responsibilities (you must configure these)
 
-- **`config/hashing.go` = bcrypt cost 12.** Required for hashing to work and to
-  remain compatible with existing `$2a$12$` hashes.
+- **bcrypt cost 12.** `package:install` sets `bcrypt.rounds: 12` in
+  `config/hashing.go`; keep it (required for hashing to work and to stay
+  compatible with existing `$2a$12$` hashes).
 - **`http.trusted_proxies`.** The rate-limiter and the audit log key on
   `ctx.Request().Ip()`, which honours `X-Forwarded-For`. Behind a proxy/CDN you
   **must** set the trusted-proxy list, or an attacker can bypass the rate limit

@@ -75,11 +75,10 @@ func (r *ServiceProvider) Boot(app foundation.Application) {
 		commands.NewCreateUser(),
 	})
 
-	// Publishable config (the setup.go installer writes these too; this enables
-	// `./artisan vendor:publish --tag=authkit` as an alternative).
+	// Publishable config — `./artisan vendor:publish --tag=authkit` writes
+	// config/authkit.go (the guard + hashing tweaks are applied by setup.go on
+	// package:install, not published, so they never clobber the app's files).
 	app.Publishes(PackageName, map[string]string{
-		"setup/config/auth.go":    app.ConfigPath("auth.go"),
 		"setup/config/authkit.go": app.ConfigPath("authkit.go"),
-		"setup/config/hashing.go": app.ConfigPath("hashing.go"),
 	}, "authkit")
 }
