@@ -30,6 +30,24 @@ Plus: session-fixation protection, `password_changed_at` multi-session
 invalidation, an `audit_logs` table + writer, and an `auth:create-user` artisan
 command for bootstrapping the first admin.
 
+## Documentation
+
+- [Installation](docs/installation.md) — full wiring (provider, config,
+  migrations, routes, first admin, SDK).
+- [Configuration](docs/configuration.md) — `authkit.*` keys, `routes.Options`,
+  feature toggles, the `RequireRole` gate.
+- [API reference](docs/api-reference.md) — endpoints, request/response shapes,
+  error codes, operation ids.
+- [Security model](docs/security.md) — guarantees, operator responsibilities,
+  v1 limitations, audit actions.
+- [Architecture](docs/architecture.md) — layering, the canonical model, Goravel
+  integration, the SDK contract loop.
+
+**Adopting into an existing app?** There is a bundled agent skill at
+[`.claude/skills/adopt-goravel-auth/`](.claude/skills/adopt-goravel-auth/SKILL.md)
+— copy it into your project's `.claude/skills/` and an AI agent can perform the
+swap (including the `admin_users → users` data migration) step by step.
+
 ## Install
 
 ```bash
