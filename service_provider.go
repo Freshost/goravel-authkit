@@ -1,11 +1,14 @@
 // Package auth is the root of the goravel-auth package: a batteries-included,
 // session-based authentication + user-management module for Goravel apps.
 //
-// A consuming app installs it with `./artisan package:install
-// github.com/freshost/goravel-auth`, which registers ServiceProvider into the
-// app's provider list. The app then wires the package routes via
-// routes.Register and appends migrations.Migrations() to its migration
-// registry. Behaviour is tuned via the optional authkit.* config (see README).
+// Install is a single step:
+//
+//	./artisan package:install github.com/freshost/goravel-auth
+//
+// which registers this ServiceProvider and writes the config files
+// (config/auth.go, config/authkit.go, config/hashing.go). The provider then
+// registers the migrations, the HTTP routes, and the artisan commands itself —
+// the consuming app does not wire anything by hand. See the README.
 package auth
 
 import (
@@ -14,7 +17,12 @@ import (
 	"github.com/goravel/framework/contracts/foundation"
 
 	"github.com/freshost/goravel-auth/console/commands"
+	"github.com/freshost/goravel-auth/migrations"
+	"github.com/freshost/goravel-auth/routes"
 )
+
+// PackageName is the module path, used as the first argument to Publishes.
+const PackageName = "github.com/freshost/goravel-auth"
 
 // Name is the human-readable module name.
 const Name = "Auth"
@@ -22,13 +30,13 @@ const Name = "Auth"
 // App holds the application instance for package-internal resolution.
 var App foundation.Application
 
-// ServiceProvider registers the goravel-auth artisan commands and boots the
-// package. Route + migration wiring is explicit in the consuming app (see
-// routes.Register and migrations.Migrations).
+// ServiceProvider registers the goravel-auth migrations, routes, commands, and
+// publishable config. Everything is wired here so the consuming app only has to
+// register this provider (done automatically by `package:install`).
 type ServiceProvider struct{}
 
 // Relationship declares the framework services the package depends on so it
-// boots after them. It provides no container bindings of its own.
+// boots after them. It registers no container bindings of its own.
 func (r *ServiceProvider) Relationship() binding.Relationship {
 	return binding.Relationship{
 		Bindings: []string{},
@@ -37,6 +45,8 @@ func (r *ServiceProvider) Relationship() binding.Relationship {
 			binding.Orm,
 			binding.Hash,
 			binding.Auth,
+			binding.Schema,
+			binding.Route,
 		},
 		ProvideFor: []string{},
 	}
@@ -47,9 +57,29 @@ func (r *ServiceProvider) Register(app foundation.Application) {
 	App = app
 }
 
-// Boot registers the package artisan commands.
+// Boot registers everything the package ships: migrations, routes, artisan
+// commands, and the publishable config (for `vendor:publish`).
 func (r *ServiceProvider) Boot(app foundation.Application) {
+	// Migrations — added to the schema registry so `artisan migrate` runs them.
+	if schema := app.MakeSchema(); schema != nil {
+		schema.Register(migrations.Migrations())
+	}
+
+	// Routes — mounted onto the app router from the authkit.* config.
+	if router := app.MakeRoute(); router != nil {
+		routes.Register(router, routes.OptionsFromConfig())
+	}
+
+	// Artisan commands.
 	app.Commands([]console.Command{
 		commands.NewCreateUser(),
 	})
+
+	// Publishable config (the setup.go installer writes these too; this enables
+	// `./artisan vendor:publish --tag=authkit` as an alternative).
+	app.Publishes(PackageName, map[string]string{
+		"setup/config/auth.go":    app.ConfigPath("auth.go"),
+		"setup/config/authkit.go": app.ConfigPath("authkit.go"),
+		"setup/config/hashing.go": app.ConfigPath("hashing.go"),
+	}, "authkit")
 }

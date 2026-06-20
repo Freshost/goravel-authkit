@@ -2,125 +2,96 @@
 
 `goravel-auth` is a backend Go module for [Goravel](https://www.goravel.dev)
 apps (tested against Goravel **v1.17.x**, Go **1.25+**, PostgreSQL). It owns the
-`users` and `audit_logs` tables, so adopt it on a fresh schema or migrate your
-existing one (see [Adoption](#adopting-into-an-existing-app)).
+`users` and `audit_logs` tables.
 
-## 1. Add the dependency
-
-Once published:
+## Quick install (fresh app)
 
 ```bash
 go get github.com/freshost/goravel-auth
-```
-
-During local development (before the repo is public), use a `replace` directive
-in your app's `go.mod` pointing at a local checkout:
-
-```
-require github.com/freshost/goravel-auth v0.0.0
-replace github.com/freshost/goravel-auth => ../goravel-auth
-```
-
-then `go mod tidy`.
-
-## 2. Register the service provider
-
-Automatic (writes the provider into your provider list and runs publishing):
-
-```bash
 ./artisan package:install github.com/freshost/goravel-auth
+./artisan migrate
+./artisan auth:create-user --email=admin@example.com --password=change-me
 ```
 
-Or manually add it to `bootstrap/providers.go` (bootstrap setup) or
-`config/app.go` (classic setup):
+That's the whole integration. `auth:create-user` also reads `ADMIN_EMAIL` /
+`ADMIN_PASSWORD` env vars if the flags are omitted.
+
+### What `package:install` does
+
+1. Registers `auth.ServiceProvider` into your provider list (`bootstrap/providers.go`).
+2. Writes three config files into your app's `config/`:
+   - **`config/auth.go`** — the session `admin` guard → `users` ORM provider.
+   - **`config/authkit.go`** — package settings (route prefix, rate limit,
+     feature toggles; see [configuration](configuration.md)).
+   - **`config/hashing.go`** — bcrypt cost 12.
+
+### What the ServiceProvider does at boot
+
+The provider wires everything else itself — you do **not** edit
+`bootstrap/migrations.go` or any routes file:
+
+- **Migrations** — registers `CreateUsers` + `CreateAuditLogs` via the schema
+  facade, so `./artisan migrate` runs them.
+- **Routes** — mounts the auth + user-management endpoints from the `authkit.*`
+  config (via `app.MakeRoute()`).
+- **Commands** — registers `auth:create-user`.
+- **Publish** — exposes the config files for `./artisan vendor:publish --tag=authkit`.
+
+After install you have `POST /api/v1/auth/login`, `/auth/me`, `/auth/logout`,
+`/auth/password`, and the `/users` CRUD. See the [API reference](api-reference.md).
+
+## Production checklist
+
+- Serve over **HTTPS**; set `session.secure=true` and a `session.same_site`.
+- If behind a proxy/CDN, set `http.trusted_proxies` (rate-limit + audit IP
+  depend on it — see [security](security.md)).
+- Regenerate your SDK if you use the hey-api/OpenAPI loop (`make swagger` +
+  `make generate-api`); run swag with `--parseDependency --parseInternal` so the
+  package's annotations are scanned.
+
+## Local development (repo not yet public)
+
+Add a `replace` directive and register the provider manually:
+
+```
+// go.mod
+require github.com/freshost/goravel-auth v0.0.0
+replace github.com/freshost/goravel-auth => /absolute/path/to/goravel-auth
+```
 
 ```go
+// bootstrap/providers.go
 import auth "github.com/freshost/goravel-auth"
-
-// providers list
-&auth.ServiceProvider{},
+// ... &auth.ServiceProvider{},
 ```
 
-The provider registers the `auth:create-user` artisan command.
+Then add `config/auth.go`, `config/authkit.go`, `config/hashing.go` (copy from
+the package's `setup/config/`), `./artisan migrate`, and create the admin.
 
-## 3. Required Goravel config
+## Manual wiring (advanced / opt-out)
 
-`goravel-auth` relies on three standard Goravel config files. Make sure your app
-has them:
-
-- **`config/hashing.go`** — **bcrypt, cost 12** (the package hashes via the Hash
-  facade; without this, login and password changes cannot hash/verify, and it
-  must be cost 12 to stay compatible with existing `$2a$12$` hashes).
-- **`config/auth.go`** — a **session** guard named `admin` (or your chosen guard
-  name; see [configuration](configuration.md)). Example:
-  ```go
-  config.Add("auth", map[string]any{
-      "defaults": map[string]any{"guard": "admin"},
-      "guards": map[string]any{
-          "admin": map[string]any{"driver": "session", "provider": "users"},
-      },
-      "providers": map[string]any{
-          "users": map[string]any{"driver": "orm"},
-      },
-  })
-  ```
-- **`config/session.go`** — httpOnly cookie; set `secure=true` and a
-  `same_site` of `lax`/`strict` in production.
-
-If you run behind a proxy/CDN, also set `http.trusted_proxies` (see
-[security](security.md)).
-
-## 4. Register the migrations
-
-Append the package migrations to your registry in `bootstrap/migrations.go`:
+The provider is the supported path, but the building blocks are exported if you
+need custom control (e.g. a non-standard route mount, or controlling migration
+order during an `admin_users → users` adoption):
 
 ```go
 import (
-    "github.com/goravel/framework/contracts/database/schema"
     authmigrations "github.com/freshost/goravel-auth/migrations"
+    authroutes "github.com/freshost/goravel-auth/routes"
 )
 
-func Migrations() []schema.Migration {
-    return append(authmigrations.Migrations(),
-        // ...your app migrations
-    )
-}
+// migrations — append to your registry instead of letting the provider register them
+facades.Schema().Register(authmigrations.Migrations())
+
+// routes — mount explicitly with your own Options
+o := authroutes.OptionsFromConfig()
+o.EnableUserManagement = false
+authroutes.Register(facades.Route(), o)
 ```
-
-## 5. Register the routes
-
-Call `routes.Register` from your own routes file (this keeps the package
-controllers in `main.go`'s import graph so `swag` scans their annotations):
-
-```go
-import authroutes "github.com/freshost/goravel-auth/routes"
-
-// In routes/api.go (or wherever you wire routes):
-authroutes.Register(facades.Route(), authroutes.OptionsFromConfig())
-```
-
-`OptionsFromConfig()` reads the `authkit.*` config keys; or build
-`authroutes.Options{...}` explicitly. See [configuration](configuration.md).
-
-## 6. Migrate and create the first admin
-
-```bash
-./artisan migrate
-./artisan auth:create-user --email=admin@example.com --password=change-me-please
-# or via env: ADMIN_EMAIL / ADMIN_PASSWORD
-```
-
-## 7. Regenerate the SDK (if you use the hey-api/OpenAPI loop)
-
-The controllers carry Swagger annotations (`@ID` = camelCase = generated TS SDK
-function name). Run your `make swagger` / `make generate-api` so the frontend
-gets `login`, `getMe`, `changePassword`, `listUsers`, etc. Ensure your swag
-invocation parses dependencies (e.g. `swag init --parseDependency
---parseInternal`) so the package's annotations are picked up.
 
 ## Adopting into an existing app
 
-If your app already has an auth/users implementation, follow the
+If your app already has auth/users, **do not** run the plain install (it would
+overwrite your `config/auth.go`). Follow the
 [adoption skill](../.claude/skills/adopt-goravel-auth/SKILL.md), which covers
-swapping the old code, the `admin_users → users` data migration, and end-to-end
-verification.
+merging the guard, the `admin_users → users` data migration, and verification.

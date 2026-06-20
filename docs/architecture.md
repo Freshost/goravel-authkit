@@ -37,22 +37,32 @@ Auth.js-shaped (nullable `name`/`image`/`email_verified`, nullable
 `password_hash` for a future OAuth flow), with `password_changed_at` for session
 invalidation and a `role` string (used by the optional `RequireRole`).
 
-## Goravel integration points
+The package follows the Goravel
+[package-development](https://www.goravel.dev/digging-deeper/package-development.html)
+model: registering the ServiceProvider is the entire integration.
 
-- **ServiceProvider** (`auth.ServiceProvider`) registers the `auth:create-user`
-  command in `Boot`; it declares its framework dependencies via `Relationship()`
-  (Config, Orm, Hash, Auth) so it boots after them. It registers no container
-  bindings of its own — services are wired explicitly in `routes.Register`.
-- **Migrations** are exported as `migrations.Migrations() []schema.Migration`,
-  which the app appends to its own registry. They are idempotent (guard on
-  `HasTable`).
-- **Routes** are registered by the app calling `routes.Register(facades.Route(),
-  opts)`. This is deliberate: it keeps the package controllers in the app's
-  `main.go` import graph so `swag` scans their annotations into the OpenAPI
-  contract (and thus the generated TS SDK). An auto-registration via
-  `app.MakeRoute()` was avoided for that reason.
-- **Config** is optional. `routes.OptionsFromConfig()` reads `authkit.*` keys
-  with safe fallbacks; `routes.Register` also defaults every zero-valued Option.
+- **ServiceProvider** (`auth.ServiceProvider`) does all wiring in `Boot`:
+  registers the migrations (`app.MakeSchema().Register(...)`), mounts the routes
+  (`app.MakeRoute()` → `routes.Register(...)` from config), registers the
+  `auth:create-user` command (`app.Commands(...)`), and exposes the config for
+  `vendor:publish` (`app.Publishes(...)`). It declares its framework
+  dependencies via `Relationship()` (Config, Orm, Hash, Auth, Schema, Route) so
+  it boots after them, and registers no container bindings of its own.
+- **`setup/setup.go`** implements `package:install`: it registers the provider
+  (`modify.RegisterProvider`) and writes the config files (`config/auth.go`,
+  `config/authkit.go`, `config/hashing.go`) via `modify.File().Overwrite()` from
+  the templates in `setup/config/`.
+- **Migrations** are `migrations.Migrations() []schema.Migration` (idempotent,
+  guarded on `HasTable`). The provider self-registers them; the function stays
+  exported for the advanced opt-out (controlling order during an
+  `admin_users → users` adoption).
+- **Routes** are mounted by the provider from `routes.OptionsFromConfig()`.
+  `routes.Register` stays exported for custom mounting. Because the provider
+  imports the controllers, they are in the app's `main.go` import graph, so
+  `swag --parseDependency --parseInternal` still scans their annotations into the
+  OpenAPI contract (and thus the generated TS SDK).
+- **Config** is optional at runtime (safe fallbacks everywhere), but
+  `package:install` writes `config/authkit.go` so apps have a tunable file.
 
 ## The SDK contract loop
 

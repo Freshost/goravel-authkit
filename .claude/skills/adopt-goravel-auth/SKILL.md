@@ -1,197 +1,141 @@
 ---
 name: adopt-goravel-auth
-description: Step-by-step guide for an AI agent to adopt the `github.com/freshost/goravel-auth` package into a Goravel (v1.17.x) + Vite/React app — replacing the app's hand-rolled login/logout/session/change-password/user-management with the shared package. Covers dependency wiring, the required Goravel config (bcrypt cost 12, session guard, trusted proxies), migration registration, route registration, swapping out the old auth code, the `admin_users → users` data migration, SDK regeneration, and end-to-end verification. Use when a project wants to switch its bespoke auth to goravel-auth, or when scaffolding auth into a new app in this stack.
+description: Step-by-step guide for an AI agent to adopt the `github.com/freshost/goravel-auth` package into a Goravel (v1.17.x) + Vite/React app — replacing the app's hand-rolled login/logout/session/change-password/user-management with the shared package. Covers the one-step install for fresh apps, the careful path for apps that already have auth (merge the guard instead of overwriting config, `admin_users → users` data reshape, removing the old code), SDK regeneration, and end-to-end verification. Use when a project wants to switch its bespoke auth to goravel-auth, or when scaffolding auth into a new app in this stack.
 ---
 
 # Adopting goravel-auth into a Goravel app
 
-This skill is for an agent working **inside a consuming Goravel + Vite/React
-project** (not inside the goravel-auth repo). It replaces the project's own auth
-with the shared package. Read the package docs alongside this:
-`docs/installation.md`, `docs/configuration.md`, `docs/security.md`,
-`docs/api-reference.md`.
+For an agent working **inside a consuming Goravel + Vite/React project**. Read
+the package docs alongside this: `docs/installation.md`, `docs/configuration.md`,
+`docs/security.md`, `docs/api-reference.md`.
 
 The package **owns the `users` and `audit_logs` tables** and a canonical `User`
-model. There is no model extensibility — the app conforms to the package shape.
+model — there is no model extensibility, the app conforms to the package shape.
+Registering `auth.ServiceProvider` is the whole integration: the provider
+registers the migrations, routes, and commands itself. The only question is how
+to get there without clobbering existing auth.
 
-## Before you start — assess the target
+## Decide the scenario first
 
-Run these and read the results before changing anything:
+- **Fresh app** (no existing auth, no `users`/`admin_users` table) → use
+  [Path A](#path-a--fresh-app). One command.
+- **Existing auth** (already has a user table, a guard, login code) → use
+  [Path B](#path-b--existing-app). `package:install` would **overwrite** your
+  `config/auth.go`, so do it carefully.
 
-1. Confirm Goravel **v1.17.x** in `go.mod` (`github.com/goravel/framework`).
-2. Find the existing auth: `grep -rl "Guard(" app/ routes/` and locate the auth
-   controller, service, middleware, the user model + table, and the routes.
-3. Decide the **migration scenario**:
-   - **A. Fresh / already `users`** — no users table yet, or a `users` table that
-     already matches the canonical columns (e.g. an Auth.js-shaped schema). Easy.
-   - **B. Existing `admin_users` (or other shape)** — needs a data migration to
-     rename/reshape into `users`. See [Step 6B](#step-6b-data-migration-for-an-existing-table).
-4. Note the existing **route paths** and **SDK operation ids** the frontend uses
-   (e.g. `/admin-users` + `listAdminUsers`) — they will change to the package's
-   (`/users` + `listUsers`).
+Always work on a branch.
 
-Make a branch. Do not work on the default branch.
-
-## Step 1 — Add the dependency
-
-Published:
+## Path A — fresh app
 
 ```bash
 go get github.com/freshost/goravel-auth
-```
-
-Local dev (repo not yet public) — add to `go.mod` and `go mod tidy`:
-
-```
-require github.com/freshost/goravel-auth v0.0.0
-replace github.com/freshost/goravel-auth => /absolute/path/to/goravel-auth
-```
-
-## Step 2 — Register the provider
-
-```bash
 ./artisan package:install github.com/freshost/goravel-auth
+./artisan migrate
+./artisan auth:create-user --email=admin@example.com --password=change-me
 ```
 
-or manually add `&auth.ServiceProvider{}` (import
-`auth "github.com/freshost/goravel-auth"`) to `bootstrap/providers.go` or
-`config/app.go`.
+`package:install` registers the provider and writes `config/auth.go`,
+`config/authkit.go`, `config/hashing.go`. The provider registers migrations +
+routes + the command at boot. Done — verify with [Step V](#step-v--verify).
 
-## Step 3 — Ensure the required config
+## Path B — existing app
 
-- **`config/hashing.go`** must select **bcrypt, cost 12**. Verify it exists; if
-  the app hashed elsewhere (e.g. bcrypt directly), this keeps existing
-  `$2a$12$` hashes verifiable.
-- **`config/auth.go`** must define a **session** guard whose name matches
-  `authkit.guard` (default `admin`) → an `orm` provider:
+### B1. Add the dependency + register the provider manually
+
+Do **not** run `package:install` (it overwrites config). Add the module
+(`go get`, or a `replace` directive for local dev) and add the provider by hand:
+
+```go
+// bootstrap/providers.go
+import auth "github.com/freshost/goravel-auth"
+// ... &auth.ServiceProvider{},
+```
+
+### B2. Reconcile config (merge, don't overwrite)
+
+- **`config/auth.go`** — ensure a **session** guard whose name matches
+  `authkit.guard` (default `admin`) → an `orm` provider named `users`:
   ```go
   "guards":    map[string]any{"admin": map[string]any{"driver": "session", "provider": "users"}},
   "providers": map[string]any{"users": map[string]any{"driver": "orm"}},
   ```
-- **`config/session.go`** — httpOnly; production `secure=true`, `same_site` set.
-- If behind a proxy/CDN, set **`http.trusted_proxies`** (rate-limit + audit IP
-  depend on it — see `docs/security.md`).
-- Optionally add **`config/authkit.go`** to tune prefix/guard/min-password/
-  rate-limit/feature toggles (see `docs/configuration.md`).
+  Merge this into your existing guards — don't drop other guards.
+- **`config/hashing.go`** — must be **bcrypt cost 12** (keeps existing `$2a$12$`
+  hashes verifiable). Copy from the package's `setup/config/hashing.go` if absent.
+- **`config/authkit.go`** — optional; copy from `setup/config/authkit.go` to tune
+  prefix / rate-limit / feature toggles. For a single-admin app set
+  `features.user_management = false`.
+- If behind a proxy/CDN, set `http.trusted_proxies` (see `docs/security.md`).
 
-## Step 4 — Register the migrations
+### B3. Reshape the existing table to `users` BEFORE the first migrate
 
-In `bootstrap/migrations.go`, append the package migrations. **Order matters**
-for scenario B (see Step 6B):
+The provider auto-registers `CreateUsers`, which is guarded by
+`HasTable("users")` — so if `users` already exists in the canonical shape,
+`CreateUsers` no-ops. Migrations run in **registration order**, and the
+provider's registration vs your app's is not ordered reliably, so the safe move
+is to reshape **before** running `migrate` (a one-off SQL step or a script),
+not as an interleaved migration.
 
-```go
-import authmigrations "github.com/freshost/goravel-auth/migrations"
+For an existing `admin_users` table (idempotent SQL — adjust to your real
+columns; existing bcrypt `$2a$12$` hashes stay valid, do NOT re-hash):
 
-func Migrations() []schema.Migration {
-    return append(authmigrations.Migrations(),
-        // ...the app's own (non-auth) migrations
-    )
-}
+```sql
+ALTER TABLE admin_users RENAME TO users;
+ALTER TABLE users RENAME COLUMN password TO password_hash;
+ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified timestamptz;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS image text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS role text NOT NULL DEFAULT 'admin';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
 ```
 
-If the app has its own `create_users` / `create_admin_users` migration, **remove
-it** (the package owns that schema now) — unless you keep it for the rename in 6B.
+Canonical columns: `id (uuid pk)`, `name text null`, `email text unique`,
+`email_verified timestamptz null`, `image text null`, `password_hash text null`,
+`password_changed_at timestamptz`, `role text default 'admin'`, `created_at`,
+`updated_at`. Then `./artisan migrate` (CreateUsers sees `users` → skips;
+CreateAuditLogs creates `audit_logs`).
 
-## Step 5 — Register the routes
+### B4. Remove the app's old auth code
 
-In the app's routes file (e.g. `routes/api.go`):
+Delete (or stop wiring) the now-duplicated code and its references:
 
-```go
-import authroutes "github.com/freshost/goravel-auth/routes"
+- the app's auth + user/admin **controllers**, the auth/admin **service** + its
+  repository, the session/auth **middleware** (`AdminAuth` etc.), the app's
+  `User`/`AdminUser` **model**, the session-regen helper, and the bootstrap
+  `create-admin` command (use `auth:create-user`).
+- remove the app's auth/user **routes** — the package provider mounts its own.
+- domain controllers that read the authenticated user id from context can use
+  `helpers.AuthUserID(ctx)` (context key `auth_user_id`, set by the package
+  middleware) — keep that key consistent if domain code depends on it.
 
-authroutes.Register(facades.Route(), authroutes.OptionsFromConfig())
-```
+If you need custom route mounting or migration ordering, the building blocks are
+exported (`routes.Register`, `migrations.Migrations()`) — see the "Manual
+wiring" section of `docs/installation.md`.
 
-For a single-admin app, disable user management:
+## Step S — regenerate the API SDK
 
-```go
-o := authroutes.OptionsFromConfig()
-o.EnableUserManagement = false
-authroutes.Register(facades.Route(), o)
-```
+The controllers carry Swagger annotations with fixed operation ids (`login`,
+`logout`, `getMe`, `changePassword`, `listUsers`, `createUser`, `getUser`,
+`updateUser`, `deleteUser`, `setUserPassword`). Run swag with `--parseDependency
+--parseInternal` so the package module is scanned, then your `make swagger` +
+`make generate-api`.
 
-Remove the app's own auth/user routes that this replaces.
+## Step F — frontend (interim, until @freshost/auth-ui)
 
-## Step 6 — Remove the app's old auth code
+Point the app's existing `useAuth`/login code at the **new SDK functions and
+routes** until the companion `@freshost/auth-ui` package is adopted:
 
-Delete (or stop wiring) the now-duplicated app code, and delete references:
-
-- the app's auth controller + user/admin controller,
-- the auth/admin service + its repository,
-- the session/auth middleware (`AdminAuth` etc.) — replace usages on guarded
-  route groups with `middleware.Authenticated(guard)` from the package, OR keep
-  using `authroutes.Register` which mounts its own guard,
-- the app's `User`/`AdminUser` model + the session-regen helper (the package
-  ships `helpers.RegenerateAndPersistSession`),
-- the bootstrap `create-admin` command (use `auth:create-user`).
-
-Other domain controllers that read the authenticated user id from context can
-read it via `helpers.AuthUserID(ctx)` (context key `auth_user_id`), which the
-package middleware sets — keep that key consistent if domain code depends on it.
-
-### Step 6B — Data migration for an existing table
-
-For scenario B (e.g. `admin_users`), write an **idempotent** code-based
-migration that reshapes the old table into the canonical `users`, and register
-it **before** the package migrations so the package's `CreateUsers` (guarded by
-`HasTable("users")`) no-ops:
-
-```go
-// bootstrap/migrations.go
-return append(
-    []schema.Migration{&migrations.RenameAdminUsersToUsers{}}, // runs first
-    authmigrations.Migrations()...,                            // CreateUsers sees "users" → skips
-)
-```
-
-```go
-func (r *RenameAdminUsersToUsers) Up() error {
-    if facades.Schema().HasTable("users") || !facades.Schema().HasTable("admin_users") {
-        return nil // already migrated, or nothing to do
-    }
-    // rename table, then reshape columns to match the canonical model
-    facades.Orm().Query().Exec("ALTER TABLE admin_users RENAME TO users")
-    facades.Orm().Query().Exec("ALTER TABLE users RENAME COLUMN password TO password_hash")
-    facades.Orm().Query().Exec("ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL")
-    facades.Orm().Query().Exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified timestamptz")
-    facades.Orm().Query().Exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS image text")
-    facades.Orm().Query().Exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS role text NOT NULL DEFAULT 'admin'")
-    facades.Orm().Query().Exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now()")
-    return nil
-}
-```
-
-Adjust column names to the real legacy schema. **Existing bcrypt `$2a$12$`
-hashes stay valid** — do not re-hash. Verify the old admin can still log in
-after migrating.
-
-## Step 7 — Regenerate the API SDK
-
-The package controllers carry Swagger annotations with fixed operation ids
-(`login`, `logout`, `getMe`, `changePassword`, `listUsers`, `createUser`,
-`getUser`, `updateUser`, `deleteUser`, `setUserPassword`). Make sure swag parses
-the dependency module (`swag init --parseDependency --parseInternal`), then run
-the app's `make swagger` + `make generate-api`.
-
-## Step 8 — Update the frontend (interim, until @freshost/auth-ui)
-
-The companion `@freshost/auth-ui` package is the eventual home for the React
-auth UI. Until it's adopted, point the app's existing `useAuth`/login code at the
-**new generated SDK functions and routes**:
-
-- `me` → `getMe`, admin-user ids (`listAdminUsers`, `createAdminUser`, …) →
-  (`listUsers`, `createUser`, …); paths `/admin-users` → `/users`.
+- `me` → `getMe`; admin-user ids (`listAdminUsers`, …) → (`listUsers`, …); paths
+  `/admin-users` → `/users`.
 - Login/logout/change-password keep the same shapes (`UserResponse`,
-  `MessageResponse`).
+  `MessageResponse`). Run `pnpm type-check` and fix renamed imports.
 
-Run `pnpm type-check` and fix the renamed imports.
-
-## Step 9 — Create the admin & verify end-to-end
+## Step V — verify
 
 ```bash
+cd backend && go build ./... && go test ./...
 ./artisan migrate
 ./artisan auth:create-user --email=admin@example.com --password=...
-cd backend && go build ./... && go test ./...
 ```
 
 Then run the app and verify (read-only where the app warns about live writes):
@@ -199,19 +143,20 @@ Then run the app and verify (read-only where the app warns about live writes):
 1. **Login** with the seeded admin → 200, session cookie set.
 2. **GET /auth/me** → the user.
 3. **Change password** → other sessions get `401 session_expired`, this one stays.
-4. **User CRUD** (if enabled) → list/create/update/delete, last-admin + self-delete
-   guards fire.
+4. **User CRUD** (if enabled) → list/create/update/delete; last-admin +
+   self-delete guards fire.
 5. Wrong password / unknown email → identical `401 invalid_credentials`.
+6. **Existing admin still logs in** with the old password (Path B).
 
 ## Common pitfalls
 
-- **Swagger doesn't see the endpoints** → swag isn't parsing the dependency
-  module; add `--parseDependency --parseInternal`, and ensure `routes.Register`
-  is reachable from `main.go`.
-- **Login 500 on hash** → missing/incorrect `config/hashing.go` (must be bcrypt
-  cost 12).
-- **`CreateUsers` migration fails "table exists"** → you're in scenario B but
-  didn't order the rename migration first / the rename didn't run.
+- **Ran `package:install` on an existing app** → it overwrote `config/auth.go`;
+  restore your other guards (Path B reconciles config by hand).
+- **`CreateUsers` runs and you end up with an empty `users` + orphaned
+  `admin_users`** → you reshaped too late; do the SQL reshape in B3 **before**
+  the first `migrate`.
+- **Login 500 on hash** → `config/hashing.go` not bcrypt cost 12.
+- **Swagger doesn't see the endpoints** → add `--parseDependency --parseInternal`.
 - **Rate-limit/audit IP wrong behind proxy** → set `http.trusted_proxies`.
 - **Guard name mismatch** → `config/auth.go` guard name must equal
-  `authkit.guard` / `Options.Guard`.
+  `authkit.guard`.

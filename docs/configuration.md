@@ -1,13 +1,18 @@
 # Configuration
 
-Behaviour is controlled two ways, which compose: the `authkit.*` config keys
-(read by `routes.OptionsFromConfig()`) and the `routes.Options` struct you pass
-to `routes.Register`. **Options passed to `Register` win**; any zero-valued
-Option falls back to `DefaultOptions()`. The package works with no config at all.
+`package:install` writes a `config/authkit.go` into your app; the ServiceProvider
+reads it at boot (via `routes.OptionsFromConfig()`) to register the routes. Edit
+that file to tune behaviour. Every key is optional — the package falls back to
+the same defaults if a key (or the whole file) is missing.
+
+For advanced cases you can bypass the provider and mount the routes yourself with
+an explicit `routes.Options` (see the "Manual wiring" section of
+[installation](installation.md)); Options passed to `routes.Register` win over
+config, and any zero-valued Option falls back to `DefaultOptions()`.
 
 ## `authkit.*` config keys
 
-Add a `config/authkit.go` to your app (all keys optional):
+The published `config/authkit.go` looks like this (all keys optional):
 
 ```go
 package config

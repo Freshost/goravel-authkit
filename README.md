@@ -50,35 +50,30 @@ swap (including the `admin_users → users` data migration) step by step.
 
 ## Install
 
+Register the provider — that is the whole integration. The provider registers
+the migrations, routes, and artisan commands itself.
+
 ```bash
 go get github.com/freshost/goravel-auth
 ./artisan package:install github.com/freshost/goravel-auth
+./artisan migrate
+./artisan auth:create-user --email=admin@example.com --password=change-me
 ```
 
-This registers `auth.ServiceProvider` and publishes `config/authkit.go` plus the
-migrations. Then:
+`package:install` registers `auth.ServiceProvider` into your app and writes the
+config files (`config/auth.go` — the session `admin` guard, `config/authkit.go`
+— package settings, `config/hashing.go` — bcrypt cost 12). You don't append
+migrations or register routes by hand — the provider does it at boot.
 
-1. Point your `config/auth.go` guard at the package model (the installer wires a
-   session `admin` guard → `users` ORM provider).
-2. Append the package migrations to your registry:
-   ```go
-   // bootstrap/migrations.go
-   import authmigrations "github.com/freshost/goravel-auth/migrations"
-   func Migrations() []schema.Migration {
-       return append(authmigrations.Migrations(), /* your migrations */ )
-   }
-   ```
-3. Register the routes:
-   ```go
-   // routes/api.go
-   import authroutes "github.com/freshost/goravel-auth/routes"
-   authroutes.Register(facades.Route(), authroutes.Options{ /* prefix, middleware */ })
-   ```
-4. Migrate and create the first admin:
-   ```bash
-   ./artisan migrate
-   ./artisan auth:create-user --email=admin@example.com --password=secret
-   ```
+> **Already have a `config/auth.go` / other guards?** `package:install`
+> overwrites those config files, which is right for a fresh app but not for one
+> with existing auth. In that case follow the
+> [adoption skill](.claude/skills/adopt-goravel-auth/SKILL.md) (merge the guard,
+> migrate `admin_users → users`) instead of the plain install.
+
+For local development before the repo is public, add a `replace` directive
+(`replace github.com/freshost/goravel-auth => ../goravel-auth`) and register the
+provider manually (`&auth.ServiceProvider{}` in `bootstrap/providers.go`).
 
 ## Configuration
 
@@ -103,11 +98,9 @@ is safe.
 
 ## Security notes (read before deploying)
 
-- **Hashing config is required.** The package hashes via the Goravel `Hash`
-  facade, so your app must ship a `config/hashing.go` selecting **bcrypt with
-  cost 12** (the value both reference apps use, and what existing `$2a$12$`
-  hashes verify against). Without a hashing config, login and password changes
-  cannot hash/verify.
+- **Hashing is bcrypt cost 12.** `package:install` writes `config/hashing.go`
+  with bcrypt cost 12 (what existing `$2a$12$` hashes verify against). Keep it
+  that way — the package hashes via the Goravel `Hash` facade.
 - **Configure trusted proxies.** The login rate-limiter and the audit log key on
   `ctx.Request().Ip()`, which honours `X-Forwarded-For`. Behind a proxy/CDN, set
   Goravel's `http.trusted_proxies` or the limit is bypassable (and audit IPs are
