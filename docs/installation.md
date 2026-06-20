@@ -77,14 +77,14 @@ guard → `users` orm provider to `config/auth.go`, set bcrypt `rounds: 12` in
 `config/hashing.go`, and add a `config/authkit.go` (copy from the package's
 `setup/config/authkit.go`). Then `./artisan migrate` and create the admin.
 
-The package exposes **only** `auth.ServiceProvider`; everything else
-(migrations, routes, controllers, services) lives under `internal/` and is not
-importable. All behaviour is tuned through the `authkit.*` config — see
-[configuration](configuration.md). There is no manual route/migration wiring.
+You only ever register `auth.ServiceProvider` — the provider wires the
+subpackages (`models`, `services`, `routes`, `migrations`, …) itself. All
+behaviour is tuned through the `authkit.*` config; there is no manual
+route/migration wiring. See [configuration](configuration.md).
 
 ## Adopting into an existing app
 
-If your app already has auth/users, **do not** run the plain install (it would
-overwrite your `config/auth.go`). Follow the
-[adoption skill](../.claude/skills/adopt-goravel-auth/SKILL.md), which covers
-merging the guard, the `admin_users → users` data migration, and verification.
+If your app already has its own auth/users, follow the
+[adoption skill](../.claude/skills/adopt-goravel-auth/SKILL.md) — it reconciles
+the `admin` guard, covers the `admin_users → users` data migration, and
+verification.

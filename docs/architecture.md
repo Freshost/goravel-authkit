@@ -43,32 +43,34 @@ model: registering the ServiceProvider is the entire integration.
 
 - **ServiceProvider** (`auth.ServiceProvider`) does all wiring in `Boot`:
   registers the migrations (`app.MakeSchema().Register(...)`), mounts the routes
-  onto `app.MakeRoute()` from the `authkit.*` config (via the internal routes
-  package), registers the `auth:create-user` command (`app.Commands(...)`), and
-  exposes the config for
+  onto `app.MakeRoute()` from the `authkit.*` config, registers the
+  `auth:create-user` command (`app.Commands(...)`), and exposes the config for
   `vendor:publish` (`app.Publishes(...)`). It declares its framework
   dependencies via `Relationship()` (Config, Orm, Hash, Auth, Schema, Route) so
-  it boots after them, and registers no container bindings of its own.
+  it boots after them.
 - **`setup/setup.go`** implements `package:install`: it registers the provider
-  (`modify.RegisterProvider`) and writes the config files (`config/auth.go`,
-  `config/authkit.go`, `config/hashing.go`) via `modify.File().Overwrite()` from
-  the templates in `setup/config/`.
+  (`modify.RegisterProvider`), writes `config/authkit.go`
+  (`modify.File().Overwrite()`), and **additively** injects the `admin` guard +
+  `users` provider into the app's `config/auth.go` and `bcrypt rounds: 12` into
+  `config/hashing.go` (`modify.GoFile().Find(match.Config(...)).Modify(modify.AddConfig(...))`).
 - **Migrations** (idempotent, guarded on `HasTable`) are self-registered by the
-  provider — they live under `internal/` and are not importable by apps.
+  provider.
 - **Routes** are mounted by the provider from the `authkit.*` config. Because the
   provider imports the controllers, they are in the app's `main.go` import graph,
-  so `swag --parseDependency --parseInternal` still scans their annotations into
-  the OpenAPI contract (and thus the generated TS SDK).
+  so `swag --parseDependency --parseInternal` scans their annotations into the
+  OpenAPI contract (and thus the generated TS SDK).
 - **Config** is optional at runtime (safe fallbacks everywhere), but
   `package:install` writes `config/authkit.go` so apps have a tunable file.
 
-## Public surface
+## Layout
 
-The **only** importable package is the module root
-(`github.com/freshost/goravel-auth` → `auth.ServiceProvider`). Everything else —
-`models`, `repositories`, `services`, `http`, `helpers`, `routes`, `migrations`,
-`console` — lives under `internal/`, so an app consumes the package purely by
-registering the provider. There are no opt-out building blocks to wire by hand.
+The repository follows the official
+[goravel/example-package](https://github.com/goravel/example-package) layout:
+`service_provider.go` + `setup/` at the root, with the implementation in
+root subpackages (`models`, `repositories`, `services`, `http`, `helpers`,
+`routes`, `migrations`, `commands`). An app consumes the package purely by
+registering `auth.ServiceProvider`; it never imports the subpackages itself —
+the provider wires them.
 
 ## The SDK contract loop
 

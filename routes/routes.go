@@ -10,10 +10,10 @@ import (
 	"github.com/goravel/framework/contracts/route"
 	"github.com/goravel/framework/facades"
 
-	"github.com/freshost/goravel-auth/internal/http/controllers"
-	"github.com/freshost/goravel-auth/internal/http/middleware"
-	"github.com/freshost/goravel-auth/internal/repositories"
-	"github.com/freshost/goravel-auth/internal/services"
+	"github.com/freshost/goravel-auth/http/controllers"
+	"github.com/freshost/goravel-auth/http/middleware"
+	"github.com/freshost/goravel-auth/repositories"
+	"github.com/freshost/goravel-auth/services"
 )
 
 // Options configures route registration and the behaviour of the wired

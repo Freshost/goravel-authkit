@@ -84,7 +84,8 @@ provider manually (`&auth.ServiceProvider{}` in `bootstrap/providers.go`).
 
 Everything is tuned through the `config/authkit.go` file that `package:install`
 writes (all keys optional — the package falls back to safe defaults). The
-package's internals are not importable; there is no Go wiring to do.
+you consume the package only by registering the provider — there is no Go wiring
+to do.
 
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |

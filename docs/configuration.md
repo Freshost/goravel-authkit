@@ -3,8 +3,8 @@
 All behaviour is tuned through one file: `config/authkit.go`, which
 `package:install` writes into your app. The ServiceProvider reads it at boot and
 registers the routes accordingly. Every key is optional — the package falls back
-to the same defaults if a key (or the whole file) is missing. There is no Go API
-to wire by hand; the package's internals are not importable.
+to the same defaults if a key (or the whole file) is missing. You never wire
+anything in Go — registering the provider is the whole integration.
 
 ## `config/authkit.go`
 

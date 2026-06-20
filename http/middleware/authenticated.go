@@ -10,8 +10,8 @@ import (
 	contractshttp "github.com/goravel/framework/contracts/http"
 	"github.com/goravel/framework/facades"
 
-	"github.com/freshost/goravel-auth/internal/helpers"
-	"github.com/freshost/goravel-auth/internal/models"
+	"github.com/freshost/goravel-auth/helpers"
+	"github.com/freshost/goravel-auth/models"
 )
 
 // SessionKeyPasswordChangedAt holds the users.password_changed_at value captured

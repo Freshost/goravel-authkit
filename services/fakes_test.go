@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/freshost/goravel-auth/internal/models"
+	"github.com/freshost/goravel-auth/models"
 )
 
 var errBoom = errors.New("boom")

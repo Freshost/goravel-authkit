@@ -8,8 +8,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/freshost/goravel-auth/internal/models"
-	"github.com/freshost/goravel-auth/internal/repositories"
+	"github.com/freshost/goravel-auth/models"
+	"github.com/freshost/goravel-auth/repositories"
 )
 
 // Auth encapsulates credential verification and self-service password changes.
