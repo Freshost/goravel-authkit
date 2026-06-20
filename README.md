@@ -100,6 +100,22 @@ to do.
 
 See [docs/configuration.md](docs/configuration.md) for details.
 
+## Programmatic API (facade)
+
+Besides the HTTP endpoints, the package exposes a facade so your own Go code
+(seeders, installers, custom commands, domain logic) can drive auth/users
+without HTTP:
+
+```go
+import authfacades "github.com/freshost/goravel-auth/facades"
+
+user, err := authfacades.Authkit().CreateUser(ctx, "jane@example.com", "Jane", "secret123", "admin")
+user, err := authfacades.Authkit().Authenticate(ctx, email, password)
+err := authfacades.Authkit().ChangePassword(ctx, id, current, next)
+```
+
+See [`contracts/authkit.go`](contracts/authkit.go) for the full interface.
+
 ## Security notes (read before deploying)
 
 - **Hashing is bcrypt cost 12.** `package:install` writes `config/hashing.go`

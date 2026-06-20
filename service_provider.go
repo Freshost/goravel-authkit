@@ -21,13 +21,17 @@ import (
 	"github.com/freshost/goravel-auth/routes"
 )
 
+// Binding is the service-container key under which the Authkit service is bound;
+// the facades.Authkit() accessor resolves it.
+const Binding = "authkit"
+
 // PackageName is the module path, used as the first argument to Publishes.
 const PackageName = "github.com/freshost/goravel-auth"
 
 // Name is the human-readable module name.
 const Name = "Auth"
 
-// App holds the application instance for package-internal resolution.
+// App holds the application instance, used by the facade to resolve the service.
 var App foundation.Application
 
 // ServiceProvider registers the goravel-auth migrations, routes, commands, and
@@ -39,7 +43,7 @@ type ServiceProvider struct{}
 // boots after them. It registers no container bindings of its own.
 func (r *ServiceProvider) Relationship() binding.Relationship {
 	return binding.Relationship{
-		Bindings: []string{},
+		Bindings: []string{Binding},
 		Dependencies: []string{
 			binding.Config,
 			binding.Orm,
@@ -52,9 +56,14 @@ func (r *ServiceProvider) Relationship() binding.Relationship {
 	}
 }
 
-// Register stores the application instance.
+// Register stores the application instance and binds the Authkit service so
+// facades.Authkit() (and any app code) can resolve it.
 func (r *ServiceProvider) Register(app foundation.Application) {
 	App = app
+
+	app.Bind(Binding, func(app foundation.Application) (any, error) {
+		return NewAuthkit(app), nil
+	})
 }
 
 // Boot registers everything the package ships: migrations, routes, artisan
