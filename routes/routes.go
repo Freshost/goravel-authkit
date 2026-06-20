@@ -115,7 +115,7 @@ func Register(router route.Router, opts Options) {
 	usersCtrl := controllers.NewUsersController(usersSvc, auditSvc)
 
 	// Public: login (rate-limited).
-	router.Prefix(opts.Prefix+"/auth").
+	router.Prefix(opts.Prefix + "/auth").
 		Middleware(middleware.RateLimitAuth(opts.RateLimitAttempts, opts.RateLimitWindow)).
 		Group(func(r route.Router) {
 			r.Post("/login", authCtrl.Login)
