@@ -85,6 +85,6 @@ route/migration wiring. See [configuration](configuration.md).
 ## Adopting into an existing app
 
 If your app already has its own auth/users, follow the
-[adoption skill](../.claude/skills/adopt-goravel-authkit/SKILL.md) — it reconciles
-the `admin` guard, covers the `admin_users → users` data migration, and
-verification.
+[adoption skill](https://github.com/Freshost/goravel-authkit/blob/main/.claude/skills/adopt-goravel-authkit/SKILL.md)
+— it reconciles the `admin` guard, covers the `admin_users → users` data
+migration, and verification.
