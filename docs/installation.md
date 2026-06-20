@@ -1,14 +1,14 @@
 # Installation
 
-`goravel-auth` is a backend Go module for [Goravel](https://www.goravel.dev)
+`goravel-authkit` is a backend Go module for [Goravel](https://www.goravel.dev)
 apps (tested against Goravel **v1.17.x**, Go **1.25+**, PostgreSQL). It owns the
 `users` and `audit_logs` tables.
 
 ## Quick install (fresh app)
 
 ```bash
-go get github.com/freshost/goravel-auth
-./artisan package:install github.com/freshost/goravel-auth
+go get github.com/freshost/goravel-authkit
+./artisan package:install github.com/freshost/goravel-authkit
 ./artisan migrate
 ./artisan auth:create-user --email=admin@example.com --password=change-me
 ```
@@ -21,7 +21,7 @@ That's the whole integration. `auth:create-user` also reads `ADMIN_EMAIL` /
 It makes four small, **additive** edits (it does not overwrite your existing
 guards or hashing settings):
 
-1. Registers `auth.ServiceProvider` into `bootstrap/providers.go`.
+1. Registers `authkit.ServiceProvider` into `bootstrap/providers.go`.
 2. Writes a new **`config/authkit.go`** — package settings (route prefix, rate
    limit, feature toggles; see [configuration](configuration.md)).
 3. Adds a session **`admin` guard** + a **`users` orm provider** into your
@@ -62,14 +62,14 @@ Add a `replace` directive and register the provider manually:
 
 ```
 // go.mod
-require github.com/freshost/goravel-auth v0.0.0
-replace github.com/freshost/goravel-auth => /absolute/path/to/goravel-auth
+require github.com/freshost/goravel-authkit v0.0.0
+replace github.com/freshost/goravel-authkit => /absolute/path/to/goravel-authkit
 ```
 
 ```go
 // bootstrap/providers.go
-import auth "github.com/freshost/goravel-auth"
-// ... &auth.ServiceProvider{},
+import authkit "github.com/freshost/goravel-authkit"
+// ... &authkit.ServiceProvider{},
 ```
 
 Then do by hand what `package:install` would have done: add an `admin` session
@@ -77,7 +77,7 @@ guard → `users` orm provider to `config/auth.go`, set bcrypt `rounds: 12` in
 `config/hashing.go`, and add a `config/authkit.go` (copy from the package's
 `setup/config/authkit.go`). Then `./artisan migrate` and create the admin.
 
-You only ever register `auth.ServiceProvider` — the provider wires the
+You only ever register `authkit.ServiceProvider` — the provider wires the
 subpackages (`models`, `services`, `routes`, `migrations`, …) itself. All
 behaviour is tuned through the `authkit.*` config; there is no manual
 route/migration wiring. See [configuration](configuration.md).
@@ -85,6 +85,6 @@ route/migration wiring. See [configuration](configuration.md).
 ## Adopting into an existing app
 
 If your app already has its own auth/users, follow the
-[adoption skill](../.claude/skills/adopt-goravel-auth/SKILL.md) — it reconciles
+[adoption skill](../.claude/skills/adopt-goravel-authkit/SKILL.md) — it reconciles
 the `admin` guard, covers the `admin_users → users` data migration, and
 verification.

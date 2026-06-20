@@ -1,6 +1,6 @@
 # Architecture
 
-`goravel-auth` is a layered, app-agnostic Goravel package. It uses **only** the
+`goravel-authkit` is a layered, app-agnostic Goravel package. It uses **only** the
 upstream `github.com/goravel/framework/facades` (never app-local facade
 wrappers), so it drops into any Goravel app regardless of that app's DI style.
 
@@ -41,7 +41,7 @@ The package follows the Goravel
 [package-development](https://www.goravel.dev/digging-deeper/package-development.html)
 model: registering the ServiceProvider is the entire integration.
 
-- **ServiceProvider** (`auth.ServiceProvider`) does all wiring in `Boot`:
+- **ServiceProvider** (`authkit.ServiceProvider`) does all wiring in `Boot`:
   registers the migrations (`app.MakeSchema().Register(...)`), mounts the routes
   onto `app.MakeRoute()` from the `authkit.*` config, registers the
   `auth:create-user` command (`app.Commands(...)`), and exposes the config for
@@ -69,7 +69,7 @@ The repository follows the official
 `service_provider.go` + `setup/` at the root, with the implementation in
 root subpackages (`models`, `repositories`, `services`, `http`, `helpers`,
 `routes`, `migrations`, `commands`). An app consumes the package purely by
-registering `auth.ServiceProvider`; it never imports the subpackages itself —
+registering `authkit.ServiceProvider`; it never imports the subpackages itself —
 the provider wires them.
 
 ## The SDK contract loop

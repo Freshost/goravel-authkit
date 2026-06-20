@@ -1,5 +1,5 @@
 // This file is published into the consuming app's config/ directory by
-// `./artisan package:install github.com/freshost/goravel-auth`. Every key is
+// `./artisan package:install github.com/freshost/goravel-authkit`. Every key is
 // optional — the package falls back to these same defaults if the file is
 // absent. Tune as needed; see docs/configuration.md.
 package config

@@ -1,4 +1,4 @@
-// Package responses holds the request/response DTOs for the goravel-auth HTTP
+// Package responses holds the request/response DTOs for the goravel-authkit HTTP
 // endpoints. Swagger annotations on the controllers reference these types so the
 // generated TypeScript SDK gets accurate models.
 package responses
@@ -6,7 +6,7 @@ package responses
 import (
 	"time"
 
-	"github.com/freshost/goravel-auth/models"
+	"github.com/freshost/goravel-authkit/models"
 )
 
 // ErrorResponse is the standard error envelope: {"error","message"}.

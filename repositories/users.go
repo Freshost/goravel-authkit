@@ -1,4 +1,4 @@
-// Package repositories owns the GORM data access for goravel-auth. Services
+// Package repositories owns the GORM data access for goravel-authkit. Services
 // depend on the UsersRepository interface so they can be unit-tested with a
 // fake; the ORM-backed implementation uses the upstream Goravel facades.
 package repositories
@@ -12,7 +12,7 @@ import (
 	"github.com/goravel/framework/facades"
 	"gorm.io/gorm"
 
-	"github.com/freshost/goravel-auth/models"
+	"github.com/freshost/goravel-authkit/models"
 )
 
 // UsersRepository is the data-access seam for users. All methods take a

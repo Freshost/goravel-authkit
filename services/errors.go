@@ -1,4 +1,4 @@
-// Package services holds the goravel-auth business logic: credential
+// Package services holds the goravel-authkit business logic: credential
 // verification, password changes with other-session invalidation, user
 // management, and audit writes. Services never touch the HTTP session — that is
 // the controller's concern; they only verify credentials and mutate tables.

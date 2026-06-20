@@ -1,4 +1,4 @@
-// Package commands holds the goravel-auth artisan commands.
+// Package commands holds the goravel-authkit artisan commands.
 package commands
 
 import (
@@ -10,8 +10,8 @@ import (
 	"github.com/goravel/framework/facades"
 	"github.com/spf13/cast"
 
-	"github.com/freshost/goravel-auth/repositories"
-	"github.com/freshost/goravel-auth/services"
+	"github.com/freshost/goravel-authkit/repositories"
+	"github.com/freshost/goravel-authkit/services"
 )
 
 // CreateUser bootstraps a user (the first admin). Idempotent: re-running with an

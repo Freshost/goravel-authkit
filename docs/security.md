@@ -1,6 +1,6 @@
 # Security model
 
-`goravel-auth` is session-cookie authentication. This document states the
+`goravel-authkit` is session-cookie authentication. This document states the
 guarantees, the operator responsibilities, and the known v1 limitations.
 
 ## What the package guarantees

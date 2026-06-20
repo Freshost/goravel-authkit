@@ -1,4 +1,4 @@
-// Package models holds the canonical GORM entities owned by the goravel-auth
+// Package models holds the canonical GORM entities owned by the goravel-authkit
 // package: the single User table backing authentication and the AuditLog table.
 //
 // The User model is intentionally Auth.js-shaped (nullable Name/Image/
@@ -14,7 +14,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// User is the account record owned by goravel-auth. Apps that adopt the package
+// User is the account record owned by goravel-authkit. Apps that adopt the package
 // share this exact shape (table "users"); the package's repositories and
 // services operate on it directly. PasswordHash is never serialized to JSON.
 type User struct {

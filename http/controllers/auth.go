@@ -1,4 +1,4 @@
-// Package controllers holds the goravel-auth HTTP controllers: the auth
+// Package controllers holds the goravel-authkit HTTP controllers: the auth
 // endpoints (login/logout/me/change-password) and the admin user-management
 // CRUD. They map service sentinel errors to the {"error","message"} envelope
 // using net/http status constants.
@@ -12,11 +12,11 @@ import (
 	contractshttp "github.com/goravel/framework/contracts/http"
 	"github.com/goravel/framework/facades"
 
-	"github.com/freshost/goravel-auth/helpers"
-	"github.com/freshost/goravel-auth/http/middleware"
-	"github.com/freshost/goravel-auth/http/responses"
-	"github.com/freshost/goravel-auth/models"
-	"github.com/freshost/goravel-auth/services"
+	"github.com/freshost/goravel-authkit/helpers"
+	"github.com/freshost/goravel-authkit/http/middleware"
+	"github.com/freshost/goravel-authkit/http/responses"
+	"github.com/freshost/goravel-authkit/models"
+	"github.com/freshost/goravel-authkit/services"
 )
 
 // AuthController handles the auth endpoints.

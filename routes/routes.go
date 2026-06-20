@@ -1,4 +1,4 @@
-// Package routes registers the goravel-auth HTTP endpoints onto a consuming
+// Package routes registers the goravel-authkit HTTP endpoints onto a consuming
 // app's router. The app calls Register from its own routes file so the package
 // controllers land in the app's import graph (required for `swag` to scan their
 // annotations into the OpenAPI contract).
@@ -10,10 +10,10 @@ import (
 	"github.com/goravel/framework/contracts/route"
 	"github.com/goravel/framework/facades"
 
-	"github.com/freshost/goravel-auth/http/controllers"
-	"github.com/freshost/goravel-auth/http/middleware"
-	"github.com/freshost/goravel-auth/repositories"
-	"github.com/freshost/goravel-auth/services"
+	"github.com/freshost/goravel-authkit/http/controllers"
+	"github.com/freshost/goravel-authkit/http/middleware"
+	"github.com/freshost/goravel-authkit/repositories"
+	"github.com/freshost/goravel-authkit/services"
 )
 
 // Options configures route registration and the behaviour of the wired

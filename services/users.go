@@ -8,8 +8,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/freshost/goravel-auth/models"
-	"github.com/freshost/goravel-auth/repositories"
+	"github.com/freshost/goravel-authkit/models"
+	"github.com/freshost/goravel-authkit/repositories"
 )
 
 // DefaultRole is assigned to users created without an explicit role.

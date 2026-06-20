@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/freshost/goravel-auth/models"
+	"github.com/freshost/goravel-authkit/models"
 )
 
 func seedUser(repo *fakeRepo, email, password string) *models.User {

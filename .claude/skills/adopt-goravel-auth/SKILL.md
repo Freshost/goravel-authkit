@@ -1,9 +1,9 @@
 ---
-name: adopt-goravel-auth
-description: Step-by-step guide for an AI agent to adopt the `github.com/freshost/goravel-auth` package into a Goravel (v1.17.x) + Vite/React app — replacing the app's hand-rolled login/logout/session/change-password/user-management with the shared package. Covers the one-step install for fresh apps, the careful path for apps that already have auth (merge the guard instead of overwriting config, `admin_users → users` data reshape, removing the old code), SDK regeneration, and end-to-end verification. Use when a project wants to switch its bespoke auth to goravel-auth, or when scaffolding auth into a new app in this stack.
+name: adopt-goravel-authkit
+description: Step-by-step guide for an AI agent to adopt the `github.com/freshost/goravel-authkit` package into a Goravel (v1.17.x) + Vite/React app — replacing the app's hand-rolled login/logout/session/change-password/user-management with the shared package. Covers the one-step install for fresh apps, the careful path for apps that already have auth (merge the guard instead of overwriting config, `admin_users → users` data reshape, removing the old code), SDK regeneration, and end-to-end verification. Use when a project wants to switch its bespoke auth to goravel-authkit, or when scaffolding auth into a new app in this stack.
 ---
 
-# Adopting goravel-auth into a Goravel app
+# Adopting goravel-authkit into a Goravel app
 
 For an agent working **inside a consuming Goravel + Vite/React project**. Read
 the package docs alongside this: `docs/installation.md`, `docs/configuration.md`,
@@ -11,7 +11,7 @@ the package docs alongside this: `docs/installation.md`, `docs/configuration.md`
 
 The package **owns the `users` and `audit_logs` tables** and a canonical `User`
 model — there is no model extensibility, the app conforms to the package shape.
-Registering `auth.ServiceProvider` is the whole integration: the provider
+Registering `authkit.ServiceProvider` is the whole integration: the provider
 registers the migrations, routes, and commands itself. The only question is how
 to get there without clobbering existing auth.
 
@@ -28,8 +28,8 @@ Always work on a branch.
 ## Path A — fresh app
 
 ```bash
-go get github.com/freshost/goravel-auth
-./artisan package:install github.com/freshost/goravel-auth
+go get github.com/freshost/goravel-authkit
+./artisan package:install github.com/freshost/goravel-authkit
 ./artisan migrate
 ./artisan auth:create-user --email=admin@example.com --password=change-me
 ```
@@ -47,8 +47,8 @@ Do **not** run `package:install` (it overwrites config). Add the module
 
 ```go
 // bootstrap/providers.go
-import auth "github.com/freshost/goravel-auth"
-// ... &auth.ServiceProvider{},
+import authkit "github.com/freshost/goravel-authkit"
+// ... &authkit.ServiceProvider{},
 ```
 
 ### B2. Reconcile config (merge, don't overwrite)
@@ -108,7 +108,7 @@ Delete (or stop wiring) the now-duplicated code and its references:
   `helpers.AuthUserID(ctx)` (context key `auth_user_id`, set by the package
   middleware) — keep that key consistent if domain code depends on it.
 
-You only register `auth.ServiceProvider` — the provider wires routes + migrations
+You only register `authkit.ServiceProvider` — the provider wires routes + migrations
 itself, there is nothing to mount by hand. Migration ordering for the reshape is
 handled by doing the SQL in B3 **before** the first `migrate` (above), not by
 interleaving a migration.

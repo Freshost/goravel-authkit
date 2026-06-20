@@ -1,4 +1,4 @@
-module github.com/freshost/goravel-auth
+module github.com/freshost/goravel-authkit
 
 go 1.25.0
 

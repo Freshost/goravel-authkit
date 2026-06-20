@@ -1,4 +1,4 @@
-// Package helpers holds small HTTP utilities shared by the goravel-auth
+// Package helpers holds small HTTP utilities shared by the goravel-authkit
 // controllers and middleware: route-param parsing, pagination, the
 // authenticated-user context key, and the session-regeneration workaround.
 package helpers

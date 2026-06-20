@@ -6,8 +6,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/freshost/goravel-auth/models"
-	"github.com/freshost/goravel-auth/repositories"
+	"github.com/freshost/goravel-authkit/models"
+	"github.com/freshost/goravel-authkit/repositories"
 )
 
 // AuditEntry is the input to the audit service — shaped like a future event

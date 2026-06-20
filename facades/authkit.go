@@ -1,4 +1,4 @@
-// Package facades exposes the goravel-auth programmatic API as a Goravel facade.
+// Package facades exposes the goravel-authkit programmatic API as a Goravel facade.
 // Call facades.Authkit() from app code to create users, authenticate, change
 // passwords, etc. without going through the HTTP layer.
 package facades
@@ -6,13 +6,13 @@ package facades
 import (
 	"log"
 
-	auth "github.com/freshost/goravel-auth"
-	"github.com/freshost/goravel-auth/contracts"
+	authkit "github.com/freshost/goravel-authkit"
+	"github.com/freshost/goravel-authkit/contracts"
 )
 
-// Authkit resolves the goravel-auth service from the container.
+// Authkit resolves the goravel-authkit service from the container.
 func Authkit() contracts.Authkit {
-	instance, err := auth.App.Make(auth.Binding)
+	instance, err := authkit.App.Make(authkit.Binding)
 	if err != nil {
 		log.Fatalln(err)
 		return nil

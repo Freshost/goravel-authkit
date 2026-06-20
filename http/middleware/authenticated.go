@@ -1,4 +1,4 @@
-// Package middleware holds the goravel-auth HTTP middleware: the session guard
+// Package middleware holds the goravel-authkit HTTP middleware: the session guard
 // (Authenticated) and the login rate-limiter (RateLimitAuth).
 package middleware
 
@@ -10,8 +10,8 @@ import (
 	contractshttp "github.com/goravel/framework/contracts/http"
 	"github.com/goravel/framework/facades"
 
-	"github.com/freshost/goravel-auth/helpers"
-	"github.com/freshost/goravel-auth/models"
+	"github.com/freshost/goravel-authkit/helpers"
+	"github.com/freshost/goravel-authkit/models"
 )
 
 // SessionKeyPasswordChangedAt holds the users.password_changed_at value captured

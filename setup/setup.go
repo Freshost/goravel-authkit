@@ -1,6 +1,6 @@
 // Command setup implements `./artisan package:install
-// github.com/freshost/goravel-auth`. It:
-//   - registers auth.ServiceProvider into the app,
+// github.com/freshost/goravel-authkit`. It:
+//   - registers authkit.ServiceProvider into the app,
 //   - writes config/authkit.go (the package's own settings file),
 //   - injects the session "admin" guard + "users" orm provider into the app's
 //     EXISTING config/auth.go (additively — it does not clobber other guards),
@@ -30,12 +30,12 @@ func main() {
 	}
 
 	moduleImport := setup.Paths().Module().Import()
-	serviceProvider := "&auth.ServiceProvider{}"
+	serviceProvider := "&authkit.ServiceProvider{}"
 
 	authConfigPath := path.Config("auth.go")
 	hashingConfigPath := path.Config("hashing.go")
 
-	// The session guard + orm provider goravel-auth needs, as Go source.
+	// The session guard + orm provider goravel-authkit needs, as Go source.
 	guard := `map[string]any{
 		"driver":   "session",
 		"provider": "users",

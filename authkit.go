@@ -1,4 +1,4 @@
-package auth
+package authkit
 
 import (
 	"context"
@@ -6,10 +6,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/goravel/framework/contracts/foundation"
 
-	"github.com/freshost/goravel-auth/contracts"
-	"github.com/freshost/goravel-auth/models"
-	"github.com/freshost/goravel-auth/repositories"
-	"github.com/freshost/goravel-auth/services"
+	"github.com/freshost/goravel-authkit/contracts"
+	"github.com/freshost/goravel-authkit/models"
+	"github.com/freshost/goravel-authkit/repositories"
+	"github.com/freshost/goravel-authkit/services"
 )
 
 // Authkit is the concrete implementation behind facades.Authkit(). It wraps the

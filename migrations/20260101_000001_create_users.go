@@ -1,4 +1,4 @@
-// Package migrations holds the code-based migrations owned by goravel-auth. A
+// Package migrations holds the code-based migrations owned by goravel-authkit. A
 // consuming app appends Migrations() to its own migration registry (see
 // bootstrap/migrations.go) so the framework runner applies them in order. Each
 // migration is idempotent.

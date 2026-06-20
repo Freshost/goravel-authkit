@@ -1,4 +1,4 @@
-// Package contracts defines the public interface exposed by the goravel-auth
+// Package contracts defines the public interface exposed by the goravel-authkit
 // facade. Consuming apps call it via facades.Authkit() to drive user/auth
 // operations programmatically (seeders, installers, custom CLI, domain code)
 // without going through the HTTP endpoints.
@@ -9,10 +9,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/freshost/goravel-auth/models"
+	"github.com/freshost/goravel-authkit/models"
 )
 
-// Authkit is the programmatic API of the goravel-auth package.
+// Authkit is the programmatic API of the goravel-authkit package.
 type Authkit interface {
 	// Authenticate verifies credentials and returns the matching user. Returns a
 	// generic invalid-credentials error for both unknown-email and wrong-password.

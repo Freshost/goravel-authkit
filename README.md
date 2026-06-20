@@ -1,4 +1,4 @@
-# goravel-auth
+# goravel-authkit
 
 Batteries-included, session-based **authentication + user management** for
 [Goravel](https://www.goravel.dev) apps. Install it, register the provider,
@@ -44,7 +44,7 @@ command for bootstrapping the first admin.
   integration, the SDK contract loop.
 
 **Adopting into an existing app?** There is a bundled agent skill at
-[`.claude/skills/adopt-goravel-auth/`](.claude/skills/adopt-goravel-auth/SKILL.md)
+[`.claude/skills/adopt-goravel-authkit/`](.claude/skills/adopt-goravel-authkit/SKILL.md)
 — copy it into your project's `.claude/skills/` and an AI agent can perform the
 swap (including the `admin_users → users` data migration) step by step.
 
@@ -54,15 +54,15 @@ Register the provider — that is the whole integration. The provider registers
 the migrations, routes, and artisan commands itself.
 
 ```bash
-go get github.com/freshost/goravel-auth
-./artisan package:install github.com/freshost/goravel-auth
+go get github.com/freshost/goravel-authkit
+./artisan package:install github.com/freshost/goravel-authkit
 ./artisan migrate
 ./artisan auth:create-user --email=admin@example.com --password=change-me
 ```
 
 `package:install` makes four small, additive edits to your app:
 
-1. registers `auth.ServiceProvider` in `bootstrap/providers.go`;
+1. registers `authkit.ServiceProvider` in `bootstrap/providers.go`;
 2. writes `config/authkit.go` (the package's own settings file);
 3. adds a session `admin` guard + `users` orm provider into your existing
    `config/auth.go` (your other guards are left untouched);
@@ -73,12 +73,12 @@ boot.
 
 > **Existing auth already?** The install is additive, but if your app already has
 > an `admin` guard, a `users` table, or its own login code, follow the
-> [adoption skill](.claude/skills/adopt-goravel-auth/SKILL.md) (reconcile the
+> [adoption skill](.claude/skills/adopt-goravel-authkit/SKILL.md) (reconcile the
 > guard, migrate `admin_users → users`) instead of the plain install.
 
 For local development before the repo is public, add a `replace` directive
-(`replace github.com/freshost/goravel-auth => ../goravel-auth`) and register the
-provider manually (`&auth.ServiceProvider{}` in `bootstrap/providers.go`).
+(`replace github.com/freshost/goravel-authkit => ../goravel-authkit`) and register the
+provider manually (`&authkit.ServiceProvider{}` in `bootstrap/providers.go`).
 
 ## Configuration
 
@@ -107,7 +107,7 @@ Besides the HTTP endpoints, the package exposes a facade so your own Go code
 without HTTP:
 
 ```go
-import authfacades "github.com/freshost/goravel-auth/facades"
+import authfacades "github.com/freshost/goravel-authkit/facades"
 
 user, err := authfacades.Authkit().CreateUser(ctx, "jane@example.com", "Jane", "secret123", "admin")
 user, err := authfacades.Authkit().Authenticate(ctx, email, password)

@@ -1,24 +1,25 @@
-// Package auth is the root of the goravel-auth package: a batteries-included,
-// session-based authentication + user-management module for Goravel apps.
+// Package authkit is the root of the goravel-authkit package: a
+// batteries-included, session-based authentication + user-management module for
+// Goravel apps.
 //
 // Install is a single step:
 //
-//	./artisan package:install github.com/freshost/goravel-auth
+//	./artisan package:install github.com/freshost/goravel-authkit
 //
 // which registers this ServiceProvider and writes the config files
 // (config/auth.go, config/authkit.go, config/hashing.go). The provider then
 // registers the migrations, the HTTP routes, and the artisan commands itself —
 // the consuming app does not wire anything by hand. See the README.
-package auth
+package authkit
 
 import (
 	"github.com/goravel/framework/contracts/binding"
 	"github.com/goravel/framework/contracts/console"
 	"github.com/goravel/framework/contracts/foundation"
 
-	"github.com/freshost/goravel-auth/commands"
-	"github.com/freshost/goravel-auth/migrations"
-	"github.com/freshost/goravel-auth/routes"
+	"github.com/freshost/goravel-authkit/commands"
+	"github.com/freshost/goravel-authkit/migrations"
+	"github.com/freshost/goravel-authkit/routes"
 )
 
 // Binding is the service-container key under which the Authkit service is bound;
@@ -26,15 +27,15 @@ import (
 const Binding = "authkit"
 
 // PackageName is the module path, used as the first argument to Publishes.
-const PackageName = "github.com/freshost/goravel-auth"
+const PackageName = "github.com/freshost/goravel-authkit"
 
 // Name is the human-readable module name.
-const Name = "Auth"
+const Name = "Authkit"
 
 // App holds the application instance, used by the facade to resolve the service.
 var App foundation.Application
 
-// ServiceProvider registers the goravel-auth migrations, routes, commands, and
+// ServiceProvider registers the goravel-authkit migrations, routes, commands, and
 // publishable config. Everything is wired here so the consuming app only has to
 // register this provider (done automatically by `package:install`).
 type ServiceProvider struct{}
