@@ -42,8 +42,9 @@ guarantees, the operator responsibilities, and the known v1 limitations.
 - **No RBAC.** The `/users` management endpoints are protected only by the
   session guard — every authenticated user can manage users and assign any
   `role`. For a single-admin deployment this is fine. For multi-user, set
-  `routes.Options.UserManagementRoles` (e.g. `["admin"]`) to add a `RequireRole`
-  check (403 on mismatch). Full roles/permissions tables are a later phase.
+  `authkit.user_management_roles` (e.g. `[]string{"admin"}`) to add a
+  `RequireRole` check (403 on mismatch). Full roles/permissions tables are a
+  later phase.
 - **Change-password is not separately rate-limited.** It sits behind the session
   guard (an attacker needs a valid session) and bcrypt is deliberately slow, but
   there is no per-user attempt cap yet.

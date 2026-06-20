@@ -6,7 +6,7 @@ package responses
 import (
 	"time"
 
-	"github.com/freshost/goravel-auth/models"
+	"github.com/freshost/goravel-auth/internal/models"
 )
 
 // ErrorResponse is the standard error envelope: {"error","message"}.

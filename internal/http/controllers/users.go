@@ -8,9 +8,9 @@ import (
 	contractshttp "github.com/goravel/framework/contracts/http"
 	"github.com/goravel/framework/facades"
 
-	"github.com/freshost/goravel-auth/helpers"
-	"github.com/freshost/goravel-auth/http/responses"
-	"github.com/freshost/goravel-auth/services"
+	"github.com/freshost/goravel-auth/internal/helpers"
+	"github.com/freshost/goravel-auth/internal/http/responses"
+	"github.com/freshost/goravel-auth/internal/services"
 )
 
 // UsersController handles admin user-management CRUD.

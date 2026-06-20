@@ -10,8 +10,8 @@ import (
 	"github.com/goravel/framework/facades"
 	"github.com/spf13/cast"
 
-	"github.com/freshost/goravel-auth/repositories"
-	"github.com/freshost/goravel-auth/services"
+	"github.com/freshost/goravel-auth/internal/repositories"
+	"github.com/freshost/goravel-auth/internal/services"
 )
 
 // CreateUser bootstraps a user (the first admin). Idempotent: re-running with an

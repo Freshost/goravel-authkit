@@ -34,8 +34,8 @@ command for bootstrapping the first admin.
 
 - [Installation](docs/installation.md) — full wiring (provider, config,
   migrations, routes, first admin, SDK).
-- [Configuration](docs/configuration.md) — `authkit.*` keys, `routes.Options`,
-  feature toggles, the `RequireRole` gate.
+- [Configuration](docs/configuration.md) — `authkit.*` keys, feature toggles,
+  the role gate.
 - [API reference](docs/api-reference.md) — endpoints, request/response shapes,
   error codes, operation ids.
 - [Security model](docs/security.md) — guarantees, operator responsibilities,
@@ -77,11 +77,9 @@ provider manually (`&auth.ServiceProvider{}` in `bootstrap/providers.go`).
 
 ## Configuration
 
-Behaviour is tuned via optional `authkit.*` config keys (all have safe
-defaults — the package works with no config at all). Either set them in a
-`config/authkit.go` in your app, or pass a `routes.Options` to `Register`
-directly (Options take precedence; `routes.OptionsFromConfig()` reads the keys
-below).
+Everything is tuned through the `config/authkit.go` file that `package:install`
+writes (all keys optional — the package falls back to safe defaults). The
+package's internals are not importable; there is no Go wiring to do.
 
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
@@ -92,9 +90,9 @@ below).
 | `authkit.rate_limit.window` | int | `60` | Rate-limit window (seconds) |
 | `authkit.features.user_management` | bool | `true` | Register `/users` CRUD |
 | `authkit.features.audit_log` | bool | `true` | Write audit entries |
+| `authkit.user_management_roles` | []string | `[]` | Roles allowed on `/users` (empty = any) |
 
-`Register` defaults every zero-valued Option, so `Register(facades.Route(), routes.Options{})`
-is safe.
+See [docs/configuration.md](docs/configuration.md) for details.
 
 ## Security notes (read before deploying)
 
@@ -107,7 +105,7 @@ is safe.
   spoofable) by sending a forged header.
 - **No RBAC in v1.** The `/users` management endpoints sit behind the session
   guard only — every authenticated user can manage users. Once your app assigns
-  roles, gate them with `routes.Options.UserManagementRoles` (e.g.
+  roles, gate them with `authkit.user_management_roles` (e.g.
   `[]string{"admin"}`), which adds a `RequireRole` check. True RBAC
   (roles/permissions tables) is a later phase.
 - **Sessions** use httpOnly cookies with session-id regeneration on login

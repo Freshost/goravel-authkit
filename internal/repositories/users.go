@@ -12,7 +12,7 @@ import (
 	"github.com/goravel/framework/facades"
 	"gorm.io/gorm"
 
-	"github.com/freshost/goravel-auth/models"
+	"github.com/freshost/goravel-auth/internal/models"
 )
 
 // UsersRepository is the data-access seam for users. All methods take a

@@ -43,8 +43,9 @@ model: registering the ServiceProvider is the entire integration.
 
 - **ServiceProvider** (`auth.ServiceProvider`) does all wiring in `Boot`:
   registers the migrations (`app.MakeSchema().Register(...)`), mounts the routes
-  (`app.MakeRoute()` → `routes.Register(...)` from config), registers the
-  `auth:create-user` command (`app.Commands(...)`), and exposes the config for
+  onto `app.MakeRoute()` from the `authkit.*` config (via the internal routes
+  package), registers the `auth:create-user` command (`app.Commands(...)`), and
+  exposes the config for
   `vendor:publish` (`app.Publishes(...)`). It declares its framework
   dependencies via `Relationship()` (Config, Orm, Hash, Auth, Schema, Route) so
   it boots after them, and registers no container bindings of its own.
@@ -52,17 +53,22 @@ model: registering the ServiceProvider is the entire integration.
   (`modify.RegisterProvider`) and writes the config files (`config/auth.go`,
   `config/authkit.go`, `config/hashing.go`) via `modify.File().Overwrite()` from
   the templates in `setup/config/`.
-- **Migrations** are `migrations.Migrations() []schema.Migration` (idempotent,
-  guarded on `HasTable`). The provider self-registers them; the function stays
-  exported for the advanced opt-out (controlling order during an
-  `admin_users → users` adoption).
-- **Routes** are mounted by the provider from `routes.OptionsFromConfig()`.
-  `routes.Register` stays exported for custom mounting. Because the provider
-  imports the controllers, they are in the app's `main.go` import graph, so
-  `swag --parseDependency --parseInternal` still scans their annotations into the
-  OpenAPI contract (and thus the generated TS SDK).
+- **Migrations** (idempotent, guarded on `HasTable`) are self-registered by the
+  provider — they live under `internal/` and are not importable by apps.
+- **Routes** are mounted by the provider from the `authkit.*` config. Because the
+  provider imports the controllers, they are in the app's `main.go` import graph,
+  so `swag --parseDependency --parseInternal` still scans their annotations into
+  the OpenAPI contract (and thus the generated TS SDK).
 - **Config** is optional at runtime (safe fallbacks everywhere), but
   `package:install` writes `config/authkit.go` so apps have a tunable file.
+
+## Public surface
+
+The **only** importable package is the module root
+(`github.com/freshost/goravel-auth` → `auth.ServiceProvider`). Everything else —
+`models`, `repositories`, `services`, `http`, `helpers`, `routes`, `migrations`,
+`console` — lives under `internal/`, so an app consumes the package purely by
+registering the provider. There are no opt-out building blocks to wire by hand.
 
 ## The SDK contract loop
 

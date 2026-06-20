@@ -108,9 +108,10 @@ Delete (or stop wiring) the now-duplicated code and its references:
   `helpers.AuthUserID(ctx)` (context key `auth_user_id`, set by the package
   middleware) — keep that key consistent if domain code depends on it.
 
-If you need custom route mounting or migration ordering, the building blocks are
-exported (`routes.Register`, `migrations.Migrations()`) — see the "Manual
-wiring" section of `docs/installation.md`.
+The package exposes only `auth.ServiceProvider` (everything else is under
+`internal/`), so there is no manual route/migration wiring — the provider does
+it. Migration ordering for the reshape is handled by doing the SQL in B3
+**before** the first `migrate` (above), not by interleaving a migration.
 
 ## Step S — regenerate the API SDK
 

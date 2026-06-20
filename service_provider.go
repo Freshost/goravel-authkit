@@ -16,9 +16,9 @@ import (
 	"github.com/goravel/framework/contracts/console"
 	"github.com/goravel/framework/contracts/foundation"
 
-	"github.com/freshost/goravel-auth/console/commands"
-	"github.com/freshost/goravel-auth/migrations"
-	"github.com/freshost/goravel-auth/routes"
+	"github.com/freshost/goravel-auth/internal/console/commands"
+	"github.com/freshost/goravel-auth/internal/migrations"
+	"github.com/freshost/goravel-auth/internal/routes"
 )
 
 // PackageName is the module path, used as the first argument to Publishes.

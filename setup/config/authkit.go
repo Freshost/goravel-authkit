@@ -27,5 +27,9 @@ func init() {
 			// Write audit entries to the audit_logs table.
 			"audit_log": true,
 		},
+		// Roles allowed to use the /users endpoints. Empty (default) = any
+		// authenticated user (v1 has no RBAC). Set e.g. []string{"admin"} once
+		// your app assigns roles to gate user management behind a role.
+		"user_management_roles": []string{},
 	})
 }

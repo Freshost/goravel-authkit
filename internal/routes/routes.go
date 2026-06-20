@@ -10,10 +10,10 @@ import (
 	"github.com/goravel/framework/contracts/route"
 	"github.com/goravel/framework/facades"
 
-	"github.com/freshost/goravel-auth/http/controllers"
-	"github.com/freshost/goravel-auth/http/middleware"
-	"github.com/freshost/goravel-auth/repositories"
-	"github.com/freshost/goravel-auth/services"
+	"github.com/freshost/goravel-auth/internal/http/controllers"
+	"github.com/freshost/goravel-auth/internal/http/middleware"
+	"github.com/freshost/goravel-auth/internal/repositories"
+	"github.com/freshost/goravel-auth/internal/services"
 )
 
 // Options configures route registration and the behaviour of the wired
@@ -77,7 +77,29 @@ func OptionsFromConfig() Options {
 	}
 	o.EnableUserManagement = cfg.GetBool("authkit.features.user_management", o.EnableUserManagement)
 	o.EnableAuditLog = cfg.GetBool("authkit.features.audit_log", o.EnableAuditLog)
+	if v := cfg.Get("authkit.user_management_roles"); v != nil {
+		o.UserManagementRoles = toStringSlice(v)
+	}
 	return o
+}
+
+// toStringSlice coerces a config value (set as []string or []any in the Go
+// config file) into []string, dropping non-string entries.
+func toStringSlice(v any) []string {
+	switch t := v.(type) {
+	case []string:
+		return t
+	case []any:
+		out := make([]string, 0, len(t))
+		for _, e := range t {
+			if s, ok := e.(string); ok {
+				out = append(out, s)
+			}
+		}
+		return out
+	default:
+		return nil
+	}
 }
 
 // Register wires the package services + controllers and mounts the routes onto

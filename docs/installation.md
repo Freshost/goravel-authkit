@@ -68,26 +68,10 @@ import auth "github.com/freshost/goravel-auth"
 Then add `config/auth.go`, `config/authkit.go`, `config/hashing.go` (copy from
 the package's `setup/config/`), `./artisan migrate`, and create the admin.
 
-## Manual wiring (advanced / opt-out)
-
-The provider is the supported path, but the building blocks are exported if you
-need custom control (e.g. a non-standard route mount, or controlling migration
-order during an `admin_users → users` adoption):
-
-```go
-import (
-    authmigrations "github.com/freshost/goravel-auth/migrations"
-    authroutes "github.com/freshost/goravel-auth/routes"
-)
-
-// migrations — append to your registry instead of letting the provider register them
-facades.Schema().Register(authmigrations.Migrations())
-
-// routes — mount explicitly with your own Options
-o := authroutes.OptionsFromConfig()
-o.EnableUserManagement = false
-authroutes.Register(facades.Route(), o)
-```
+The package exposes **only** `auth.ServiceProvider`; everything else
+(migrations, routes, controllers, services) lives under `internal/` and is not
+importable. All behaviour is tuned through the `authkit.*` config — see
+[configuration](configuration.md). There is no manual route/migration wiring.
 
 ## Adopting into an existing app
 

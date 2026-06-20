@@ -5,7 +5,7 @@ import (
 
 	"github.com/goravel/framework/facades"
 
-	"github.com/freshost/goravel-auth/models"
+	"github.com/freshost/goravel-auth/internal/models"
 )
 
 // AuditRepository persists audit entries.
