@@ -32,6 +32,11 @@ type Options struct {
 	EnableUserManagement bool
 	// EnableAuditLog wires the audit service into the controllers.
 	EnableAuditLog bool
+	// UserManagementRoles, when non-empty, gates the /users endpoints behind a
+	// RequireRole check (the user's role must be one of these). Empty (the v1
+	// default) leaves them open to any authenticated user, since v1 ships no
+	// RBAC. Set e.g. []string{"admin"} once your app assigns roles.
+	UserManagementRoles []string
 }
 
 // DefaultOptions returns the baked-in defaults (matches the published config).
@@ -76,8 +81,26 @@ func OptionsFromConfig() Options {
 }
 
 // Register wires the package services + controllers and mounts the routes onto
-// router. router is typically facades.Route().
+// router. router is typically facades.Route(). Zero-valued Options fields fall
+// back to DefaultOptions so a bare Register(router, Options{}) is safe.
 func Register(router route.Router, opts Options) {
+	def := DefaultOptions()
+	if opts.Prefix == "" {
+		opts.Prefix = def.Prefix
+	}
+	if opts.Guard == "" {
+		opts.Guard = def.Guard
+	}
+	if opts.MinPasswordLength <= 0 {
+		opts.MinPasswordLength = def.MinPasswordLength
+	}
+	if opts.RateLimitAttempts <= 0 {
+		opts.RateLimitAttempts = def.RateLimitAttempts
+	}
+	if opts.RateLimitWindow <= 0 {
+		opts.RateLimitWindow = def.RateLimitWindow
+	}
+
 	usersRepo := repositories.NewUsers()
 	hasher := services.NewFacadeHasher()
 	authSvc := services.NewAuth(usersRepo, hasher, opts.MinPasswordLength)
@@ -107,12 +130,19 @@ func Register(router route.Router, opts Options) {
 			r.Put("/auth/password", authCtrl.ChangePassword)
 
 			if opts.EnableUserManagement {
-				r.Get("/users", usersCtrl.Index)
-				r.Post("/users", usersCtrl.Store)
-				r.Get("/users/{id}", usersCtrl.Show)
-				r.Put("/users/{id}", usersCtrl.Update)
-				r.Delete("/users/{id}", usersCtrl.Destroy)
-				r.Post("/users/{id}/password", usersCtrl.SetPassword)
+				userRoutes := func(ur route.Router) {
+					ur.Get("/users", usersCtrl.Index)
+					ur.Post("/users", usersCtrl.Store)
+					ur.Get("/users/{id}", usersCtrl.Show)
+					ur.Put("/users/{id}", usersCtrl.Update)
+					ur.Delete("/users/{id}", usersCtrl.Destroy)
+					ur.Post("/users/{id}/password", usersCtrl.SetPassword)
+				}
+				if len(opts.UserManagementRoles) > 0 {
+					r.Middleware(middleware.RequireRole(opts.Guard, opts.UserManagementRoles...)).Group(userRoutes)
+				} else {
+					userRoutes(r)
+				}
 			}
 		})
 }

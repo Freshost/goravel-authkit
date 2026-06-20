@@ -10,9 +10,14 @@ import (
 
 // rateLimiter is a simple in-memory sliding-window limiter keyed by client IP.
 // A single-process web tier makes this sufficient; no external store is needed.
+//
+// SECURITY NOTE: keying is by ctx.Request().Ip(), which honours X-Forwarded-For.
+// Behind a proxy, the consuming app MUST configure trusted proxies (Goravel
+// http.trusted_proxies) or the limit is bypassable by spoofing the header.
 type rateLimiter struct {
-	mu       sync.Mutex
-	requests map[string][]time.Time
+	mu        sync.Mutex
+	requests  map[string][]time.Time
+	lastSweep time.Time
 }
 
 var authLimiter = &rateLimiter{requests: make(map[string][]time.Time)}
@@ -29,7 +34,7 @@ func RateLimitAuth(maxAttempts int, window time.Duration) contractshttp.Middlewa
 			}).Abort()
 			return
 		}
-		authLimiter.record(ip)
+		authLimiter.record(ip, window)
 		ctx.Request().Next()
 	}
 }
@@ -52,15 +57,42 @@ func (rl *rateLimiter) isLimited(key string, maxAttempts int, window time.Durati
 	return false
 }
 
-func (rl *rateLimiter) record(key string) {
+func (rl *rateLimiter) record(key string, window time.Duration) {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
-	rl.requests[key] = append(rl.requests[key], time.Now())
+
+	now := time.Now()
+	rl.requests[key] = append(rl.requests[key], now)
+
+	// Periodic global sweep evicts IPs with no recent attempts so the map does
+	// not grow unboundedly under IP rotation. Runs at most once per window.
+	if now.Sub(rl.lastSweep) > window {
+		rl.sweepLocked(now.Add(-window))
+		rl.lastSweep = now
+	}
+}
+
+// sweepLocked prunes stale timestamps and deletes empty keys. Caller holds mu.
+func (rl *rateLimiter) sweepLocked(cutoff time.Time) {
+	for k, times := range rl.requests {
+		valid := times[:0:0]
+		for _, t := range times {
+			if t.After(cutoff) {
+				valid = append(valid, t)
+			}
+		}
+		if len(valid) == 0 {
+			delete(rl.requests, k)
+		} else {
+			rl.requests[k] = valid
+		}
+	}
 }
 
 // ResetRateLimiters clears the limiter state (used by tests).
 func ResetRateLimiters() {
 	authLimiter.mu.Lock()
 	authLimiter.requests = make(map[string][]time.Time)
+	authLimiter.lastSweep = time.Time{}
 	authLimiter.mu.Unlock()
 }

@@ -55,6 +55,7 @@ func (c *AuthController) Login(ctx contractshttp.Context) contractshttp.Response
 
 	user, err := c.auth.Authenticate(ctx.Request().Origin().Context(), req.Email, req.Password)
 	if err != nil {
+		c.writeAuditAttempt(ctx, req.Email, "auth.login_failed")
 		return c.mapServiceError(ctx, err)
 	}
 
@@ -207,6 +208,22 @@ func (c *AuthController) writeAudit(ctx contractshttp.Context, user *models.User
 	}
 	id := user.ID
 	c.writeAuditID(ctx, &id, action, id.String())
+}
+
+// writeAuditAttempt records a failed login (no actor; the attempted email goes
+// into metadata) so brute-force activity leaves a forensic trail.
+func (c *AuthController) writeAuditAttempt(ctx contractshttp.Context, email, action string) {
+	if c.audit == nil {
+		return
+	}
+	if err := c.audit.Log(ctx.Request().Origin().Context(), services.AuditEntry{
+		Action:       action,
+		ResourceType: "user",
+		Metadata:     map[string]any{"email": email},
+		IP:           ctx.Request().Ip(),
+	}); err != nil {
+		facades.Log().Errorf("audit %s: %v", action, err)
+	}
 }
 
 func (c *AuthController) writeAuditID(ctx contractshttp.Context, actorID *uuid.UUID, action, resourceID string) {

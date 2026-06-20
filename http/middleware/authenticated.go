@@ -54,6 +54,35 @@ func Authenticated(guard string) contractshttp.Middleware {
 	}
 }
 
+// RequireRole rejects authenticated users whose role is not in allowed. It must
+// run AFTER Authenticated. An empty allowed list is a no-op (open to any
+// authenticated user) — this is the v1 default, since v1 ships no RBAC. Apps
+// that want to gate user-management behind a role pass one or more roles via
+// routes.Options.UserManagementRoles.
+func RequireRole(guard string, allowed ...string) contractshttp.Middleware {
+	return func(ctx contractshttp.Context) {
+		if len(allowed) == 0 {
+			ctx.Request().Next()
+			return
+		}
+		var user models.User
+		if err := facades.Auth(ctx).Guard(guard).User(&user); err != nil || user.ID == uuid.Nil {
+			abortUnauthorized(ctx, "unauthorized", "Authentication required")
+			return
+		}
+		for _, role := range allowed {
+			if user.Role == role {
+				ctx.Request().Next()
+				return
+			}
+		}
+		_ = ctx.Response().Json(nethttp.StatusForbidden, contractshttp.Json{
+			"error":   "forbidden",
+			"message": "Insufficient permissions",
+		}).Abort()
+	}
+}
+
 func abortUnauthorized(ctx contractshttp.Context, code, message string) {
 	_ = ctx.Response().Json(nethttp.StatusUnauthorized, contractshttp.Json{
 		"error":   code,

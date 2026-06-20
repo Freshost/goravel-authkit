@@ -64,9 +64,45 @@ migrations. Then:
 
 ## Configuration
 
-`config/authkit.go` (published) controls route prefix, guard name, minimum
-password length, login rate-limit, and feature toggles
-(`user_management`, `audit_log`).
+Behaviour is tuned via optional `authkit.*` config keys (all have safe
+defaults — the package works with no config at all). Either set them in a
+`config/authkit.go` in your app, or pass a `routes.Options` to `Register`
+directly (Options take precedence; `routes.OptionsFromConfig()` reads the keys
+below).
+
+| Key | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `authkit.route_prefix` | string | `/api/v1` | Prefix for all routes |
+| `authkit.guard` | string | `admin` | Goravel session guard name |
+| `authkit.min_password_length` | int | `8` | Minimum new-password length |
+| `authkit.rate_limit.attempts` | int | `5` | Login attempts per window per IP |
+| `authkit.rate_limit.window` | int | `60` | Rate-limit window (seconds) |
+| `authkit.features.user_management` | bool | `true` | Register `/users` CRUD |
+| `authkit.features.audit_log` | bool | `true` | Write audit entries |
+
+`Register` defaults every zero-valued Option, so `Register(facades.Route(), routes.Options{})`
+is safe.
+
+## Security notes (read before deploying)
+
+- **Hashing config is required.** The package hashes via the Goravel `Hash`
+  facade, so your app must ship a `config/hashing.go` selecting **bcrypt with
+  cost 12** (the value both reference apps use, and what existing `$2a$12$`
+  hashes verify against). Without a hashing config, login and password changes
+  cannot hash/verify.
+- **Configure trusted proxies.** The login rate-limiter and the audit log key on
+  `ctx.Request().Ip()`, which honours `X-Forwarded-For`. Behind a proxy/CDN, set
+  Goravel's `http.trusted_proxies` or the limit is bypassable (and audit IPs are
+  spoofable) by sending a forged header.
+- **No RBAC in v1.** The `/users` management endpoints sit behind the session
+  guard only — every authenticated user can manage users. Once your app assigns
+  roles, gate them with `routes.Options.UserManagementRoles` (e.g.
+  `[]string{"admin"}`), which adds a `RequireRole` check. True RBAC
+  (roles/permissions tables) is a later phase.
+- **Sessions** use httpOnly cookies with session-id regeneration on login
+  (anti-fixation) and `password_changed_at` multi-session invalidation. Set
+  `session.same_site` to `lax` or `strict` and `session.secure=true` in
+  production.
 
 ## License
 
