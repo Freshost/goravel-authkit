@@ -46,8 +46,8 @@ model: registering the ServiceProvider is the entire integration.
   onto `app.MakeRoute()` from the `authkit.*` config, registers the
   `auth:create-user` command (`app.Commands(...)`), and exposes the config for
   `vendor:publish` (`app.Publishes(...)`). It declares its framework
-  dependencies via `Relationship()` (Config, Orm, Hash, Auth, Schema, Route) so
-  it boots after them.
+  dependencies via `Relationship()` (Config, Orm, Hash, Auth, Crypt, Schema,
+  Route) so it boots after them.
 - **`setup/setup.go`** implements `package:install`: it registers the provider
   (`modify.RegisterProvider`), writes `config/authkit.go`
   (`modify.File().Overwrite()`), and **additively** injects the `admin` guard +

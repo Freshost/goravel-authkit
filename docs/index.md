@@ -14,8 +14,8 @@ React/PatternFly frontend counterpart lives in `@freshost/auth-ui`.
 !!! note "Status — v1 in development"
     v1 covers the core that real projects already ship: login/logout/session,
     change-password with other-session invalidation, login rate-limiting, admin
-    user-management CRUD, and an audit log. Later phases: self-registration,
-    email verification, password reset by email, RBAC.
+    user-management CRUD, an audit log, and TOTP two-factor. Later phases:
+    self-registration, email verification, password reset by email, RBAC.
 
 ## What v1 gives you
 
@@ -25,12 +25,14 @@ React/PatternFly frontend counterpart lives in `@freshost/auth-ui`.
 | `POST /api/v1/auth/logout` | Destroys the session |
 | `GET  /api/v1/auth/me` | Current authenticated user |
 | `PUT  /api/v1/auth/password` | Change password (invalidates other sessions) |
+| `POST /api/v1/auth/two-factor…` | TOTP enroll / confirm / disable / recovery + login challenge |
 | `GET/POST/PUT/DELETE /api/v1/users` | Admin user management (toggleable) |
 | `POST /api/v1/users/{id}/password` | Admin set-password |
 
 Plus session-fixation protection, `password_changed_at` multi-session
-invalidation, an `audit_logs` table + writer, an `auth:create-user` artisan
-command, and a `facades.Authkit()` programmatic API.
+invalidation, TOTP two-factor (encrypted secret + single-use recovery codes), an
+`audit_logs` table + writer, an `auth:create-user` artisan command, and a
+`facades.Authkit()` programmatic API.
 
 ## Quick start
 

@@ -12,8 +12,9 @@ SDK contracts). The React/PatternFly frontend counterpart lives in
 
 > **Status:** v1 in development. v1 covers the core that real projects already
 > ship: login/logout/session, change-password with other-session invalidation,
-> login rate-limiting, admin user-management CRUD, and an audit log. Later
-> phases: self-registration, email verification, password reset by email, RBAC.
+> login rate-limiting, admin user-management CRUD, an audit log, and **TOTP
+> two-factor**. Later phases: self-registration, email verification, password
+> reset by email, RBAC.
 
 ## What v1 gives you
 
@@ -23,11 +24,14 @@ SDK contracts). The React/PatternFly frontend counterpart lives in
 | `POST /auth/logout` | Destroys the session |
 | `GET  /auth/me` | Current authenticated user |
 | `PUT  /auth/password` | Change password (invalidates other sessions) |
+| `POST /auth/two-factor` … | TOTP enroll / confirm / disable / recovery-codes (toggleable) |
+| `POST /auth/two-factor-challenge` | Complete a 2FA login |
 | `GET/POST/PUT/DELETE /users` | Admin user management (toggleable) |
 | `POST /users/{id}/password` | Admin set-password |
 
 Plus: session-fixation protection, `password_changed_at` multi-session
-invalidation, an `audit_logs` table + writer, and an `auth:create-user` artisan
+invalidation, **TOTP two-factor** (encrypted secret + single-use recovery
+codes), an `audit_logs` table + writer, and an `auth:create-user` artisan
 command for bootstrapping the first admin.
 
 ## Documentation
@@ -96,6 +100,9 @@ to do.
 | `authkit.rate_limit.window` | int | `60` | Rate-limit window (seconds) |
 | `authkit.features.user_management` | bool | `true` | Register `/users` CRUD |
 | `authkit.features.audit_log` | bool | `true` | Write audit entries |
+| `authkit.features.two_factor` | bool | `true` | Register TOTP two-factor endpoints + login gate |
+| `authkit.two_factor.issuer` | string | `""` | Authenticator issuer (empty = app name) |
+| `authkit.two_factor.recovery_codes` | int | `8` | Recovery codes per confirmation |
 | `authkit.user_management_roles` | []string | `[]` | Roles allowed on `/users` (empty = any) |
 
 See [docs/configuration.md](docs/configuration.md) for details.
@@ -112,6 +119,10 @@ import authfacades "github.com/freshost/goravel-authkit/facades"
 user, err := authfacades.Authkit().CreateUser(ctx, "jane@example.com", "Jane", "secret123", "admin")
 user, err := authfacades.Authkit().Authenticate(ctx, email, password)
 err := authfacades.Authkit().ChangePassword(ctx, id, current, next)
+
+// two-factor
+secret, url, err := authfacades.Authkit().EnableTwoFactor(ctx, id)
+codes, err := authfacades.Authkit().ConfirmTwoFactor(ctx, id, "123456")
 ```
 
 See [`contracts/authkit.go`](contracts/authkit.go) for the full interface.

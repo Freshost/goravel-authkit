@@ -91,10 +91,25 @@ func (f *fakeRepo) UpdatePassword(_ context.Context, id uuid.UUID, hash string, 
 	return nil
 }
 
+func (f *fakeRepo) UpdateTwoFactor(_ context.Context, id uuid.UUID, secret, recoveryCodes *string, confirmedAt *time.Time) error {
+	if u, ok := f.byID[id]; ok {
+		u.TwoFactorSecret = secret
+		u.TwoFactorRecoveryCodes = recoveryCodes
+		u.TwoFactorConfirmedAt = confirmedAt
+	}
+	return nil
+}
+
 // fakeHasher treats "hash:"+value as the hash; no crypto, fully deterministic.
 type fakeHasher struct{}
 
 func (fakeHasher) Make(value string) (string, error) { return "hash:" + value, nil }
 func (fakeHasher) Check(value, hashed string) bool   { return "hash:"+value == hashed }
+
+// fakeCrypter is a no-op crypter for tests (stores plaintext).
+type fakeCrypter struct{}
+
+func (fakeCrypter) Encrypt(v string) (string, error) { return v, nil }
+func (fakeCrypter) Decrypt(v string) (string, error) { return v, nil }
 
 func ptr(s string) *string { return &s }

@@ -38,6 +38,26 @@ guarantees, the operator responsibilities, and the known v1 limitations.
   for CSRF defense — there is no token-based CSRF protection.
 - **TLS.** Serve over HTTPS so the session cookie is never sent in clear.
 
+## Two-factor (TOTP)
+
+When `authkit.features.two_factor` is on, users can enroll in TOTP
+(RFC 6238, Google-Authenticator compatible, via `github.com/pquerna/otp`):
+
+- **Secret + recovery codes are encrypted at rest** with the Goravel `Crypt`
+  facade (app key); both columns are `json:"-"` and never serialized or logged.
+- **Two-step login.** A correct password for a 2FA user returns
+  `{two_factor:true}` and stashes only the user id in the session — the session
+  is **not** authenticated until the challenge succeeds.
+- **The challenge endpoint is rate-limited** (same limiter as login) because a
+  6-digit code is brute-forceable.
+- **Recovery codes are single-use**, stored encrypted, and can be regenerated
+  (which invalidates the old set). The challenge accepts a TOTP code or a
+  recovery code.
+- **TOTP validation allows ±1 period of clock skew** (the library default).
+
+Operator note: a re-auth gate (password/code) on *disabling* 2FA is recommended
+and planned; v1 allows an authenticated user to disable their own 2FA.
+
 ## Known v1 limitations (by design)
 
 - **No RBAC.** The `/users` management endpoints are protected only by the
@@ -64,6 +84,9 @@ When `EnableAuditLog` is on, the package writes to `audit_logs`:
 | `auth.password_changed` | Self-service password change |
 | `user.create` / `user.update` / `user.delete` | User management |
 | `user.password_reset` | Admin set-password |
+| `auth.two_factor_enrolled` / `auth.two_factor_confirmed` | 2FA enrollment |
+| `auth.two_factor_disabled` / `auth.two_factor_recovery_regenerated` | 2FA changes |
+| `auth.two_factor_failed` | Failed 2FA challenge |
 
 Audit writes are best-effort: a write failure is logged but does not fail the
 parent request.

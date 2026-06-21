@@ -37,6 +37,14 @@ type Options struct {
 	// default) leaves them open to any authenticated user, since v1 ships no
 	// RBAC. Set e.g. []string{"admin"} once your app assigns roles.
 	UserManagementRoles []string
+	// EnableTwoFactor registers the TOTP two-factor endpoints and the two-step
+	// login gate. Each user still opts in individually by enrolling.
+	EnableTwoFactor bool
+	// TwoFactorIssuer is the issuer shown in the authenticator app (defaults to
+	// the package issuer when empty).
+	TwoFactorIssuer string
+	// RecoveryCodeCount is how many recovery codes are generated on confirmation.
+	RecoveryCodeCount int
 }
 
 // DefaultOptions returns the baked-in defaults (matches the published config).
@@ -49,6 +57,8 @@ func DefaultOptions() Options {
 		RateLimitWindow:      time.Minute,
 		EnableUserManagement: true,
 		EnableAuditLog:       true,
+		EnableTwoFactor:      true,
+		RecoveryCodeCount:    services.DefaultRecoveryCodeCount,
 	}
 }
 
@@ -77,6 +87,13 @@ func OptionsFromConfig() Options {
 	}
 	o.EnableUserManagement = cfg.GetBool("authkit.features.user_management", o.EnableUserManagement)
 	o.EnableAuditLog = cfg.GetBool("authkit.features.audit_log", o.EnableAuditLog)
+	o.EnableTwoFactor = cfg.GetBool("authkit.features.two_factor", o.EnableTwoFactor)
+	if v := cfg.GetString("authkit.two_factor.issuer"); v != "" {
+		o.TwoFactorIssuer = v
+	}
+	if v := cfg.GetInt("authkit.two_factor.recovery_codes"); v > 0 {
+		o.RecoveryCodeCount = v
+	}
 	if v := cfg.Get("authkit.user_management_roles"); v != nil {
 		o.UserManagementRoles = toStringSlice(v)
 	}
@@ -133,14 +150,24 @@ func Register(router route.Router, opts Options) {
 		auditSvc = services.NewAudit(repositories.NewAudit())
 	}
 
-	authCtrl := controllers.NewAuthController(authSvc, auditSvc, opts.Guard)
-	usersCtrl := controllers.NewUsersController(usersSvc, auditSvc)
+	var twoFactorSvc *services.TwoFactor
+	if opts.EnableTwoFactor {
+		twoFactorSvc = services.NewTwoFactor(usersRepo, services.NewFacadeCrypter(), opts.TwoFactorIssuer, opts.RecoveryCodeCount)
+	}
 
-	// Public: login (rate-limited).
+	authCtrl := controllers.NewAuthController(authSvc, auditSvc, twoFactorSvc, opts.Guard)
+	usersCtrl := controllers.NewUsersController(usersSvc, auditSvc)
+	twoFactorCtrl := controllers.NewTwoFactorController(usersSvc, twoFactorSvc, auditSvc, opts.Guard)
+
+	// Public, rate-limited: login + the 2FA challenge (both gate on session/IP,
+	// not on the authenticated guard).
 	router.Prefix(opts.Prefix + "/auth").
 		Middleware(middleware.RateLimitAuth(opts.RateLimitAttempts, opts.RateLimitWindow)).
 		Group(func(r route.Router) {
 			r.Post("/login", authCtrl.Login)
+			if opts.EnableTwoFactor {
+				r.Post("/two-factor-challenge", twoFactorCtrl.Challenge)
+			}
 		})
 
 	// Guarded: everything behind the session guard.
@@ -150,6 +177,14 @@ func Register(router route.Router, opts Options) {
 			r.Post("/auth/logout", authCtrl.Logout)
 			r.Get("/auth/me", authCtrl.Me)
 			r.Put("/auth/password", authCtrl.ChangePassword)
+
+			if opts.EnableTwoFactor {
+				r.Post("/auth/two-factor", twoFactorCtrl.Enable)
+				r.Post("/auth/two-factor/confirm", twoFactorCtrl.Confirm)
+				r.Delete("/auth/two-factor", twoFactorCtrl.Disable)
+				r.Get("/auth/two-factor/recovery-codes", twoFactorCtrl.RecoveryCodes)
+				r.Post("/auth/two-factor/recovery-codes", twoFactorCtrl.RegenerateRecoveryCodes)
+			}
 
 			if opts.EnableUserManagement {
 				userRoutes := func(ur route.Router) {

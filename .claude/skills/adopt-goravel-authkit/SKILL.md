@@ -117,9 +117,11 @@ interleaving a migration.
 
 The controllers carry Swagger annotations with fixed operation ids (`login`,
 `logout`, `getMe`, `changePassword`, `listUsers`, `createUser`, `getUser`,
-`updateUser`, `deleteUser`, `setUserPassword`). Run swag with `--parseDependency
---parseInternal` so the package module is scanned, then your `make swagger` +
-`make generate-api`.
+`updateUser`, `deleteUser`, `setUserPassword`, plus the two-factor ids
+`twoFactorChallenge`, `enableTwoFactor`, `confirmTwoFactor`, `disableTwoFactor`,
+`getTwoFactorRecoveryCodes`, `regenerateTwoFactorRecoveryCodes`). Run swag with
+`--parseDependency --parseInternal` so the package module is scanned, then your
+`make swagger` + `make generate-api`.
 
 ## Step F — frontend (interim, until @freshost/auth-ui)
 

@@ -25,6 +25,11 @@ func init() {
         "features": map[string]any{
             "user_management": true,
             "audit_log":       true,
+            "two_factor":      true,
+        },
+        "two_factor": map[string]any{
+            "issuer":         "", // defaults to the app name
+            "recovery_codes": 8,
         },
         "user_management_roles": []string{}, // empty = open to any authenticated user
     })
@@ -40,6 +45,9 @@ func init() {
 | `authkit.rate_limit.window` | int | `60` | Rate-limit window, seconds |
 | `authkit.features.user_management` | bool | `true` | Register the `/users` CRUD endpoints |
 | `authkit.features.audit_log` | bool | `true` | Write entries to `audit_logs` |
+| `authkit.features.two_factor` | bool | `true` | Register the TOTP two-factor endpoints + login gate |
+| `authkit.two_factor.issuer` | string | `""` | Issuer shown in the authenticator app (empty = app name) |
+| `authkit.two_factor.recovery_codes` | int | `8` | Recovery codes generated on confirmation |
 | `authkit.user_management_roles` | []string | `[]` | Roles allowed to use `/users` (empty = any authenticated user) |
 
 ## Feature toggles
@@ -48,6 +56,8 @@ func init() {
   (use for single-admin apps; `auth:create-user` still bootstraps the admin).
 - **`features.audit_log = false`** — runs without writing audit entries. The
   migration still creates the `audit_logs` table.
+- **`features.two_factor = false`** — drops the `/auth/two-factor*` routes and
+  the two-step login gate. The migration still adds the columns.
 
 ## Gating user management by role
 

@@ -32,4 +32,15 @@ type Authkit interface {
 	ChangePassword(ctx context.Context, id uuid.UUID, currentPassword, newPassword string) error
 	// DeleteUser removes a user, refusing to remove the last one.
 	DeleteUser(ctx context.Context, id uuid.UUID) error
+
+	// EnableTwoFactor starts TOTP enrollment, returning the secret + otpauth URL
+	// (the user confirms with a code to activate).
+	EnableTwoFactor(ctx context.Context, id uuid.UUID) (secret, otpauthURL string, err error)
+	// ConfirmTwoFactor verifies a code against the pending secret, activates 2FA,
+	// and returns one-time recovery codes.
+	ConfirmTwoFactor(ctx context.Context, id uuid.UUID, code string) (recoveryCodes []string, err error)
+	// VerifyTwoFactor checks a TOTP code for a 2FA-enabled user.
+	VerifyTwoFactor(ctx context.Context, id uuid.UUID, code string) (bool, error)
+	// DisableTwoFactor clears the user's two-factor state.
+	DisableTwoFactor(ctx context.Context, id uuid.UUID) error
 }

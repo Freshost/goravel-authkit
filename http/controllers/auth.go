@@ -19,17 +19,23 @@ import (
 	"github.com/freshost/goravel-authkit/services"
 )
 
+// SessionKeyTwoFactorUserID holds the id of a user who passed the password step
+// but still owes a 2FA challenge. The session is NOT authenticated until the
+// challenge succeeds.
+const SessionKeyTwoFactorUserID = "authkit_2fa_user_id"
+
 // AuthController handles the auth endpoints.
 type AuthController struct {
-	auth  *services.Auth
-	audit *services.Audit // nil when audit logging is disabled
-	guard string
+	auth      *services.Auth
+	audit     *services.Audit     // nil when audit logging is disabled
+	twoFactor *services.TwoFactor // nil when 2FA is disabled
+	guard     string
 }
 
-// NewAuthController builds the auth controller. Pass a nil audit to disable
-// audit writes.
-func NewAuthController(auth *services.Auth, audit *services.Audit, guard string) *AuthController {
-	return &AuthController{auth: auth, audit: audit, guard: guard}
+// NewAuthController builds the auth controller. Pass a nil audit to disable audit
+// writes, and a nil twoFactor to disable the two-factor login gate.
+func NewAuthController(auth *services.Auth, audit *services.Audit, twoFactor *services.TwoFactor, guard string) *AuthController {
+	return &AuthController{auth: auth, audit: audit, twoFactor: twoFactor, guard: guard}
 }
 
 // Login godoc
@@ -41,7 +47,7 @@ func NewAuthController(auth *services.Auth, audit *services.Audit, guard string)
 //	@Accept			json
 //	@Produce		json
 //	@Param			body	body		responses.LoginRequest	true	"Login credentials"
-//	@Success		200		{object}	responses.UserResponse
+//	@Success		200		{object}	responses.UserResponse "Logged in (or {two_factor:true} when a 2FA challenge is required)"
 //	@Failure		400		{object}	responses.ErrorResponse
 //	@Failure		401		{object}	responses.ErrorResponse
 //	@Failure		429		{object}	responses.ErrorResponse
@@ -59,19 +65,44 @@ func (c *AuthController) Login(ctx contractshttp.Context) contractshttp.Response
 		return c.mapServiceError(ctx, err)
 	}
 
-	if _, err := facades.Auth(ctx).Guard(c.guard).Login(user); err != nil {
+	// Two-step login: if the user has confirmed 2FA, do NOT establish the
+	// session yet. Stash the pending user id and require a challenge.
+	if c.twoFactor != nil && user.TwoFactorEnabled() {
+		if sess := ctx.Request().Session(); sess != nil {
+			sess.Put(SessionKeyTwoFactorUserID, user.ID.String())
+		}
+		return ctx.Response().Json(http.StatusOK, responses.TwoFactorRequiredResponse{TwoFactor: true})
+	}
+
+	return completeLogin(ctx, c.guard, c.audit, user)
+}
+
+// completeLogin establishes the authenticated session for a verified user
+// (guard login, session-id regeneration, password stamp, audit) and returns the
+// user response. Shared by password-only login and the 2FA challenge.
+func completeLogin(ctx contractshttp.Context, guard string, audit *services.Audit, user *models.User) contractshttp.Response {
+	if _, err := facades.Auth(ctx).Guard(guard).Login(user); err != nil {
 		facades.Log().Errorf("auth: establish session: %v", err)
-		return c.internal(ctx)
+		return ctx.Response().Json(http.StatusInternalServerError, responses.ErrorResponse{
+			Error: "internal_error", Message: "Internal server error",
+		})
 	}
 	if err := helpers.RegenerateAndPersistSession(ctx); err != nil {
 		facades.Log().Errorf("auth: regenerate session: %v", err)
 	}
-	ctx.Request().Session().Put(
-		middleware.SessionKeyPasswordChangedAt,
-		middleware.FormatPasswordTimestamp(user.PasswordChangedAt),
-	)
-
-	c.writeAudit(ctx, user, "auth.login")
+	if sess := ctx.Request().Session(); sess != nil {
+		sess.Put(middleware.SessionKeyPasswordChangedAt, middleware.FormatPasswordTimestamp(user.PasswordChangedAt))
+		sess.Forget(SessionKeyTwoFactorUserID)
+	}
+	if audit != nil {
+		id := user.ID
+		rid := id.String()
+		if err := audit.Log(ctx.Request().Origin().Context(), services.AuditEntry{
+			ActorID: &id, ActorEmail: user.Email, Action: "auth.login", ResourceType: "user", ResourceID: &rid, IP: ctx.Request().Ip(),
+		}); err != nil {
+			facades.Log().Errorf("audit auth.login: %v", err)
+		}
+	}
 	return ctx.Response().Json(http.StatusOK, responses.NewUserResponse(user))
 }
 

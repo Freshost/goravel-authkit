@@ -27,6 +27,8 @@ type UsersRepository interface {
 	Save(ctx context.Context, u *models.User) error
 	Delete(ctx context.Context, u *models.User) error
 	UpdatePassword(ctx context.Context, id uuid.UUID, passwordHash string, changedAt time.Time) error
+	// UpdateTwoFactor sets the three two_factor columns (nil clears a column to NULL).
+	UpdateTwoFactor(ctx context.Context, id uuid.UUID, secret, recoveryCodes *string, confirmedAt *time.Time) error
 }
 
 // Users is the ORM-backed UsersRepository.
@@ -92,6 +94,15 @@ func (r *Users) UpdatePassword(ctx context.Context, id uuid.UUID, passwordHash s
 	_, err := facades.Orm().WithContext(ctx).Query().Model(&models.User{}).Where("id", id).Update(map[string]any{
 		"password_hash":       passwordHash,
 		"password_changed_at": changedAt,
+	})
+	return err
+}
+
+func (r *Users) UpdateTwoFactor(ctx context.Context, id uuid.UUID, secret, recoveryCodes *string, confirmedAt *time.Time) error {
+	_, err := facades.Orm().WithContext(ctx).Query().Model(&models.User{}).Where("id", id).Update(map[string]any{
+		"two_factor_secret":         secret,
+		"two_factor_recovery_codes": recoveryCodes,
+		"two_factor_confirmed_at":   confirmedAt,
 	})
 	return err
 }

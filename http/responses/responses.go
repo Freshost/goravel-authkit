@@ -52,6 +52,37 @@ type SetPasswordRequest struct {
 	Password string `json:"password" binding:"required" example:"new-password"`
 }
 
+// TwoFactorRequiredResponse is returned by login when the user has 2FA enabled:
+// the session is not established yet; the client must call the challenge endpoint.
+type TwoFactorRequiredResponse struct {
+	TwoFactor bool `json:"two_factor" example:"true"`
+}
+
+// TwoFactorChallengeRequest completes a 2FA login with either a TOTP code or a
+// recovery code (exactly one).
+type TwoFactorChallengeRequest struct {
+	Code         string `json:"code" example:"123456"`
+	RecoveryCode string `json:"recoveryCode" example:"ABCDE-FGHJK"`
+}
+
+// TwoFactorConfirmRequest confirms enrollment with a TOTP code.
+type TwoFactorConfirmRequest struct {
+	Code string `json:"code" binding:"required" example:"123456"`
+}
+
+// TwoFactorEnrollmentResponse is returned when enrollment starts: the secret and
+// the otpauth:// URL the client renders as a QR code.
+type TwoFactorEnrollmentResponse struct {
+	Secret     string `json:"secret" example:"JBSWY3DPEHPK3PXP"`
+	OtpauthURL string `json:"otpauthUrl" example:"otpauth://totp/App:admin@example.com?secret=...&issuer=App"`
+}
+
+// RecoveryCodesResponse carries one-time recovery codes (shown once on
+// confirmation / regeneration; thereafter only the unused ones).
+type RecoveryCodesResponse struct {
+	RecoveryCodes []string `json:"recoveryCodes" example:"ABCDE-FGHJK"`
+}
+
 // UserResponse is the public view of a user (never includes the password hash).
 type UserResponse struct {
 	ID        string `json:"id" example:"3f2504e0-4f89-41d3-9a0c-0305e82c3301"`

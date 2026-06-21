@@ -26,10 +26,23 @@ type User struct {
 	PasswordHash      *string    `gorm:"type:text" json:"-"`
 	PasswordChangedAt time.Time  `gorm:"type:timestamptz;not null;autoCreateTime" json:"passwordChangedAt"`
 	Role              string     `gorm:"type:text;not null;default:'admin'" json:"role"`
-	CreatedAt         time.Time  `json:"createdAt"`
-	UpdatedAt         time.Time  `json:"updatedAt"`
+
+	// Two-factor (TOTP). Secret + recovery codes are stored encrypted (Crypt
+	// facade) and never serialized. TwoFactorConfirmedAt is set once the user
+	// confirms enrollment; nil means 2FA is not active.
+	TwoFactorSecret        *string    `gorm:"type:text" json:"-"`
+	TwoFactorRecoveryCodes *string    `gorm:"type:text" json:"-"`
+	TwoFactorConfirmedAt   *time.Time `gorm:"type:timestamptz" json:"-"`
+
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 func (User) TableName() string {
 	return "users"
+}
+
+// TwoFactorEnabled reports whether the user has confirmed TOTP two-factor auth.
+func (u *User) TwoFactorEnabled() bool {
+	return u.TwoFactorConfirmedAt != nil && u.TwoFactorSecret != nil && *u.TwoFactorSecret != ""
 }

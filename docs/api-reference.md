@@ -14,6 +14,26 @@ function name. Auth endpoints other than login require the session cookie
 | GET | `/auth/me` | `getMe` | cookie | `200` UserResponse | `401` |
 | PUT | `/auth/password` | `changePassword` | cookie | `200` MessageResponse | `400` `401` `500` |
 
+> When the user has 2FA enabled, `login` returns `200 {"two_factor": true}`
+> **without** establishing the session — the client must then call
+> `two-factor-challenge`.
+
+## Two-factor (when `EnableTwoFactor`)
+
+| Method | Path | `@ID` | Auth | Success | Errors |
+| --- | --- | --- | --- | --- | --- |
+| POST | `/auth/two-factor-challenge` | `twoFactorChallenge` | pending session (rate-limited) | `200` UserResponse | `400` `401` `429` |
+| POST | `/auth/two-factor` | `enableTwoFactor` | cookie | `200` TwoFactorEnrollmentResponse | `401` `409` |
+| POST | `/auth/two-factor/confirm` | `confirmTwoFactor` | cookie | `200` RecoveryCodesResponse | `400` `401` |
+| DELETE | `/auth/two-factor` | `disableTwoFactor` | cookie | `200` MessageResponse | `401` |
+| GET | `/auth/two-factor/recovery-codes` | `getTwoFactorRecoveryCodes` | cookie | `200` RecoveryCodesResponse | `401` |
+| POST | `/auth/two-factor/recovery-codes` | `regenerateTwoFactorRecoveryCodes` | cookie | `200` RecoveryCodesResponse | `401` |
+
+Enrollment flow: `enableTwoFactor` (get secret + otpauth URL → render QR) →
+user scans → `confirmTwoFactor` with a code (activates, returns recovery codes).
+Login flow with 2FA: `login` → `{two_factor:true}` → `twoFactorChallenge` with a
+`code` **or** `recoveryCode`.
+
 ## Users (when `EnableUserManagement`)
 
 | Method | Path | `@ID` | Success | Errors |
@@ -42,6 +62,13 @@ function name. Auth endpoints other than login require the session cookie
 
 // SetPasswordRequest
 { "password": "new-secret" }
+
+// TwoFactorChallengeRequest — supply exactly one
+{ "code": "123456" }            // TOTP code
+{ "recoveryCode": "ABCDE-FGHJK" } // or a recovery code
+
+// TwoFactorConfirmRequest
+{ "code": "123456" }
 ```
 
 ## Response shapes
@@ -58,6 +85,15 @@ function name. Auth endpoints other than login require the session cookie
 
 // MessageResponse
 { "message": "Password changed" }
+
+// TwoFactorRequiredResponse — login when 2FA is enabled
+{ "two_factor": true }
+
+// TwoFactorEnrollmentResponse
+{ "secret": "JBSWY3DPEHPK3PXP", "otpauthUrl": "otpauth://totp/App:admin@example.com?secret=...&issuer=App" }
+
+// RecoveryCodesResponse
+{ "recoveryCodes": ["ABCDE-FGHJK", "..."] }
 
 // ErrorResponse — the standard error envelope
 { "error": "invalid_credentials", "message": "Invalid email or password" }

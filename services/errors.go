@@ -29,6 +29,14 @@ var (
 	ErrLastAdmin = errors.New("cannot remove the last admin")
 	// ErrInternal wraps an unexpected lower-layer failure.
 	ErrInternal = errors.New("internal error")
+	// ErrTwoFactorNotEnrolled is returned when a 2FA operation needs an active
+	// (or pending) enrollment the user does not have.
+	ErrTwoFactorNotEnrolled = errors.New("two-factor not enrolled")
+	// ErrTwoFactorAlreadyEnabled is returned when enrolling a user who already
+	// has 2FA confirmed.
+	ErrTwoFactorAlreadyEnabled = errors.New("two-factor already enabled")
+	// ErrInvalidCode is returned when a TOTP (or recovery) code does not verify.
+	ErrInvalidCode = errors.New("invalid code")
 )
 
 // DefaultMinPasswordLength is the fallback minimum new-password length when the

@@ -26,6 +26,16 @@ func init() {
 			"user_management": true,
 			// Write audit entries to the audit_logs table.
 			"audit_log": true,
+			// Register the TOTP two-factor endpoints + two-step login gate.
+			// Users still opt in individually by enrolling.
+			"two_factor": true,
+		},
+		// TOTP two-factor settings.
+		"two_factor": map[string]any{
+			// Issuer shown in the authenticator app (defaults to the app name).
+			"issuer": "",
+			// Number of single-use recovery codes generated on confirmation.
+			"recovery_codes": 8,
 		},
 		// Roles allowed to use the /users endpoints. Empty (default) = any
 		// authenticated user (v1 has no RBAC). Set e.g. []string{"admin"} once

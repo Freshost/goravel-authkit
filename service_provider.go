@@ -50,6 +50,7 @@ func (r *ServiceProvider) Relationship() binding.Relationship {
 			binding.Orm,
 			binding.Hash,
 			binding.Auth,
+			binding.Crypt,
 			binding.Schema,
 			binding.Route,
 		},
