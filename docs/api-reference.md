@@ -25,7 +25,7 @@ function name. Auth endpoints other than login require the session cookie
 | POST | `/auth/two-factor-challenge` | `twoFactorChallenge` | pending session (rate-limited) | `200` UserResponse | `400` `401` `429` |
 | POST | `/auth/two-factor` | `enableTwoFactor` | cookie | `200` TwoFactorEnrollmentResponse | `401` `409` |
 | POST | `/auth/two-factor/confirm` | `confirmTwoFactor` | cookie | `200` RecoveryCodesResponse | `400` `401` |
-| DELETE | `/auth/two-factor` | `disableTwoFactor` | cookie | `200` MessageResponse | `401` |
+| DELETE | `/auth/two-factor` | `disableTwoFactor` | cookie (+ password re-auth) | `200` MessageResponse | `400` `401` |
 | GET | `/auth/two-factor/recovery-codes` | `getTwoFactorRecoveryCodes` | cookie | `200` RecoveryCodesResponse | `401` |
 | POST | `/auth/two-factor/recovery-codes` | `regenerateTwoFactorRecoveryCodes` | cookie | `200` RecoveryCodesResponse | `401` |
 
@@ -69,6 +69,9 @@ Login flow with 2FA: `login` → `{two_factor:true}` → `twoFactorChallenge` wi
 
 // TwoFactorConfirmRequest
 { "code": "123456" }
+
+// TwoFactorDisableRequest — re-auth before disabling 2FA
+{ "password": "secret" }
 ```
 
 ## Response shapes

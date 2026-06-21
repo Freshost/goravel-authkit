@@ -70,6 +70,12 @@ type TwoFactorConfirmRequest struct {
 	Code string `json:"code" binding:"required" example:"123456"`
 }
 
+// TwoFactorDisableRequest re-authenticates with the account password before
+// disabling 2FA.
+type TwoFactorDisableRequest struct {
+	Password string `json:"password" binding:"required" example:"secret"`
+}
+
 // TwoFactorEnrollmentResponse is returned when enrollment starts: the secret and
 // the otpauth:// URL the client renders as a QR code.
 type TwoFactorEnrollmentResponse struct {

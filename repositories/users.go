@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	ormcontract "github.com/goravel/framework/contracts/database/orm"
 	"github.com/goravel/framework/facades"
 	"gorm.io/gorm"
 
@@ -29,6 +30,10 @@ type UsersRepository interface {
 	UpdatePassword(ctx context.Context, id uuid.UUID, passwordHash string, changedAt time.Time) error
 	// UpdateTwoFactor sets the three two_factor columns (nil clears a column to NULL).
 	UpdateTwoFactor(ctx context.Context, id uuid.UUID, secret, recoveryCodes *string, confirmedAt *time.Time) error
+	// MutateLocked loads the user inside a transaction with a row lock
+	// (SELECT ... FOR UPDATE), applies fn, and saves — making a read-modify-write
+	// (e.g. consuming a recovery code, recording a used TOTP step) atomic.
+	MutateLocked(ctx context.Context, id uuid.UUID, fn func(u *models.User) error) error
 }
 
 // Users is the ORM-backed UsersRepository.
@@ -105,4 +110,20 @@ func (r *Users) UpdateTwoFactor(ctx context.Context, id uuid.UUID, secret, recov
 		"two_factor_confirmed_at":   confirmedAt,
 	})
 	return err
+}
+
+func (r *Users) MutateLocked(ctx context.Context, id uuid.UUID, fn func(u *models.User) error) error {
+	return facades.Orm().WithContext(ctx).Transaction(func(tx ormcontract.Query) error {
+		var u models.User
+		if err := tx.Where("id", id).LockForUpdate().First(&u); err != nil {
+			return err
+		}
+		if u.ID == uuid.Nil {
+			return gorm.ErrRecordNotFound
+		}
+		if err := fn(&u); err != nil {
+			return err
+		}
+		return tx.Save(&u)
+	})
 }

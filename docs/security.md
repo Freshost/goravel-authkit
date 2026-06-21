@@ -51,12 +51,14 @@ When `authkit.features.two_factor` is on, users can enroll in TOTP
 - **The challenge endpoint is rate-limited** (same limiter as login) because a
   6-digit code is brute-forceable.
 - **Recovery codes are single-use**, stored encrypted, and can be regenerated
-  (which invalidates the old set). The challenge accepts a TOTP code or a
-  recovery code.
-- **TOTP validation allows ±1 period of clock skew** (the library default).
-
-Operator note: a re-auth gate (password/code) on *disabling* 2FA is recommended
-and planned; v1 allows an authenticated user to disable their own 2FA.
+  (which invalidates the old set). Consumption is atomic (row-locked
+  transaction) so a code cannot be double-spent under concurrency. The challenge
+  accepts a TOTP code or a recovery code.
+- **TOTP codes are single-use within their window** (OWASP ASVS 2.8.4): the
+  accepted code's time-step is recorded and a replayed code is rejected.
+  Validation allows ±1 period of clock skew.
+- **Disabling 2FA requires re-authentication** with the account password, so a
+  stolen session alone cannot silently remove 2FA.
 
 ## Known v1 limitations (by design)
 

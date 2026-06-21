@@ -33,6 +33,9 @@ type User struct {
 	TwoFactorSecret        *string    `gorm:"type:text" json:"-"`
 	TwoFactorRecoveryCodes *string    `gorm:"type:text" json:"-"`
 	TwoFactorConfirmedAt   *time.Time `gorm:"type:timestamptz" json:"-"`
+	// Start time of the last accepted TOTP step; rejects replay within a code's
+	// validity window (single-use TOTP).
+	TwoFactorLastUsedAt *time.Time `gorm:"type:timestamptz" json:"-"`
 
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`

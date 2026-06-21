@@ -10,5 +10,6 @@ func Migrations() []schema.Migration {
 		&CreateUsers{},
 		&CreateAuditLogs{},
 		&AddTwoFactorToUsers{},
+		&AddTwoFactorLastUsed{},
 	}
 }

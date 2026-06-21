@@ -157,7 +157,7 @@ func Register(router route.Router, opts Options) {
 
 	authCtrl := controllers.NewAuthController(authSvc, auditSvc, twoFactorSvc, opts.Guard)
 	usersCtrl := controllers.NewUsersController(usersSvc, auditSvc)
-	twoFactorCtrl := controllers.NewTwoFactorController(usersSvc, twoFactorSvc, auditSvc, opts.Guard)
+	twoFactorCtrl := controllers.NewTwoFactorController(usersSvc, authSvc, twoFactorSvc, auditSvc, opts.Guard)
 
 	// Public, rate-limited: login + the 2FA challenge (both gate on session/IP,
 	// not on the authenticated guard).

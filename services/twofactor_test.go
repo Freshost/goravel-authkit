@@ -98,6 +98,29 @@ func TestTwoFactor_Disable(t *testing.T) {
 	assert.False(t, repo.byID[u.ID].TwoFactorEnabled())
 }
 
+func TestTwoFactor_VerifyLoginCode_ReplayRejected(t *testing.T) {
+	repo := newFakeRepo()
+	u := seedFor2FA(repo, "f@example.com")
+	tf := newTwoFactor(repo)
+	enr, _ := tf.Enable(context.Background(), u.ID)
+	confirmCode, _ := totp.GenerateCode(enr.Secret, time.Now())
+	_, err := tf.Confirm(context.Background(), u.ID, confirmCode)
+	require.NoError(t, err)
+
+	code, _ := totp.GenerateCode(enr.Secret, time.Now())
+	ok, err := tf.VerifyLoginCode(context.Background(), u.ID, code)
+	require.NoError(t, err)
+	assert.True(t, ok, "first use of the code succeeds")
+
+	// Replaying the same code (same time-step) is rejected.
+	ok, err = tf.VerifyLoginCode(context.Background(), u.ID, code)
+	require.NoError(t, err)
+	assert.False(t, ok, "replay of the same code is rejected")
+
+	ok, _ = tf.VerifyLoginCode(context.Background(), u.ID, "000000")
+	assert.False(t, ok, "wrong code is rejected")
+}
+
 func TestTwoFactor_RegenerateInvalidatesOld(t *testing.T) {
 	repo := newFakeRepo()
 	u := seedFor2FA(repo, "e@example.com")

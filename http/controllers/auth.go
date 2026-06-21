@@ -66,8 +66,12 @@ func (c *AuthController) Login(ctx contractshttp.Context) contractshttp.Response
 	}
 
 	// Two-step login: if the user has confirmed 2FA, do NOT establish the
-	// session yet. Stash the pending user id and require a challenge.
+	// session yet. Regenerate the session id (anti-fixation) before stashing the
+	// pending user id; the session stays unauthenticated until the challenge.
 	if c.twoFactor != nil && user.TwoFactorEnabled() {
+		if err := helpers.RegenerateAndPersistSession(ctx); err != nil {
+			facades.Log().Errorf("auth: regenerate session: %v", err)
+		}
 		if sess := ctx.Request().Session(); sess != nil {
 			sess.Put(SessionKeyTwoFactorUserID, user.ID.String())
 		}

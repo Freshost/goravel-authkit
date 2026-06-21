@@ -18,14 +18,15 @@ import (
 // pending login) and the management endpoints (enable/confirm/disable/recovery).
 type TwoFactorController struct {
 	users     *services.Users
+	auth      *services.Auth
 	twoFactor *services.TwoFactor
 	audit     *services.Audit
 	guard     string
 }
 
 // NewTwoFactorController builds the two-factor controller.
-func NewTwoFactorController(users *services.Users, twoFactor *services.TwoFactor, audit *services.Audit, guard string) *TwoFactorController {
-	return &TwoFactorController{users: users, twoFactor: twoFactor, audit: audit, guard: guard}
+func NewTwoFactorController(users *services.Users, auth *services.Auth, twoFactor *services.TwoFactor, audit *services.Audit, guard string) *TwoFactorController {
+	return &TwoFactorController{users: users, auth: auth, twoFactor: twoFactor, audit: audit, guard: guard}
 }
 
 // Challenge godoc
@@ -45,32 +46,32 @@ func NewTwoFactorController(users *services.Users, twoFactor *services.TwoFactor
 func (c *TwoFactorController) Challenge(ctx contractshttp.Context) contractshttp.Response {
 	sess := ctx.Request().Session()
 	if sess == nil {
-		return unauthorized(ctx, "no pending two-factor challenge")
+		return c.unauthorized(ctx, "no pending two-factor challenge")
 	}
 	raw, _ := sess.Get(SessionKeyTwoFactorUserID).(string)
 	id, err := uuid.Parse(raw)
 	if err != nil || id == uuid.Nil {
-		return unauthorized(ctx, "no pending two-factor challenge")
+		return c.unauthorized(ctx, "no pending two-factor challenge")
 	}
 
 	var req responses.TwoFactorChallengeRequest
 	if err := ctx.Request().Bind(&req); err != nil {
-		return badRequest(ctx, "Invalid request body")
+		return c.badRequest(ctx, "Invalid request body")
 	}
 
 	user, err := c.users.GetByID(ctx.Request().Origin().Context(), id)
 	if err != nil {
-		return unauthorized(ctx, "no pending two-factor challenge")
+		return c.unauthorized(ctx, "no pending two-factor challenge")
 	}
 
 	var ok bool
 	switch {
 	case strings.TrimSpace(req.Code) != "":
-		ok, err = c.twoFactor.Verify(user, req.Code)
+		ok, err = c.twoFactor.VerifyLoginCode(ctx.Request().Origin().Context(), id, req.Code)
 	case strings.TrimSpace(req.RecoveryCode) != "":
 		ok, err = c.twoFactor.ConsumeRecoveryCode(ctx.Request().Origin().Context(), id, req.RecoveryCode)
 	default:
-		return badRequest(ctx, "A code or recoveryCode is required")
+		return c.badRequest(ctx, "A code or recoveryCode is required")
 	}
 	if err != nil {
 		facades.Log().Errorf("2fa challenge: %v", err)
@@ -128,7 +129,7 @@ func (c *TwoFactorController) Confirm(ctx contractshttp.Context) contractshttp.R
 	id := helpers.AuthUserID(ctx)
 	var req responses.TwoFactorConfirmRequest
 	if err := ctx.Request().Bind(&req); err != nil {
-		return badRequest(ctx, "Invalid request body")
+		return c.badRequest(ctx, "Invalid request body")
 	}
 	codes, err := c.twoFactor.Confirm(ctx.Request().Origin().Context(), id, req.Code)
 	if err != nil {
@@ -142,15 +143,31 @@ func (c *TwoFactorController) Confirm(ctx contractshttp.Context) contractshttp.R
 //
 //	@ID				disableTwoFactor
 //	@Summary		Disable 2FA
-//	@Description	Clears the user's two-factor secret and recovery codes.
+//	@Description	Clears the user's two-factor secret and recovery codes. Requires the account password to confirm (re-auth), so a stolen session alone cannot silently remove 2FA.
 //	@Tags			Auth
+//	@Accept			json
 //	@Produce		json
 //	@Security		CookieAuth
-//	@Success		200	{object}	responses.MessageResponse
-//	@Failure		401	{object}	responses.ErrorResponse
+//	@Param			body	body		responses.TwoFactorDisableRequest	true	"Account password"
+//	@Success		200		{object}	responses.MessageResponse
+//	@Failure		401		{object}	responses.ErrorResponse
 //	@Router			/auth/two-factor [delete]
 func (c *TwoFactorController) Disable(ctx contractshttp.Context) contractshttp.Response {
 	id := helpers.AuthUserID(ctx)
+
+	var req responses.TwoFactorDisableRequest
+	if err := ctx.Request().Bind(&req); err != nil {
+		return c.badRequest(ctx, "Invalid request body")
+	}
+	user, err := c.users.GetByID(ctx.Request().Origin().Context(), id)
+	if err != nil {
+		return c.mapError(ctx, err)
+	}
+	// Re-auth: confirm the account password before removing 2FA.
+	if _, err := c.auth.Authenticate(ctx.Request().Origin().Context(), user.Email, req.Password); err != nil {
+		return c.unauthorized(ctx, "Password confirmation failed")
+	}
+
 	if err := c.twoFactor.Disable(ctx.Request().Origin().Context(), id); err != nil {
 		return c.mapError(ctx, err)
 	}
@@ -239,10 +256,10 @@ func (c *TwoFactorController) mapError(ctx contractshttp.Context, err error) con
 	}
 }
 
-func unauthorized(ctx contractshttp.Context, msg string) contractshttp.Response {
+func (c *TwoFactorController) unauthorized(ctx contractshttp.Context, msg string) contractshttp.Response {
 	return ctx.Response().Json(http.StatusUnauthorized, responses.ErrorResponse{Error: "unauthorized", Message: msg})
 }
 
-func badRequest(ctx contractshttp.Context, msg string) contractshttp.Response {
+func (c *TwoFactorController) badRequest(ctx contractshttp.Context, msg string) contractshttp.Response {
 	return ctx.Response().Json(http.StatusBadRequest, responses.ErrorResponse{Error: "validation_error", Message: msg})
 }

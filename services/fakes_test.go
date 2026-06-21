@@ -100,6 +100,14 @@ func (f *fakeRepo) UpdateTwoFactor(_ context.Context, id uuid.UUID, secret, reco
 	return nil
 }
 
+func (f *fakeRepo) MutateLocked(_ context.Context, id uuid.UUID, fn func(u *models.User) error) error {
+	u, ok := f.byID[id]
+	if !ok {
+		return errBoom
+	}
+	return fn(u) // mutates the stored user in place (persisted)
+}
+
 // fakeHasher treats "hash:"+value as the hash; no crypto, fully deterministic.
 type fakeHasher struct{}
 

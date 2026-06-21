@@ -10,11 +10,15 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
 
 	"github.com/freshost/goravel-authkit/models"
 	"github.com/freshost/goravel-authkit/repositories"
 )
+
+// totpPeriodSeconds is the TOTP step length (Google-Authenticator default).
+const totpPeriodSeconds uint = 30
 
 // DefaultRecoveryCodeCount is the fallback number of recovery codes generated on
 // confirmation when the app does not override authkit.two_factor.recovery_codes.
@@ -126,7 +130,9 @@ func (s *TwoFactor) Confirm(ctx context.Context, id uuid.UUID, code string) ([]s
 	return plain, nil
 }
 
-// Verify checks a TOTP code against a confirmed user's secret.
+// Verify checks a TOTP code against a confirmed user's secret WITHOUT replay
+// protection. Used by the programmatic facade; the login challenge uses
+// VerifyLoginCode instead, which is single-use.
 func (s *TwoFactor) Verify(user *models.User, code string) (bool, error) {
 	if user == nil || !user.TwoFactorEnabled() {
 		return false, ErrTwoFactorNotEnrolled
@@ -138,43 +144,100 @@ func (s *TwoFactor) Verify(user *models.User, code string) (bool, error) {
 	return totp.Validate(strings.TrimSpace(code), secret), nil
 }
 
-// ConsumeRecoveryCode verifies a recovery code and marks it used (single-use).
-// Returns true when a matching unused code was consumed.
-func (s *TwoFactor) ConsumeRecoveryCode(ctx context.Context, id uuid.UUID, code string) (bool, error) {
-	u, err := s.repo.FindByID(ctx, id)
+// VerifyLoginCode verifies a TOTP code for the login challenge and enforces
+// single-use: the code's time-step must be newer than the last accepted one
+// (rejecting replay within the validity window). The check + the last-used
+// stamp are written atomically under a row lock.
+func (s *TwoFactor) VerifyLoginCode(ctx context.Context, id uuid.UUID, code string) (bool, error) {
+	ok := false
+	err := s.repo.MutateLocked(ctx, id, func(u *models.User) error {
+		if !u.TwoFactorEnabled() {
+			return ErrTwoFactorNotEnrolled
+		}
+		secret, derr := s.crypter.Decrypt(*u.TwoFactorSecret)
+		if derr != nil {
+			return derr
+		}
+		stepStart, matched := s.matchTOTPStep(secret, code, time.Now().UTC())
+		if !matched {
+			return nil // ok stays false
+		}
+		// Replay protection: reject a code whose step was already consumed.
+		if u.TwoFactorLastUsedAt != nil && !stepStart.After(*u.TwoFactorLastUsedAt) {
+			return nil
+		}
+		used := stepStart
+		u.TwoFactorLastUsedAt = &used
+		ok = true
+		return nil
+	})
 	if err != nil {
+		if errors.Is(err, ErrTwoFactorNotEnrolled) {
+			return false, err
+		}
 		return false, errors.Join(ErrInternal, err)
 	}
-	if u == nil || !u.TwoFactorEnabled() || u.TwoFactorRecoveryCodes == nil {
-		return false, ErrTwoFactorNotEnrolled
-	}
-	codes, err := s.decodeRecoveryCodes(*u.TwoFactorRecoveryCodes)
-	if err != nil {
-		return false, errors.Join(ErrInternal, err)
-	}
+	return ok, nil
+}
 
+// ConsumeRecoveryCode verifies a recovery code and marks it used (single-use).
+// The read-marked-write is atomic under a row lock to prevent double-spend.
+func (s *TwoFactor) ConsumeRecoveryCode(ctx context.Context, id uuid.UUID, code string) (bool, error) {
+	consumed := false
+	err := s.repo.MutateLocked(ctx, id, func(u *models.User) error {
+		if !u.TwoFactorEnabled() || u.TwoFactorRecoveryCodes == nil {
+			return ErrTwoFactorNotEnrolled
+		}
+		codes, derr := s.decodeRecoveryCodes(*u.TwoFactorRecoveryCodes)
+		if derr != nil {
+			return derr
+		}
+		trimmed := strings.TrimSpace(code)
+		for i := range codes {
+			if codes[i].UsedAt == nil && subtle.ConstantTimeCompare([]byte(codes[i].Code), []byte(trimmed)) == 1 {
+				now := time.Now().UTC()
+				codes[i].UsedAt = &now
+				consumed = true
+				break
+			}
+		}
+		if !consumed {
+			return nil
+		}
+		enc, eerr := s.encodeRecoveryCodes(codes)
+		if eerr != nil {
+			return eerr
+		}
+		u.TwoFactorRecoveryCodes = &enc
+		return nil
+	})
+	if err != nil {
+		if errors.Is(err, ErrTwoFactorNotEnrolled) {
+			return false, err
+		}
+		return false, errors.Join(ErrInternal, err)
+	}
+	return consumed, nil
+}
+
+// matchTOTPStep returns the start time of the time-step whose code equals the
+// supplied code (checking the current step and ±1 for clock skew), and whether
+// any matched.
+func (s *TwoFactor) matchTOTPStep(secret, code string, now time.Time) (time.Time, bool) {
 	code = strings.TrimSpace(code)
-	matched := false
-	for i := range codes {
-		if codes[i].UsedAt == nil && subtle.ConstantTimeCompare([]byte(codes[i].Code), []byte(code)) == 1 {
-			now := time.Now().UTC()
-			codes[i].UsedAt = &now
-			matched = true
-			break
+	opts := totp.ValidateOpts{Period: totpPeriodSeconds, Skew: 0, Digits: otp.DigitsSix, Algorithm: otp.AlgorithmSHA1}
+	for _, offset := range []int64{0, -1, 1} {
+		t := now.Add(time.Duration(offset*int64(totpPeriodSeconds)) * time.Second)
+		candidate, err := totp.GenerateCodeCustom(secret, t, opts)
+		if err != nil {
+			continue
+		}
+		if subtle.ConstantTimeCompare([]byte(candidate), []byte(code)) == 1 {
+			stepStart := time.Unix((t.Unix()/int64(totpPeriodSeconds))*int64(totpPeriodSeconds), 0).UTC()
+			return stepStart, true
 		}
 	}
-	if !matched {
-		return false, nil
-	}
-
-	enc, err := s.encodeRecoveryCodes(codes)
-	if err != nil {
-		return false, errors.Join(ErrInternal, err)
-	}
-	if err := s.repo.UpdateTwoFactor(ctx, id, u.TwoFactorSecret, &enc, u.TwoFactorConfirmedAt); err != nil {
-		return false, errors.Join(ErrInternal, err)
-	}
-	return true, nil
+	return time.Time{}, false
 }
 
 // Disable clears all two-factor state for the user.
