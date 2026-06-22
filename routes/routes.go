@@ -12,6 +12,7 @@ import (
 
 	"github.com/freshost/goravel-authkit/http/controllers"
 	"github.com/freshost/goravel-authkit/http/middleware"
+	"github.com/freshost/goravel-authkit/http/responses"
 	"github.com/freshost/goravel-authkit/repositories"
 	"github.com/freshost/goravel-authkit/services"
 )
@@ -37,6 +38,10 @@ type Options struct {
 	// default) leaves them open to any authenticated user, since v1 ships no
 	// RBAC. Set e.g. []string{"admin"} once your app assigns roles.
 	UserManagementRoles []string
+	// Roles, when non-empty, is the set of role values accepted when creating or
+	// updating a user (the management endpoints reject anything outside it).
+	// Empty means any role is accepted. The frontend renders these as a select.
+	Roles []string
 	// EnableTwoFactor registers the TOTP two-factor endpoints and the two-step
 	// login gate. Each user still opts in individually by enrolling.
 	EnableTwoFactor bool
@@ -97,6 +102,9 @@ func OptionsFromConfig() Options {
 	if v := cfg.Get("authkit.user_management_roles"); v != nil {
 		o.UserManagementRoles = toStringSlice(v)
 	}
+	if v := cfg.Get("authkit.roles"); v != nil {
+		o.Roles = toStringSlice(v)
+	}
 	return o
 }
 
@@ -143,7 +151,7 @@ func Register(router route.Router, opts Options) {
 	usersRepo := repositories.NewUsers()
 	hasher := services.NewFacadeHasher()
 	authSvc := services.NewAuth(usersRepo, hasher, opts.MinPasswordLength)
-	usersSvc := services.NewUsers(usersRepo, hasher, opts.MinPasswordLength)
+	usersSvc := services.NewUsers(usersRepo, hasher, opts.MinPasswordLength, opts.Roles)
 
 	var auditSvc *services.Audit
 	if opts.EnableAuditLog {
@@ -158,32 +166,43 @@ func Register(router route.Router, opts Options) {
 	authCtrl := controllers.NewAuthController(authSvc, auditSvc, twoFactorSvc, opts.Guard)
 	usersCtrl := controllers.NewUsersController(usersSvc, auditSvc)
 	twoFactorCtrl := controllers.NewTwoFactorController(usersSvc, authSvc, twoFactorSvc, auditSvc, opts.Guard)
+	metaCtrl := controllers.NewMetaController(opts.Roles, opts.MinPasswordLength, responses.MetaFeatures{
+		UserManagement: opts.EnableUserManagement,
+		TwoFactor:      opts.EnableTwoFactor,
+		AuditLog:       opts.EnableAuditLog,
+	})
 
-	// Public, rate-limited: login + the 2FA challenge (both gate on session/IP,
-	// not on the authenticated guard).
-	router.Prefix(opts.Prefix + "/auth").
-		Middleware(middleware.RateLimitAuth(opts.RateLimitAttempts, opts.RateLimitWindow)).
-		Group(func(r route.Router) {
-			r.Post("/login", authCtrl.Login)
+	// All package routes live under a single owned namespace ({prefix}/auth/*) so
+	// they never collide with the host app's own routes (its /meta, /users, …).
+	// One outer prefixed group, with nested middleware groups for the three
+	// access tiers (public / rate-limited / session-guarded) — Goravel composes
+	// nested groups and their middleware natively.
+	router.Prefix(opts.Prefix + "/auth").Group(func(r route.Router) {
+		// Public, non-sensitive config for the frontend (role options, features).
+		r.Get("/meta", metaCtrl.Show)
+
+		// Public but rate-limited: login + the 2FA challenge (gate on session/IP,
+		// not on the authenticated guard).
+		r.Middleware(middleware.RateLimitAuth(opts.RateLimitAttempts, opts.RateLimitWindow)).
+			Group(func(pub route.Router) {
+				pub.Post("/login", authCtrl.Login)
+				if opts.EnableTwoFactor {
+					pub.Post("/two-factor-challenge", twoFactorCtrl.Challenge)
+				}
+			})
+
+		// Guarded: everything behind the session guard.
+		r.Middleware(middleware.Authenticated(opts.Guard)).Group(func(g route.Router) {
+			g.Post("/logout", authCtrl.Logout)
+			g.Get("/me", authCtrl.Me)
+			g.Put("/password", authCtrl.ChangePassword)
+
 			if opts.EnableTwoFactor {
-				r.Post("/two-factor-challenge", twoFactorCtrl.Challenge)
-			}
-		})
-
-	// Guarded: everything behind the session guard.
-	router.Prefix(opts.Prefix).
-		Middleware(middleware.Authenticated(opts.Guard)).
-		Group(func(r route.Router) {
-			r.Post("/auth/logout", authCtrl.Logout)
-			r.Get("/auth/me", authCtrl.Me)
-			r.Put("/auth/password", authCtrl.ChangePassword)
-
-			if opts.EnableTwoFactor {
-				r.Post("/auth/two-factor", twoFactorCtrl.Enable)
-				r.Post("/auth/two-factor/confirm", twoFactorCtrl.Confirm)
-				r.Delete("/auth/two-factor", twoFactorCtrl.Disable)
-				r.Get("/auth/two-factor/recovery-codes", twoFactorCtrl.RecoveryCodes)
-				r.Post("/auth/two-factor/recovery-codes", twoFactorCtrl.RegenerateRecoveryCodes)
+				g.Post("/two-factor", twoFactorCtrl.Enable)
+				g.Post("/two-factor/confirm", twoFactorCtrl.Confirm)
+				g.Delete("/two-factor", twoFactorCtrl.Disable)
+				g.Get("/two-factor/recovery-codes", twoFactorCtrl.RecoveryCodes)
+				g.Post("/two-factor/recovery-codes", twoFactorCtrl.RegenerateRecoveryCodes)
 			}
 
 			if opts.EnableUserManagement {
@@ -196,10 +215,11 @@ func Register(router route.Router, opts Options) {
 					ur.Post("/users/{id}/password", usersCtrl.SetPassword)
 				}
 				if len(opts.UserManagementRoles) > 0 {
-					r.Middleware(middleware.RequireRole(opts.Guard, opts.UserManagementRoles...)).Group(userRoutes)
+					g.Middleware(middleware.RequireRole(opts.Guard, opts.UserManagementRoles...)).Group(userRoutes)
 				} else {
-					userRoutes(r)
+					userRoutes(g)
 				}
 			}
 		})
+	})
 }

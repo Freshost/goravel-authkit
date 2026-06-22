@@ -34,7 +34,7 @@ func NewUsersController(users *services.Users, audit *services.Audit) *UsersCont
 //	@Produce		json
 //	@Success		200	{array}		responses.UserResponse
 //	@Failure		401	{object}	responses.ErrorResponse
-//	@Router			/users [get]
+//	@Router			/auth/users [get]
 func (c *UsersController) Index(ctx contractshttp.Context) contractshttp.Response {
 	users, err := c.users.List(ctx.Request().Origin().Context())
 	if err != nil {
@@ -53,7 +53,7 @@ func (c *UsersController) Index(ctx contractshttp.Context) contractshttp.Respons
 //	@Param			id	path		string	true	"User ID (UUID)"
 //	@Success		200	{object}	responses.UserResponse
 //	@Failure		404	{object}	responses.ErrorResponse
-//	@Router			/users/{id} [get]
+//	@Router			/auth/users/{id} [get]
 func (c *UsersController) Show(ctx contractshttp.Context) contractshttp.Response {
 	id, errResp := helpers.ParseUUIDParam(ctx, "id")
 	if errResp != nil {
@@ -78,7 +78,7 @@ func (c *UsersController) Show(ctx contractshttp.Context) contractshttp.Response
 //	@Success		201		{object}	responses.UserResponse
 //	@Failure		400		{object}	responses.ErrorResponse
 //	@Failure		409		{object}	responses.ErrorResponse
-//	@Router			/users [post]
+//	@Router			/auth/users [post]
 func (c *UsersController) Store(ctx contractshttp.Context) contractshttp.Response {
 	var req responses.CreateUserRequest
 	if err := ctx.Request().Bind(&req); err != nil {
@@ -106,7 +106,7 @@ func (c *UsersController) Store(ctx contractshttp.Context) contractshttp.Respons
 //	@Failure		400		{object}	responses.ErrorResponse
 //	@Failure		404		{object}	responses.ErrorResponse
 //	@Failure		409		{object}	responses.ErrorResponse
-//	@Router			/users/{id} [put]
+//	@Router			/auth/users/{id} [put]
 func (c *UsersController) Update(ctx contractshttp.Context) contractshttp.Response {
 	id, errResp := helpers.ParseUUIDParam(ctx, "id")
 	if errResp != nil {
@@ -136,7 +136,7 @@ func (c *UsersController) Update(ctx contractshttp.Context) contractshttp.Respon
 //	@Failure		400	{object}	responses.ErrorResponse
 //	@Failure		404	{object}	responses.ErrorResponse
 //	@Failure		409	{object}	responses.ErrorResponse
-//	@Router			/users/{id} [delete]
+//	@Router			/auth/users/{id} [delete]
 func (c *UsersController) Destroy(ctx contractshttp.Context) contractshttp.Response {
 	id, errResp := helpers.ParseUUIDParam(ctx, "id")
 	if errResp != nil {
@@ -167,7 +167,7 @@ func (c *UsersController) Destroy(ctx contractshttp.Context) contractshttp.Respo
 //	@Success		200		{object}	responses.UserResponse
 //	@Failure		400		{object}	responses.ErrorResponse
 //	@Failure		404		{object}	responses.ErrorResponse
-//	@Router			/users/{id}/password [post]
+//	@Router			/auth/users/{id}/password [post]
 func (c *UsersController) SetPassword(ctx contractshttp.Context) contractshttp.Response {
 	id, errResp := helpers.ParseUUIDParam(ctx, "id")
 	if errResp != nil {

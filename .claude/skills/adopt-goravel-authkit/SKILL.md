@@ -182,7 +182,7 @@ README for the full API.
 
 **Interim fallback** (if you must keep the app's own UI for now): point the
 existing `useAuth` code at the new SDK ids/paths — `me`→`getMe`,
-`listAdminUsers`→`listUsers`, `/admin-users`→`/users`; login/logout/change-
+`listAdminUsers`→`listUsers`, `/admin-users`→`/auth/users`; login/logout/change-
 password keep the same `UserResponse`/`MessageResponse` shapes.
 
 ## Step V — verify

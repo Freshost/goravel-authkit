@@ -89,13 +89,31 @@ type RecoveryCodesResponse struct {
 	RecoveryCodes []string `json:"recoveryCodes" example:"ABCDE-FGHJK"`
 }
 
+// MetaResponse exposes the FE-relevant, non-sensitive package config so the UI
+// can adapt (role-select options, feature visibility, password rules) without
+// hardcoding or duplicating it. Served unauthenticated at {prefix}/meta.
+type MetaResponse struct {
+	// Roles are the assignable role values (from authkit.roles). Empty = any.
+	Roles             []string     `json:"roles"`
+	MinPasswordLength int          `json:"minPasswordLength" example:"8"`
+	Features          MetaFeatures `json:"features"`
+}
+
+// MetaFeatures mirrors the authkit.features toggles for the frontend.
+type MetaFeatures struct {
+	UserManagement bool `json:"userManagement" example:"true"`
+	TwoFactor      bool `json:"twoFactor" example:"true"`
+	AuditLog       bool `json:"auditLog" example:"true"`
+}
+
 // UserResponse is the public view of a user (never includes the password hash).
 type UserResponse struct {
-	ID        string `json:"id" example:"3f2504e0-4f89-41d3-9a0c-0305e82c3301"`
-	Email     string `json:"email" example:"admin@example.com"`
-	Name      string `json:"name" example:"Admin"`
-	Role      string `json:"role" example:"admin"`
-	CreatedAt string `json:"createdAt" example:"2026-01-01T00:00:00Z"`
+	ID               string `json:"id" example:"3f2504e0-4f89-41d3-9a0c-0305e82c3301"`
+	Email            string `json:"email" example:"admin@example.com"`
+	Name             string `json:"name" example:"Admin"`
+	Role             string `json:"role" example:"admin"`
+	TwoFactorEnabled bool   `json:"twoFactorEnabled" example:"false"`
+	CreatedAt        string `json:"createdAt" example:"2026-01-01T00:00:00Z"`
 }
 
 // NewUserResponse maps a User model to its public DTO.
@@ -109,11 +127,12 @@ func NewUserResponse(u *models.User) UserResponse {
 		createdAt = u.CreatedAt.UTC().Format(time.RFC3339)
 	}
 	return UserResponse{
-		ID:        u.ID.String(),
-		Email:     u.Email,
-		Name:      name,
-		Role:      u.Role,
-		CreatedAt: createdAt,
+		ID:               u.ID.String(),
+		Email:            u.Email,
+		Name:             name,
+		Role:             u.Role,
+		TwoFactorEnabled: u.TwoFactorEnabled(),
+		CreatedAt:        createdAt,
 	}
 }
 

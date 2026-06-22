@@ -13,7 +13,7 @@ It consumes the package **locally** via a `replace` directive to the repo root
 - Go 1.25+
 - PostgreSQL on `127.0.0.1:5432` (the package migrations are Postgres-specific)
 
-## Run (port 8090)
+## Run (port 8099)
 
 ```bash
 cp .env.example .env                 # set DB_USERNAME/DB_PASSWORD for your Postgres
@@ -21,16 +21,16 @@ createdb authkit_demo                # or: psql -c 'create database authkit_demo
 go run . artisan key:generate
 go run . artisan migrate
 go run . artisan auth:create-user --email=admin@demo.test --password=password123 --name=Admin
-go run .                             # serves http://127.0.0.1:8090
+go run .                             # serves http://127.0.0.1:8099
 ```
 
 Smoke test:
 
 ```bash
-curl -i -c j -b j -XPOST localhost:8090/api/v1/auth/login \
+curl -i -c j -b j -XPOST localhost:8099/api/v1/auth/login \
   -H 'content-type: application/json' \
   -d '{"email":"admin@demo.test","password":"password123"}'
-curl -c j -b j localhost:8090/api/v1/auth/me
+curl -c j -b j localhost:8099/api/v1/auth/me
 ```
 
 ## The whole authkit integration
@@ -52,4 +52,4 @@ Goravel rebuilds the HTTP engine when global middleware is set — see the packa
 
 The React UI that drives this backend lives in the **authkit-ui** repo under
 `demo/`. Start this backend first, then run that frontend — it proxies
-`/api` → `:8090`.
+`/api` → `:8099`.

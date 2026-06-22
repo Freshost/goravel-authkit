@@ -42,7 +42,7 @@ func NewAuthkit(app foundation.Application) *Authkit {
 	hasher := services.NewFacadeHasher()
 	return &Authkit{
 		auth:      services.NewAuth(repo, hasher, minPwLen),
-		users:     services.NewUsers(repo, hasher, minPwLen),
+		users:     services.NewUsers(repo, hasher, minPwLen, nil),
 		twoFactor: services.NewTwoFactor(repo, services.NewFacadeCrypter(), issuer, recoveryCount),
 	}
 }

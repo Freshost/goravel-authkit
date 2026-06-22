@@ -41,5 +41,9 @@ func init() {
 		// authenticated user (v1 has no RBAC). Set e.g. []string{"admin"} once
 		// your app assigns roles to gate user management behind a role.
 		"user_management_roles": []string{},
+		// Assignable role values for users. Empty = any role accepted; set a list
+		// to restrict create/update (the backend validates) and to render the
+		// role field as a select in the UI (pass the same list to AuthkitProvider).
+		"roles": []string{"admin", "user"},
 	})
 }

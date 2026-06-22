@@ -1,9 +1,15 @@
 # API Reference
 
-All paths are prefixed with `Options.Prefix` (default `/api/v1`). The `@ID`
-column is the Swagger operation id — it becomes the generated TypeScript SDK
-function name. Auth endpoints other than login require the session cookie
-(guarded by `Authenticated`).
+Every package route lives under **`{Options.Prefix}/auth`** (default
+`/api/v1/auth`) — a single owned namespace so the package never collides with the
+host app's own routes (its `/meta`, `/users`, …). The paths below are relative to
+that base. The `@ID` column is the Swagger operation id — it becomes the
+generated TypeScript SDK function name. Auth endpoints other than login require
+the session cookie (guarded by `Authenticated`).
+
+| Method | Path | `@ID` | Auth |
+| --- | --- | --- | --- |
+| GET | `/auth/meta` | `getAuthkitConfig` | public — role options + feature flags for the UI |
 
 ## Auth
 
@@ -38,12 +44,12 @@ Login flow with 2FA: `login` → `{two_factor:true}` → `twoFactorChallenge` wi
 
 | Method | Path | `@ID` | Success | Errors |
 | --- | --- | --- | --- | --- |
-| GET | `/users` | `listUsers` | `200` `[]UserResponse` | `401` |
-| POST | `/users` | `createUser` | `201` UserResponse | `400` `409` |
-| GET | `/users/{id}` | `getUser` | `200` UserResponse | `404` |
-| PUT | `/users/{id}` | `updateUser` | `200` UserResponse | `400` `404` `409` |
-| DELETE | `/users/{id}` | `deleteUser` | `200` MessageResponse | `400` `404` `409` |
-| POST | `/users/{id}/password` | `setUserPassword` | `200` UserResponse | `400` `404` |
+| GET | `/auth/users` | `listUsers` | `200` `[]UserResponse` | `401` |
+| POST | `/auth/users` | `createUser` | `201` UserResponse | `400` `409` |
+| GET | `/auth/users/{id}` | `getUser` | `200` UserResponse | `404` |
+| PUT | `/auth/users/{id}` | `updateUser` | `200` UserResponse | `400` `404` `409` |
+| DELETE | `/auth/users/{id}` | `deleteUser` | `200` MessageResponse | `400` `404` `409` |
+| POST | `/auth/users/{id}/password` | `setUserPassword` | `200` UserResponse | `400` `404` |
 
 ## Request bodies
 
@@ -83,7 +89,15 @@ Login flow with 2FA: `login` → `{two_factor:true}` → `twoFactorChallenge` wi
   "email": "admin@example.com",
   "name": "Admin",
   "role": "admin",
+  "twoFactorEnabled": false,
   "createdAt": "2026-01-01T00:00:00Z"
+}
+
+// MetaResponse — GET /auth/meta (public; the UI reads roles/features from here)
+{
+  "roles": ["admin", "user"],
+  "minPasswordLength": 8,
+  "features": { "userManagement": true, "twoFactor": true, "auditLog": true }
 }
 
 // MessageResponse

@@ -59,7 +59,7 @@ func (r *CreateUser) Handle(ctx console.Context) error {
 	}
 
 	minPwLen := facades.Config().GetInt("authkit.min_password_length", services.DefaultMinPasswordLength)
-	svc := services.NewUsers(repositories.NewUsers(), services.NewFacadeHasher(), minPwLen)
+	svc := services.NewUsers(repositories.NewUsers(), services.NewFacadeHasher(), minPwLen, nil)
 
 	user, err := svc.Create(context.Background(), email, name, password, role)
 	if err != nil {

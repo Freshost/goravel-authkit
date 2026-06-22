@@ -25,5 +25,6 @@ func init() {
 			"recovery_codes": 8,
 		},
 		"user_management_roles": []string{},
+		"roles":                 []string{"admin", "user"},
 	})
 }

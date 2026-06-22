@@ -20,15 +20,40 @@ type Users struct {
 	repo     repositories.UsersRepository
 	hasher   Hasher
 	minPwLen int
+	roles    []string
 }
 
 // NewUsers builds the user-management service. minPwLen <= 0 falls back to
-// DefaultMinPasswordLength.
-func NewUsers(repo repositories.UsersRepository, hasher Hasher, minPwLen int) *Users {
+// DefaultMinPasswordLength. roles, when non-empty, restricts the accepted role
+// values (Create/Update reject anything outside the set); empty means any role.
+func NewUsers(repo repositories.UsersRepository, hasher Hasher, minPwLen int, roles []string) *Users {
 	if minPwLen <= 0 {
 		minPwLen = DefaultMinPasswordLength
 	}
-	return &Users{repo: repo, hasher: hasher, minPwLen: minPwLen}
+	return &Users{repo: repo, hasher: hasher, minPwLen: minPwLen, roles: roles}
+}
+
+// defaultRole returns the role to assign when none is given: the first
+// configured role, else DefaultRole.
+func (s *Users) defaultRole() string {
+	if len(s.roles) > 0 {
+		return s.roles[0]
+	}
+	return DefaultRole
+}
+
+// roleAllowed reports whether role is acceptable. With no configured roles any
+// non-empty role is allowed.
+func (s *Users) roleAllowed(role string) bool {
+	if len(s.roles) == 0 {
+		return true
+	}
+	for _, r := range s.roles {
+		if r == role {
+			return true
+		}
+	}
+	return false
 }
 
 // GetByID returns a user or ErrNotFound.
@@ -65,7 +90,10 @@ func (s *Users) Create(ctx context.Context, email, name, password, role string) 
 		return nil, errors.Join(ErrValidation, errors.New("password is too short"))
 	}
 	if role == "" {
-		role = DefaultRole
+		role = s.defaultRole()
+	}
+	if !s.roleAllowed(role) {
+		return nil, errors.Join(ErrValidation, errors.New("invalid role"))
 	}
 
 	existing, err := s.repo.FindByEmail(ctx, email)
@@ -112,6 +140,9 @@ func (s *Users) Update(ctx context.Context, id uuid.UUID, email, name, role stri
 	role = strings.TrimSpace(role)
 	if email == "" {
 		return nil, errors.Join(ErrValidation, errors.New("email is required"))
+	}
+	if role != "" && !s.roleAllowed(role) {
+		return nil, errors.Join(ErrValidation, errors.New("invalid role"))
 	}
 
 	if email != u.Email {

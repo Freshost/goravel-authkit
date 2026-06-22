@@ -10,7 +10,7 @@ import (
 
 func TestUsersCreate_DefaultsRoleAndHashes(t *testing.T) {
 	repo := newFakeRepo()
-	svc := NewUsers(repo, fakeHasher{}, 8)
+	svc := NewUsers(repo, fakeHasher{}, 8, nil)
 
 	u, err := svc.Create(context.Background(), "New@Example.com", "  New Admin ", "secret123", "")
 	require.NoError(t, err)
@@ -25,7 +25,7 @@ func TestUsersCreate_DefaultsRoleAndHashes(t *testing.T) {
 func TestUsersCreate_DuplicateAndShortPassword(t *testing.T) {
 	repo := newFakeRepo()
 	seedUser(repo, "admin@example.com", "secret123")
-	svc := NewUsers(repo, fakeHasher{}, 8)
+	svc := NewUsers(repo, fakeHasher{}, 8, nil)
 
 	_, err := svc.Create(context.Background(), "admin@example.com", "", "secret123", "")
 	assert.ErrorIs(t, err, ErrAlreadyExists)
@@ -37,7 +37,7 @@ func TestUsersCreate_DuplicateAndShortPassword(t *testing.T) {
 func TestUsersDelete_LastAdminGuarded(t *testing.T) {
 	repo := newFakeRepo()
 	u := seedUser(repo, "only@example.com", "secret123")
-	svc := NewUsers(repo, fakeHasher{}, 8)
+	svc := NewUsers(repo, fakeHasher{}, 8, nil)
 
 	err := svc.Delete(context.Background(), u.ID)
 	assert.ErrorIs(t, err, ErrLastAdmin)
@@ -47,7 +47,7 @@ func TestUsersDelete_WithOthersSucceeds(t *testing.T) {
 	repo := newFakeRepo()
 	a := seedUser(repo, "a@example.com", "secret123")
 	seedUser(repo, "b@example.com", "secret123")
-	svc := NewUsers(repo, fakeHasher{}, 8)
+	svc := NewUsers(repo, fakeHasher{}, 8, nil)
 
 	require.NoError(t, svc.Delete(context.Background(), a.ID))
 	_, ok := repo.byID[a.ID]
@@ -58,7 +58,7 @@ func TestUsersUpdate_EmailCollision(t *testing.T) {
 	repo := newFakeRepo()
 	seedUser(repo, "taken@example.com", "secret123")
 	b := seedUser(repo, "b@example.com", "secret123")
-	svc := NewUsers(repo, fakeHasher{}, 8)
+	svc := NewUsers(repo, fakeHasher{}, 8, nil)
 
 	_, err := svc.Update(context.Background(), b.ID, "taken@example.com", "B", "admin")
 	assert.ErrorIs(t, err, ErrAlreadyExists)
@@ -68,7 +68,7 @@ func TestUsersSetPassword_BumpsTimestamp(t *testing.T) {
 	repo := newFakeRepo()
 	u := seedUser(repo, "admin@example.com", "secret123")
 	old := u.PasswordChangedAt
-	svc := NewUsers(repo, fakeHasher{}, 8)
+	svc := NewUsers(repo, fakeHasher{}, 8, nil)
 
 	got, err := svc.SetPassword(context.Background(), u.ID, "newsecret456")
 	require.NoError(t, err)
@@ -77,7 +77,7 @@ func TestUsersSetPassword_BumpsTimestamp(t *testing.T) {
 }
 
 func TestUsersGetByID_NotFound(t *testing.T) {
-	svc := NewUsers(newFakeRepo(), fakeHasher{}, 8)
+	svc := NewUsers(newFakeRepo(), fakeHasher{}, 8, nil)
 	_, err := svc.GetByID(context.Background(), seedUser(newFakeRepo(), "x@example.com", "secret123").ID)
 	assert.ErrorIs(t, err, ErrNotFound)
 }
