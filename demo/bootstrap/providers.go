@@ -23,6 +23,7 @@ import (
 	"github.com/goravel/framework/view"
 	"github.com/goravel/gin"
 	"github.com/goravel/postgres"
+	"github.com/goravel/sqlite"
 
 	authkit "github.com/freshost/goravel-authkit"
 )
@@ -39,6 +40,7 @@ func Providers() []foundation.ServiceProvider {
 		&gin.ServiceProvider{},
 		&database.ServiceProvider{},
 		&postgres.ServiceProvider{},
+		&sqlite.ServiceProvider{},
 		&auth.ServiceProvider{},
 		&crypt.ServiceProvider{},
 		&queue.ServiceProvider{},

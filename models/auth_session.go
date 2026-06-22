@@ -12,7 +12,7 @@ import (
 // address a session for termination. A request whose session has no row is
 // treated as terminated.
 type AuthSession struct {
-	ID           uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
+	ID           uuid.UUID `gorm:"type:uuid;primaryKey" json:"id"`
 	SessionID    string    `gorm:"type:varchar(255);not null;uniqueIndex" json:"-"`
 	UserID       uuid.UUID `gorm:"type:uuid;not null;index" json:"userId"`
 	IP           string    `gorm:"type:varchar(64)" json:"ip,omitempty"`

@@ -18,7 +18,7 @@ func (r *CreateAuthSessions) Up() error {
 		return nil
 	}
 	return facades.Schema().Create("auth_sessions", func(table schema.Blueprint) {
-		table.Uuid("id").Default(uuidDefault)
+		table.Uuid("id")
 		table.Primary("id")
 		table.String("session_id", 255)
 		table.Uuid("user_id")

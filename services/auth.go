@@ -142,8 +142,11 @@ func isUniqueViolation(err error) bool {
 // ChangePassword verifies the current password, validates the new one (min
 // length, must differ), updates the hash, and bumps password_changed_at so
 // every OTHER active session for this user is rejected on its next request. It
-// returns the new password_changed_at so the controller can re-stamp THIS
-// session and keep it alive.
+// returns the new password_changed_at — re-read from the DB so it matches the
+// stored precision exactly — so the controller can re-stamp THIS session and
+// keep it alive. (A locally-generated time.Now() has nanosecond precision, but
+// Postgres timestamptz stores microseconds, so stamping the raw value would
+// never match the DB value on the next request and would log THIS session out.)
 func (s *Auth) ChangePassword(ctx context.Context, id uuid.UUID, currentPassword, newPassword string) (time.Time, error) {
 	user, err := s.repo.FindByID(ctx, id)
 	if err != nil {
@@ -168,11 +171,20 @@ func (s *Auth) ChangePassword(ctx context.Context, id uuid.UUID, currentPassword
 		return time.Time{}, errors.Join(ErrInternal, err)
 	}
 
-	changedAt := time.Now().UTC()
-	if err := s.repo.UpdatePassword(ctx, id, hashed, changedAt); err != nil {
+	if err := s.repo.UpdatePassword(ctx, id, hashed, time.Now().UTC()); err != nil {
 		return time.Time{}, errors.Join(ErrInternal, err)
 	}
-	return changedAt, nil
+
+	// Re-read so the returned timestamp matches what the DB actually stored
+	// (driver precision), keeping the caller's own session valid.
+	updated, err := s.repo.FindByID(ctx, id)
+	if err != nil {
+		return time.Time{}, errors.Join(ErrInternal, err)
+	}
+	if updated == nil {
+		return time.Time{}, ErrUnauthorized
+	}
+	return updated.PasswordChangedAt, nil
 }
 
 func normalizeEmail(email string) string {

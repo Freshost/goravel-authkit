@@ -11,7 +11,7 @@ import (
 // future event payload so audit can move to an event/queue pipeline later
 // without changing callers.
 type AuditLog struct {
-	ID           uuid.UUID  `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
+	ID           uuid.UUID  `gorm:"type:uuid;primaryKey" json:"id"`
 	ActorID      *uuid.UUID `gorm:"type:uuid;index" json:"actor_id,omitempty"`
 	ActorEmail   string     `gorm:"type:varchar(255)" json:"actor_email,omitempty"`
 	Action       string     `gorm:"type:varchar(255);not null" json:"action"`

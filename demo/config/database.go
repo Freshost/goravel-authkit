@@ -3,13 +3,15 @@ package config
 import (
 	"github.com/goravel/framework/contracts/database/driver"
 	postgresfacades "github.com/goravel/postgres/facades"
+	sqlitefacades "github.com/goravel/sqlite/facades"
 	"goravel/app/facades"
 )
 
 func init() {
 	config := facades.Config()
 	config.Add("database", map[string]any{
-		"default": "postgres",
+		// DB_CONNECTION=sqlite exercises the SQLite path (driver-agnostic schema).
+		"default": config.Env("DB_CONNECTION", "postgres"),
 		// Database connections
 		"connections": map[string]any{
 			"postgres": map[string]any{
@@ -24,6 +26,14 @@ func init() {
 				"schema":   config.Env("DB_SCHEMA", "public"),
 				"via": func() (driver.Driver, error) {
 					return postgresfacades.Postgres("postgres")
+				},
+			},
+			"sqlite": map[string]any{
+				"database": config.Env("DB_DATABASE", "goravel.db"),
+				"prefix":   "",
+				"singular": false,
+				"via": func() (driver.Driver, error) {
+					return sqlitefacades.Sqlite("sqlite")
 				},
 			},
 		},

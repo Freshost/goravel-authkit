@@ -18,7 +18,7 @@ func (r *CreateAuthRememberTokens) Up() error {
 		return nil
 	}
 	return facades.Schema().Create("auth_remember_tokens", func(table schema.Blueprint) {
-		table.Uuid("id").Default(uuidDefault)
+		table.Uuid("id")
 		table.Primary("id")
 		table.Uuid("user_id")
 		table.String("selector", 64)

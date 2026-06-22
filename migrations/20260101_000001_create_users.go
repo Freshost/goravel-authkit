@@ -6,12 +6,8 @@ package migrations
 
 import (
 	"github.com/goravel/framework/contracts/database/schema"
-	databaseschema "github.com/goravel/framework/database/schema"
 	"github.com/goravel/framework/facades"
 )
-
-// uuidDefault is gen_random_uuid() as a raw SQL expression for UUID PK defaults.
-var uuidDefault = databaseschema.Expression("gen_random_uuid()")
 
 // CreateUsers creates the canonical users table backing authentication. The
 // first admin is created by the `auth:create-user` command or an app installer;
@@ -27,7 +23,9 @@ func (r *CreateUsers) Up() error {
 		return nil
 	}
 	return facades.Schema().Create("users", func(table schema.Blueprint) {
-		table.Uuid("id").Default(uuidDefault)
+		// No DB-side default: every insert sets the id in Go (uuid.New()), so the
+		// schema stays driver-agnostic (a gen_random_uuid() default breaks SQLite).
+		table.Uuid("id")
 		table.Primary("id")
 		table.Text("name").Nullable()
 		table.String("email", 255)

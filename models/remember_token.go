@@ -13,7 +13,7 @@ import (
 // every use, which both limits the theft window and enables theft detection
 // (a stale validator presented for a known selector revokes the whole family).
 type RememberToken struct {
-	ID            uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
+	ID            uuid.UUID `gorm:"type:uuid;primaryKey" json:"id"`
 	UserID        uuid.UUID `gorm:"type:uuid;not null;index" json:"userId"`
 	Selector      string    `gorm:"type:varchar(64);not null;uniqueIndex" json:"selector"`
 	ValidatorHash string    `gorm:"type:varchar(64);not null" json:"-"`

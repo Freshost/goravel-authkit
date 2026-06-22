@@ -18,7 +18,7 @@ import (
 // share this exact shape (table "users"); the package's repositories and
 // services operate on it directly. PasswordHash is never serialized to JSON.
 type User struct {
-	ID                uuid.UUID  `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
+	ID                uuid.UUID  `gorm:"type:uuid;primaryKey" json:"id"`
 	Name              *string    `gorm:"type:text" json:"name,omitempty"`
 	Email             string     `gorm:"uniqueIndex;not null" json:"email"`
 	EmailVerified     *time.Time `gorm:"type:timestamptz" json:"emailVerified,omitempty"`

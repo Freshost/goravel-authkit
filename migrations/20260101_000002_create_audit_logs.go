@@ -17,7 +17,7 @@ func (r *CreateAuditLogs) Up() error {
 		return nil
 	}
 	return facades.Schema().Create("audit_logs", func(table schema.Blueprint) {
-		table.Uuid("id").Default(uuidDefault)
+		table.Uuid("id")
 		table.Primary("id")
 		table.Uuid("actor_id").Nullable()
 		table.String("actor_email", 255).Nullable()

@@ -7,12 +7,17 @@ require (
 	github.com/goravel/framework v1.17.2
 	github.com/goravel/gin v1.17.0
 	github.com/goravel/postgres v1.17.1
+	github.com/goravel/sqlite v1.17.0
 	github.com/stretchr/testify v1.11.1
 )
 
 require (
 	github.com/boombuler/barcode v1.0.1-0.20190219062509-6c824513bacc // indirect
+	github.com/ncruces/go-sqlite3 v0.25.0 // indirect
+	github.com/ncruces/go-sqlite3/gormlite v0.24.0 // indirect
+	github.com/ncruces/julianday v1.0.0 // indirect
 	github.com/pquerna/otp v1.5.0 // indirect
+	github.com/tetratelabs/wazero v1.9.0 // indirect
 )
 
 require (
