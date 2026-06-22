@@ -9,12 +9,15 @@ apps (tested against Goravel **v1.17.x**, Go **1.25+**, PostgreSQL). It owns the
 ```bash
 go get github.com/freshost/goravel-authkit
 ./artisan package:install github.com/freshost/goravel-authkit
+# one-time: wire session middleware + routes in bootstrap/app.go (see below)
 ./artisan migrate
 ./artisan auth:create-user --email=admin@example.com --password=change-me
 ```
 
-That's the whole integration. `auth:create-user` also reads `ADMIN_EMAIL` /
-`ADMIN_PASSWORD` env vars if the flags are omitted.
+`package:install` registers the provider and writes the config; you then add two
+lines to `bootstrap/app.go` to enable sessions and mount the routes (see
+[Wire sessions + routes](#wire-sessions--routes-one-time)). `auth:create-user`
+also reads `ADMIN_EMAIL` / `ADMIN_PASSWORD` env vars if the flags are omitted.
 
 ### What `package:install` does
 
@@ -34,18 +37,44 @@ guards or hashing settings):
 
 ### What the ServiceProvider does at boot
 
-The provider wires everything else itself — you do **not** edit
-`bootstrap/migrations.go` or any routes file:
+The provider registers, with no edits to `bootstrap/migrations.go`:
 
 - **Migrations** — registers `CreateUsers` + `CreateAuditLogs` via the schema
   facade, so `./artisan migrate` runs them.
-- **Routes** — mounts the auth + user-management endpoints from the `authkit.*`
-  config (via `app.MakeRoute()`).
 - **Commands** — registers `auth:create-user`.
 - **Publish** — exposes `config/authkit.go` for `./artisan vendor:publish --tag=authkit`.
 
-After install you have `POST /api/v1/auth/login`, `/auth/me`, `/auth/logout`,
-`/auth/password`, and the `/users` CRUD. See the [API reference](api-reference.md).
+### Wire sessions + routes (one-time)
+
+The package is **session-cookie** auth, so two things must be wired in
+`bootstrap/app.go` — the provider cannot do them itself, because Goravel rebuilds
+the HTTP engine when global middleware is set (which happens *after* providers
+boot), discarding any routes a provider registers in its `Boot`. Add:
+
+```go
+import (
+	"github.com/goravel/framework/contracts/foundation/configuration"
+	sessionmiddleware "github.com/goravel/framework/session/middleware"
+	authkitroutes "github.com/freshost/goravel-authkit/routes"
+)
+
+foundation.Setup().
+	// 1) session middleware must run globally
+	WithMiddleware(func(h configuration.Middleware) {
+		h.Append(sessionmiddleware.StartSession())
+	}).
+	WithRouting(func() {
+		routes.Web()
+		// 2) mount authkit routes here (this callback runs after the engine
+		//    rebuild, so the routes survive)
+		authkitroutes.Register(facades.Route(), authkitroutes.OptionsFromConfig())
+	}).
+	// ...
+```
+
+After that you have `POST /api/v1/auth/login`, `/auth/me`, `/auth/logout`,
+`/auth/password`, the two-factor endpoints, and the `/users` CRUD. See the
+[API reference](api-reference.md).
 
 ## Production checklist
 
@@ -75,12 +104,18 @@ import authkit "github.com/freshost/goravel-authkit"
 Then do by hand what `package:install` would have done: add an `admin` session
 guard → `users` orm provider to `config/auth.go`, set bcrypt `rounds: 12` in
 `config/hashing.go`, and add a `config/authkit.go` (copy from the package's
-`setup/config/authkit.go`). Then `./artisan migrate` and create the admin.
+`setup/config/authkit.go`). Wire sessions + routes in `bootstrap/app.go` (see
+[above](#wire-sessions--routes-one-time)). Then `./artisan migrate` and create
+the admin.
 
-You only ever register `authkit.ServiceProvider` — the provider wires the
-subpackages (`models`, `services`, `routes`, `migrations`, …) itself. All
-behaviour is tuned through the `authkit.*` config; there is no manual
-route/migration wiring. See [configuration](configuration.md).
+> A complete, runnable wiring of exactly this lives in the
+> [`authkit-ui` demo backend](https://github.com/Freshost/authkit-ui/tree/main/demo/backend) —
+> copy its `bootstrap/app.go`, `config/auth.go`, `config/authkit.go` and
+> `routes/web.go` if you want a reference.
+
+Migrations are registered by the provider; only the session middleware and the
+one-line `authkitroutes.Register(...)` are wired app-side. All behaviour is tuned
+through the `authkit.*` config. See [configuration](configuration.md).
 
 ## Adopting into an existing app
 

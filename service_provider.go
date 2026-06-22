@@ -7,9 +7,23 @@
 //	./artisan package:install github.com/freshost/goravel-authkit
 //
 // which registers this ServiceProvider and writes the config files
-// (config/auth.go, config/authkit.go, config/hashing.go). The provider then
-// registers the migrations, the HTTP routes, and the artisan commands itself —
-// the consuming app does not wire anything by hand. See the README.
+// (config/auth.go, config/authkit.go, config/hashing.go). The provider registers
+// the migrations and the artisan commands itself; the app mounts the HTTP routes
+// from its own routing callback with one line:
+//
+//	authkitroutes "github.com/freshost/goravel-authkit/routes"
+//	// inside foundation.Setup().WithRouting(func(){ ... })
+//	authkitroutes.Register(facades.Route(), authkitroutes.OptionsFromConfig())
+//
+// Routes are registered app-side (not in the provider) because Goravel rebuilds
+// the HTTP engine when global middleware is set — which happens AFTER providers
+// boot — so any routes a provider registers in Boot are discarded. The routing
+// callback runs after that rebuild, so routes registered there survive. The app
+// must also enable session middleware globally (the package is cookie-based):
+//
+//	WithMiddleware(func(h configuration.Middleware){ h.Append(sessionmiddleware.StartSession()) })
+//
+// See the README and docs/installation.md.
 package authkit
 
 import (
@@ -19,7 +33,6 @@ import (
 
 	"github.com/freshost/goravel-authkit/commands"
 	"github.com/freshost/goravel-authkit/migrations"
-	"github.com/freshost/goravel-authkit/routes"
 )
 
 // Binding is the service-container key under which the Authkit service is bound;
@@ -35,9 +48,10 @@ const Name = "Authkit"
 // App holds the application instance, used by the facade to resolve the service.
 var App foundation.Application
 
-// ServiceProvider registers the goravel-authkit migrations, routes, commands, and
-// publishable config. Everything is wired here so the consuming app only has to
-// register this provider (done automatically by `package:install`).
+// ServiceProvider registers the goravel-authkit migrations, commands, and
+// publishable config. HTTP routes are mounted app-side via routes.Register (see
+// the package doc) because provider-registered routes do not survive the engine
+// rebuild that global middleware triggers.
 type ServiceProvider struct{}
 
 // Relationship declares the framework services the package depends on so it
@@ -68,17 +82,13 @@ func (r *ServiceProvider) Register(app foundation.Application) {
 	})
 }
 
-// Boot registers everything the package ships: migrations, routes, artisan
-// commands, and the publishable config (for `vendor:publish`).
+// Boot registers the package migrations, artisan commands, and the publishable
+// config (for `vendor:publish`). HTTP routes are NOT registered here — the app
+// calls routes.Register from its routing callback (see the package doc).
 func (r *ServiceProvider) Boot(app foundation.Application) {
 	// Migrations — added to the schema registry so `artisan migrate` runs them.
 	if schema := app.MakeSchema(); schema != nil {
 		schema.Register(migrations.Migrations())
-	}
-
-	// Routes — mounted onto the app router from the authkit.* config.
-	if router := app.MakeRoute(); router != nil {
-		routes.Register(router, routes.OptionsFromConfig())
 	}
 
 	// Artisan commands.

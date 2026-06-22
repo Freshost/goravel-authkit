@@ -11,9 +11,15 @@ the package docs alongside this: `docs/installation.md`, `docs/configuration.md`
 
 The package **owns the `users` and `audit_logs` tables** and a canonical `User`
 model — there is no model extensibility, the app conforms to the package shape.
-Registering `authkit.ServiceProvider` is the whole integration: the provider
-registers the migrations, routes, and commands itself. The only question is how
-to get there without clobbering existing auth.
+Registering `authkit.ServiceProvider` registers the migrations + the
+`auth:create-user` command. Two things are wired app-side in `bootstrap/app.go`:
+global **`StartSession()`** middleware and a one-line
+**`authkitroutes.Register(facades.Route(), authkitroutes.OptionsFromConfig())`**
+in the routing callback (the provider can't register routes itself — Goravel
+rebuilds the HTTP engine when global middleware is set, *after* providers boot,
+so provider-registered routes are discarded; the routing callback runs after
+that rebuild). The questions are getting there without clobbering existing auth,
+and adding those two lines.
 
 ## Decide the scenario first
 
@@ -30,13 +36,35 @@ Always work on a branch.
 ```bash
 go get github.com/freshost/goravel-authkit
 ./artisan package:install github.com/freshost/goravel-authkit
+# then add the two lines below to bootstrap/app.go
 ./artisan migrate
 ./artisan auth:create-user --email=admin@example.com --password=change-me
 ```
 
 `package:install` registers the provider and writes `config/auth.go`,
-`config/authkit.go`, `config/hashing.go`. The provider registers migrations +
-routes + the command at boot. Done — verify with [Step V](#step-v--verify).
+`config/authkit.go`, `config/hashing.go`. Then wire sessions + routes in
+`bootstrap/app.go`:
+
+```go
+import (
+	"github.com/goravel/framework/contracts/foundation/configuration"
+	sessionmiddleware "github.com/goravel/framework/session/middleware"
+	authkitroutes "github.com/freshost/goravel-authkit/routes"
+)
+
+foundation.Setup().
+	WithMiddleware(func(h configuration.Middleware) {
+		h.Append(sessionmiddleware.StartSession())
+	}).
+	WithRouting(func() {
+		routes.Web()
+		authkitroutes.Register(facades.Route(), authkitroutes.OptionsFromConfig())
+	}).
+	// ...providers, migrations, config
+```
+
+A complete runnable reference is the `authkit-ui/demo/backend`. Verify with
+[Step V](#step-v--verify).
 
 ## Path B — existing app
 
@@ -108,10 +136,11 @@ Delete (or stop wiring) the now-duplicated code and its references:
   `helpers.AuthUserID(ctx)` (context key `auth_user_id`, set by the package
   middleware) — keep that key consistent if domain code depends on it.
 
-You only register `authkit.ServiceProvider` — the provider wires routes + migrations
-itself, there is nothing to mount by hand. Migration ordering for the reshape is
-handled by doing the SQL in B3 **before** the first `migrate` (above), not by
-interleaving a migration.
+The provider wires migrations + the command itself; you add the global
+`StartSession()` middleware and the one-line `authkitroutes.Register(...)` in
+`bootstrap/app.go` (see Path A). Migration ordering for the reshape is handled by
+doing the SQL in B3 **before** the first `migrate` (above), not by interleaving a
+migration.
 
 ## Step S — regenerate the API SDK
 
