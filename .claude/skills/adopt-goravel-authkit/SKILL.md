@@ -1,6 +1,6 @@
 ---
 name: adopt-goravel-authkit
-description: Step-by-step guide for an AI agent to adopt the `github.com/freshost/goravel-authkit` package into a Goravel (v1.17.x) + Vite/React app — replacing the app's hand-rolled login/logout/session/change-password/user-management with the shared package. Covers the one-step install for fresh apps, the careful path for apps that already have auth (merge the guard instead of overwriting config, `admin_users → users` data reshape, removing the old code), SDK regeneration, and end-to-end verification. Use when a project wants to switch its bespoke auth to goravel-authkit, or when scaffolding auth into a new app in this stack.
+description: Step-by-step guide for an AI agent to adopt the `github.com/freshost/goravel-authkit` package into a Goravel (v1.17.x) + Vite/React app — replacing the app's hand-rolled login/logout/session/change-password/user-management with the shared package. Covers the one-step install for fresh apps, the careful path for apps that already have auth (merge the guard instead of overwriting config, `admin_users → users` data reshape, removing the old code), SDK regeneration, the React companion `@freshost/authkit-ui` (drop-in login/account/2FA/user-management UI), and end-to-end verification. Use when a project wants to switch its bespoke auth to goravel-authkit, or when scaffolding auth into a new app in this stack.
 ---
 
 # Adopting goravel-authkit into a Goravel app
@@ -123,15 +123,38 @@ The controllers carry Swagger annotations with fixed operation ids (`login`,
 `--parseDependency --parseInternal` so the package module is scanned, then your
 `make swagger` + `make generate-api`.
 
-## Step F — frontend (interim, until @freshost/auth-ui)
+## Step F — frontend (`@freshost/authkit-ui`)
 
-Point the app's existing `useAuth`/login code at the **new SDK functions and
-routes** until the companion `@freshost/auth-ui` package is adopted:
+The companion package `@freshost/authkit-ui` replaces the app's hand-rolled
+login / account / 2FA / user-management UI. It talks to the backend through its
+**own typed client** over the stable authkit routes — it does **not** depend on
+the app's generated SDK, so adopting it is independent of Step S. Read its
+README for the full API.
 
-- `me` → `getMe`; admin-user ids (`listAdminUsers`, …) → (`listUsers`, …); paths
-  `/admin-users` → `/users`.
-- Login/logout/change-password keep the same shapes (`UserResponse`,
-  `MessageResponse`). Run `pnpm type-check` and fix renamed imports.
+1. **Install** (peer deps already present in this stack: `@freshost/ui`, React,
+   `react-router`, `@tanstack/react-query`, `react-i18next`). Until it's
+   published, add the packed tarball:
+   ```bash
+   pnpm add @freshost/authkit-ui     # or: pnpm add /path/to/freshost-authkit-ui-*.tgz
+   ```
+2. **Wire the provider** inside the existing `QueryClientProvider` + i18n +
+   router. Build a `notify` adapter from whatever the app already has:
+   - imperative store: `{ success: notify.success, error: notify.danger }`
+   - `useToast()` context: wrap `toast({ variant, title })` in `success`/`error`
+     (memoize where the hook is in scope).
+   Pass `baseURL` (the app's `/api/v1`), `branding`, and `routes`.
+3. **Swap the pages**: replace the app's `LoginPage` / account / admin-users
+   pages and `useAuth`/`useAdminUsers` hooks with the package's `LoginPage`,
+   `AuthGuard`, `AccountPage`/`ChangePasswordModal`, `UsersPage`, and the 2FA
+   components (`TwoFactorSetup`, `DisableTwoFactor`, `RecoveryCodes`). Delete the
+   old toast-coupled auth hooks; the package's hooks toast via your adapter.
+4. **Keep the app's `QueryClient` defaults** — the package sets only per-query
+   options. Don't add global `staleTime`/`retry` for it.
+
+**Interim fallback** (if you must keep the app's own UI for now): point the
+existing `useAuth` code at the new SDK ids/paths — `me`→`getMe`,
+`listAdminUsers`→`listUsers`, `/admin-users`→`/users`; login/logout/change-
+password keep the same `UserResponse`/`MessageResponse` shapes.
 
 ## Step V — verify
 
