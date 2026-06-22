@@ -55,6 +55,11 @@ func (r *Users) FindByEmail(ctx context.Context, email string) (*models.User, er
 		}
 		return nil, err
 	}
+	// Goravel's Query.First returns a nil error and leaves the destination
+	// zero-valued when no row matches, so detect "not found" by the unset PK.
+	if u.ID == uuid.Nil {
+		return nil, nil
+	}
 	return &u, nil
 }
 
@@ -66,6 +71,9 @@ func (r *Users) FindByID(ctx context.Context, id uuid.UUID) (*models.User, error
 			return nil, nil
 		}
 		return nil, err
+	}
+	if u.ID == uuid.Nil {
+		return nil, nil
 	}
 	return &u, nil
 }
