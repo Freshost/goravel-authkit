@@ -37,6 +37,9 @@ var (
 	ErrTwoFactorAlreadyEnabled = errors.New("two-factor already enabled")
 	// ErrInvalidCode is returned when a TOTP (or recovery) code does not verify.
 	ErrInvalidCode = errors.New("invalid code")
+	// ErrInvalidRememberToken is returned when a "remember me" cookie is malformed,
+	// unknown, expired, or fails validation.
+	ErrInvalidRememberToken = errors.New("invalid remember token")
 )
 
 // DefaultMinPasswordLength is the fallback minimum new-password length when the

@@ -18,7 +18,17 @@ the session cookie (guarded by `Authenticated`).
 | POST | `/auth/login` | `login` | public (rate-limited) | `200` UserResponse | `400` `401` `429` `500` |
 | POST | `/auth/logout` | `logout` | cookie | `200` MessageResponse | `401` |
 | GET | `/auth/me` | `getMe` | cookie | `200` UserResponse | `401` |
+| PUT | `/auth/me` | `updateProfile` | cookie | `200` UserResponse | `400` `401` `409` `500` |
 | PUT | `/auth/password` | `changePassword` | cookie | `200` MessageResponse | `400` `401` `500` |
+| GET | `/auth/logins` | `getLoginHistory` | cookie | `200` `[]LoginHistoryEntry` | `401` |
+
+## Sessions (when `features.sessions`)
+
+| Method | Path | `@ID` | Auth | Success | Errors |
+| --- | --- | --- | --- | --- | --- |
+| GET | `/auth/sessions` | `listSessions` | cookie | `200` `[]SessionResponse` | `401` |
+| DELETE | `/auth/sessions` | `terminateOtherSessions` | cookie | `200` MessageResponse | `401` |
+| DELETE | `/auth/sessions/{id}` | `terminateSession` | cookie | `200` MessageResponse | `400` `404` |
 
 > When the user has 2FA enabled, `login` returns `200 {"two_factor": true}`
 > **without** establishing the session — the client must then call
@@ -54,8 +64,11 @@ Login flow with 2FA: `login` → `{two_factor:true}` → `twoFactorChallenge` wi
 ## Request bodies
 
 ```jsonc
-// LoginRequest
-{ "email": "admin@example.com", "password": "secret" }
+// LoginRequest — `remember` is optional (default false)
+{ "email": "admin@example.com", "password": "secret", "remember": true }
+
+// UpdateProfileRequest — the user's own name + email
+{ "email": "admin@example.com", "name": "Admin" }
 
 // ChangePasswordRequest
 { "currentPassword": "secret", "newPassword": "new-secret" }
@@ -63,8 +76,8 @@ Login flow with 2FA: `login` → `{two_factor:true}` → `twoFactorChallenge` wi
 // CreateUserRequest
 { "email": "jane@example.com", "name": "Jane Admin", "password": "secret", "role": "admin" }
 
-// UpdateUserRequest
-{ "email": "jane@example.com", "name": "Jane Admin", "role": "admin" }
+// UpdateUserRequest — `disabled` is optional (omit to leave unchanged)
+{ "email": "jane@example.com", "name": "Jane Admin", "role": "admin", "disabled": false }
 
 // SetPasswordRequest
 { "password": "new-secret" }
@@ -90,6 +103,7 @@ Login flow with 2FA: `login` → `{two_factor:true}` → `twoFactorChallenge` wi
   "name": "Admin",
   "role": "admin",
   "twoFactorEnabled": false,
+  "disabled": false,
   "createdAt": "2026-01-01T00:00:00Z"
 }
 
@@ -97,8 +111,21 @@ Login flow with 2FA: `login` → `{two_factor:true}` → `twoFactorChallenge` wi
 {
   "roles": ["admin", "user"],
   "minPasswordLength": 8,
-  "features": { "userManagement": true, "twoFactor": true, "auditLog": true }
+  "features": { "userManagement": true, "twoFactor": true, "auditLog": true, "sessions": true }
 }
+
+// SessionResponse — one active session (secret session id never exposed)
+{
+  "id": "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+  "ip": "203.0.113.7",
+  "userAgent": "Mozilla/5.0 ...",
+  "current": true,
+  "createdAt": "2026-01-01T00:00:00Z",
+  "lastActiveAt": "2026-01-01T01:00:00Z"
+}
+
+// LoginHistoryEntry — a recent successful sign-in (action = auth.login | auth.login_remember)
+{ "action": "auth.login", "ip": "203.0.113.7", "createdAt": "2026-01-01T00:00:00Z" }
 
 // MessageResponse
 { "message": "Password changed" }
@@ -124,6 +151,10 @@ Login flow with 2FA: `login` → `{two_factor:true}` → `twoFactorChallenge` wi
 | 400 | `wrong_password` | Change-password current password incorrect |
 | 400 | `invalid_id` | Malformed UUID path param |
 | 400 | `self_delete` | Deleting your own account |
+| 400 | `self_disable` | Disabling your own account |
+| 400 | `current_session` | Terminating the current session (use logout) |
+| 401 | `session_terminated` | The session was signed out elsewhere |
+| 403 | `account_disabled` | The account is locked (`disabled`) — login + sessions refused |
 | 401 | `invalid_credentials` | Login failed (unknown email **or** wrong password — never distinguished) |
 | 401 | `unauthorized` | Missing/invalid session |
 | 401 | `session_expired` | Password changed elsewhere → other sessions invalidated |
@@ -144,3 +175,28 @@ Login flow with 2FA: `login` → `{two_factor:true}` → `twoFactorChallenge` wi
   self-delete (`self_delete`).
 - Failed logins are recorded to `audit_logs` (`auth.login_failed`) when audit is
   enabled.
+- **Remember me** (when `features.remember_me`, default on): `login` with
+  `"remember": true` issues a long-lived, http-only `authkit_remember` cookie
+  (selector-validator token in `auth_remember_tokens`, default 30-day sliding
+  expiry). When the short session has expired, a guarded-route middleware
+  silently re-establishes it from this cookie and **rotates** the validator on
+  every use. The just-superseded validator is honoured for a short grace window
+  (60s) so concurrent requests aren't mistaken for theft; a validator that is
+  stale beyond that (or simply wrong) for a known selector is treated as theft
+  and revokes the user's whole token family. With 2FA the cookie is issued only
+  after the challenge completes. Logout revokes this device's token; a password
+  change (and disabling the account) revokes **all** of the user's remember
+  tokens. Expired rows are pruned lazily on access and by the
+  `auth:prune-remember-tokens` command (schedule it daily).
+- **Disabled accounts**: setting `disabled` on a user (`PUT /auth/users/{id}`)
+  locks the account — login returns `403 account_disabled`, and any live session
+  or remember cookie is rejected on its next request. You cannot disable your own
+  account (`400 self_disable`).
+- **Active sessions** (when `features.sessions`): each login is tracked in
+  `auth_sessions` (session id, IP, user-agent, last-active). `GET /auth/logins`
+  returns the user's recent successful sign-ins; `GET /auth/sessions` lists their
+  active sessions (the current one flagged). Deleting a session row terminates
+  it — the `TrackSession` middleware rejects the next request from a session with
+  no row (`401 session_terminated`). You can't terminate the current session via
+  the API (`400 current_session`) — use logout. A password change drops all other
+  session rows; stale rows are pruned by `auth:prune-remember-tokens`.

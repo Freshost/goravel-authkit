@@ -26,6 +26,9 @@ type User struct {
 	PasswordHash      *string    `gorm:"type:text" json:"-"`
 	PasswordChangedAt time.Time  `gorm:"type:timestamptz;not null;autoCreateTime" json:"passwordChangedAt"`
 	Role              string     `gorm:"type:text;not null;default:'admin'" json:"role"`
+	// DisabledAt, when set, locks the account: login is refused and any live
+	// session / remember cookie is rejected on its next request. nil = active.
+	DisabledAt *time.Time `gorm:"type:timestamptz" json:"disabledAt,omitempty"`
 
 	// Two-factor (TOTP). Secret + recovery codes are stored encrypted (Crypt
 	// facade) and never serialized. TwoFactorConfirmedAt is set once the user
@@ -48,4 +51,9 @@ func (User) TableName() string {
 // TwoFactorEnabled reports whether the user has confirmed TOTP two-factor auth.
 func (u *User) TwoFactorEnabled() bool {
 	return u.TwoFactorConfirmedAt != nil && u.TwoFactorSecret != nil && *u.TwoFactorSecret != ""
+}
+
+// IsDisabled reports whether the account is locked (DisabledAt set).
+func (u *User) IsDisabled() bool {
+	return u.DisabledAt != nil
 }

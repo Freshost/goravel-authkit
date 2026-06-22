@@ -21,12 +21,16 @@ type TwoFactorController struct {
 	auth      *services.Auth
 	twoFactor *services.TwoFactor
 	audit     *services.Audit
+	remember  *services.Remember // nil when remember-me is disabled
+	sessions  *services.Sessions // nil when session tracking is disabled
 	guard     string
 }
 
-// NewTwoFactorController builds the two-factor controller.
-func NewTwoFactorController(users *services.Users, auth *services.Auth, twoFactor *services.TwoFactor, audit *services.Audit, guard string) *TwoFactorController {
-	return &TwoFactorController{users: users, auth: auth, twoFactor: twoFactor, audit: audit, guard: guard}
+// NewTwoFactorController builds the two-factor controller. Pass a nil remember to
+// disable persistent "remember me" logins, and a nil sessions to disable
+// active-session tracking.
+func NewTwoFactorController(users *services.Users, auth *services.Auth, twoFactor *services.TwoFactor, audit *services.Audit, remember *services.Remember, sessions *services.Sessions, guard string) *TwoFactorController {
+	return &TwoFactorController{users: users, auth: auth, twoFactor: twoFactor, audit: audit, remember: remember, sessions: sessions, guard: guard}
 }
 
 // Challenge godoc
@@ -84,7 +88,13 @@ func (c *TwoFactorController) Challenge(ctx contractshttp.Context) contractshttp
 		})
 	}
 
-	return completeLogin(ctx, c.guard, c.audit, user)
+	// Honour the remember-me intent stashed during the password step.
+	wantRemember := false
+	if raw, ok := sess.Get(SessionKeyRememberIntent).(string); ok && raw == "1" {
+		wantRemember = true
+	}
+
+	return completeLogin(ctx, c.guard, c.audit, c.remember, c.sessions, wantRemember, user)
 }
 
 // Enable godoc

@@ -94,6 +94,7 @@ func (r *ServiceProvider) Boot(app foundation.Application) {
 	// Artisan commands.
 	app.Commands([]console.Command{
 		commands.NewCreateUser(),
+		commands.NewPruneRememberTokens(),
 	})
 
 	// Publishable config — `./artisan vendor:publish --tag=authkit` writes

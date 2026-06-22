@@ -51,3 +51,15 @@ func (s *Audit) Log(ctx context.Context, e AuditEntry) error {
 	}
 	return nil
 }
+
+// LoginActions are the audit actions that count as a successful sign-in.
+var LoginActions = []string{"auth.login", "auth.login_remember"}
+
+// RecentLogins returns the user's most recent successful sign-ins (password or
+// remember-cookie), newest first, capped at limit.
+func (s *Audit) RecentLogins(ctx context.Context, userID uuid.UUID, limit int) ([]models.AuditLog, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	return s.repo.ListByActorActions(ctx, userID, LoginActions, limit)
+}

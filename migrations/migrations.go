@@ -11,5 +11,9 @@ func Migrations() []schema.Migration {
 		&CreateAuditLogs{},
 		&AddTwoFactorToUsers{},
 		&AddTwoFactorLastUsed{},
+		&CreateAuthRememberTokens{},
+		&AddRememberTokenRotation{},
+		&AddDisabledAtToUsers{},
+		&CreateAuthSessions{},
 	}
 }

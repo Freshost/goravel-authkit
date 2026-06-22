@@ -60,8 +60,24 @@ func TestUsersUpdate_EmailCollision(t *testing.T) {
 	b := seedUser(repo, "b@example.com", "secret123")
 	svc := NewUsers(repo, fakeHasher{}, 8, nil)
 
-	_, err := svc.Update(context.Background(), b.ID, "taken@example.com", "B", "admin")
+	_, err := svc.Update(context.Background(), b.ID, "taken@example.com", "B", "admin", nil)
 	assert.ErrorIs(t, err, ErrAlreadyExists)
+}
+
+func TestUsersUpdate_DisableAndEnable(t *testing.T) {
+	repo := newFakeRepo()
+	u := seedUser(repo, "admin@example.com", "secret123")
+	svc := NewUsers(repo, fakeHasher{}, 8, nil)
+
+	disabled := true
+	got, err := svc.Update(context.Background(), u.ID, "admin@example.com", "Admin", "admin", &disabled)
+	require.NoError(t, err)
+	assert.True(t, got.IsDisabled())
+
+	enabled := false
+	got, err = svc.Update(context.Background(), u.ID, "admin@example.com", "Admin", "admin", &enabled)
+	require.NoError(t, err)
+	assert.False(t, got.IsDisabled())
 }
 
 func TestUsersSetPassword_BumpsTimestamp(t *testing.T) {

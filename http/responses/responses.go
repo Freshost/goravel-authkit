@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/freshost/goravel-authkit/models"
+	"github.com/freshost/goravel-authkit/services"
 )
 
 // ErrorResponse is the standard error envelope: {"error","message"}.
@@ -24,6 +25,15 @@ type MessageResponse struct {
 type LoginRequest struct {
 	Email    string `json:"email" form:"email" binding:"required,email" example:"admin@example.com"`
 	Password string `json:"password" form:"password" binding:"required" example:"password"`
+	// Remember, when true, issues a persistent "remember me" cookie so the user
+	// stays logged in across browser restarts until it expires or they log out.
+	Remember bool `json:"remember" form:"remember" example:"false"`
+}
+
+// UpdateProfileRequest is the PUT /auth/me body — the user's own name and email.
+type UpdateProfileRequest struct {
+	Email string `json:"email" binding:"required,email" example:"admin@example.com"`
+	Name  string `json:"name" example:"Admin"`
 }
 
 // ChangePasswordRequest is the PUT /auth/password body.
@@ -40,11 +50,13 @@ type CreateUserRequest struct {
 	Role     string `json:"role" example:"admin"`
 }
 
-// UpdateUserRequest is the PUT /users/{id} body.
+// UpdateUserRequest is the PUT /users/{id} body. Disabled is a pointer so an
+// omitted field leaves the lock state unchanged.
 type UpdateUserRequest struct {
-	Email string `json:"email" binding:"required,email" example:"jane@example.com"`
-	Name  string `json:"name" example:"Jane Admin"`
-	Role  string `json:"role" example:"admin"`
+	Email    string `json:"email" binding:"required,email" example:"jane@example.com"`
+	Name     string `json:"name" example:"Jane Admin"`
+	Role     string `json:"role" example:"admin"`
+	Disabled *bool  `json:"disabled" example:"false"`
 }
 
 // SetPasswordRequest is the POST /users/{id}/password body.
@@ -104,6 +116,7 @@ type MetaFeatures struct {
 	UserManagement bool `json:"userManagement" example:"true"`
 	TwoFactor      bool `json:"twoFactor" example:"true"`
 	AuditLog       bool `json:"auditLog" example:"true"`
+	Sessions       bool `json:"sessions" example:"true"`
 }
 
 // UserResponse is the public view of a user (never includes the password hash).
@@ -113,6 +126,7 @@ type UserResponse struct {
 	Name             string `json:"name" example:"Admin"`
 	Role             string `json:"role" example:"admin"`
 	TwoFactorEnabled bool   `json:"twoFactorEnabled" example:"false"`
+	Disabled         bool   `json:"disabled" example:"false"`
 	CreatedAt        string `json:"createdAt" example:"2026-01-01T00:00:00Z"`
 }
 
@@ -132,8 +146,65 @@ func NewUserResponse(u *models.User) UserResponse {
 		Name:             name,
 		Role:             u.Role,
 		TwoFactorEnabled: u.TwoFactorEnabled(),
+		Disabled:         u.IsDisabled(),
 		CreatedAt:        createdAt,
 	}
+}
+
+// SessionResponse is the public view of one active session. The secret session
+// id is never exposed; ID is the row's own id, used to address it for
+// termination.
+type SessionResponse struct {
+	ID           string `json:"id" example:"3f2504e0-4f89-41d3-9a0c-0305e82c3301"`
+	IP           string `json:"ip" example:"203.0.113.7"`
+	UserAgent    string `json:"userAgent" example:"Mozilla/5.0 ..."`
+	Current      bool   `json:"current" example:"true"`
+	CreatedAt    string `json:"createdAt" example:"2026-01-01T00:00:00Z"`
+	LastActiveAt string `json:"lastActiveAt" example:"2026-01-01T01:00:00Z"`
+}
+
+// NewSessionListResponse maps service session views to public DTOs.
+func NewSessionListResponse(views []services.SessionView) []SessionResponse {
+	out := make([]SessionResponse, 0, len(views))
+	for _, v := range views {
+		out = append(out, SessionResponse{
+			ID:           v.ID.String(),
+			IP:           v.IP,
+			UserAgent:    v.UserAgent,
+			Current:      v.IsCurrent,
+			CreatedAt:    formatTime(v.CreatedAt),
+			LastActiveAt: formatTime(v.LastActiveAt),
+		})
+	}
+	return out
+}
+
+// LoginHistoryEntry is one recent successful sign-in.
+type LoginHistoryEntry struct {
+	// Action is "auth.login" (password) or "auth.login_remember" (remember cookie).
+	Action    string `json:"action" example:"auth.login"`
+	IP        string `json:"ip" example:"203.0.113.7"`
+	CreatedAt string `json:"createdAt" example:"2026-01-01T00:00:00Z"`
+}
+
+// NewLoginHistoryResponse maps audit rows to login-history DTOs.
+func NewLoginHistoryResponse(entries []models.AuditLog) []LoginHistoryEntry {
+	out := make([]LoginHistoryEntry, 0, len(entries))
+	for i := range entries {
+		out = append(out, LoginHistoryEntry{
+			Action:    entries[i].Action,
+			IP:        entries[i].IP,
+			CreatedAt: formatTime(entries[i].CreatedAt),
+		})
+	}
+	return out
+}
+
+func formatTime(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.UTC().Format(time.RFC3339)
 }
 
 // NewUserListResponse maps a slice of users to public DTOs.

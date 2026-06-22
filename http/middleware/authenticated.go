@@ -41,6 +41,12 @@ func Authenticated(guard string) contractshttp.Middleware {
 			return
 		}
 
+		if user.IsDisabled() {
+			_ = facades.Auth(ctx).Guard(guard).Logout()
+			abortUnauthorized(ctx, "account_disabled", "This account has been disabled")
+			return
+		}
+
 		session := ctx.Request().Session()
 		if session != nil && !sessionPasswordTimestampValid(session, user.PasswordChangedAt) {
 			_ = facades.Auth(ctx).Guard(guard).Logout()

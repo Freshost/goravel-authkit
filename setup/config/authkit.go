@@ -29,6 +29,10 @@ func init() {
 			// Register the TOTP two-factor endpoints + two-step login gate.
 			// Users still opt in individually by enrolling.
 			"two_factor": true,
+			// Persistent "remember me" login cookie (selector-validator token).
+			"remember_me": true,
+			// Active-session tracking: list/terminate sessions + login history.
+			"sessions": true,
 		},
 		// TOTP two-factor settings.
 		"two_factor": map[string]any{
@@ -36,6 +40,11 @@ func init() {
 			"issuer": "",
 			// Number of single-use recovery codes generated on confirmation.
 			"recovery_codes": 8,
+		},
+		// "Remember me" settings.
+		"remember": map[string]any{
+			// How long the remember cookie stays valid, in days (sliding on use).
+			"lifetime_days": 30,
 		},
 		// Roles allowed to use the /users endpoints. Empty (default) = any
 		// authenticated user (v1 has no RBAC). Set e.g. []string{"admin"} once

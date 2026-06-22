@@ -72,6 +72,73 @@ func (s *Auth) Me(ctx context.Context, id uuid.UUID) (*models.User, error) {
 	return user, nil
 }
 
+// UpdateProfile lets the authenticated user change their own name and email. The
+// role is intentionally out of scope (admin-managed via the users service). It
+// returns the updated user and whether anything actually changed (false skips
+// the write so a no-op save isn't audited). A colliding email returns
+// ErrAlreadyExists; a missing email returns ErrValidation. Changing the email
+// clears EmailVerified, since the new address is unverified.
+func (s *Auth) UpdateProfile(ctx context.Context, id uuid.UUID, email, name string) (*models.User, bool, error) {
+	user, err := s.repo.FindByID(ctx, id)
+	if err != nil {
+		return nil, false, errors.Join(ErrInternal, err)
+	}
+	if user == nil {
+		return nil, false, ErrUnauthorized
+	}
+
+	email = normalizeEmail(email)
+	name = strings.TrimSpace(name)
+	if email == "" {
+		return nil, false, errors.Join(ErrValidation, errors.New("email is required"))
+	}
+
+	currentName := ""
+	if user.Name != nil {
+		currentName = *user.Name
+	}
+	emailChanged := email != user.Email
+	nameChanged := name != currentName
+	if !emailChanged && !nameChanged {
+		return user, false, nil
+	}
+
+	if emailChanged {
+		other, err := s.repo.FindByEmail(ctx, email)
+		if err != nil {
+			return nil, false, errors.Join(ErrInternal, err)
+		}
+		if other != nil && other.ID != user.ID {
+			return nil, false, ErrAlreadyExists
+		}
+		user.Email = email
+		user.EmailVerified = nil
+	}
+	if name != "" {
+		user.Name = &name
+	} else {
+		user.Name = nil
+	}
+
+	if err := s.repo.Save(ctx, user); err != nil {
+		if isUniqueViolation(err) {
+			return nil, false, ErrAlreadyExists
+		}
+		return nil, false, errors.Join(ErrInternal, err)
+	}
+	return user, true, nil
+}
+
+// isUniqueViolation best-effort detects a unique-constraint failure from the
+// underlying driver, so a lost email-uniqueness race surfaces as 409 (not 500).
+func isUniqueViolation(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "duplicate") || strings.Contains(msg, "unique")
+}
+
 // ChangePassword verifies the current password, validates the new one (min
 // length, must differ), updates the hash, and bumps password_changed_at so
 // every OTHER active session for this user is rejected on its next request. It

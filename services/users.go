@@ -128,8 +128,10 @@ func (s *Users) Create(ctx context.Context, email, name, password, role string) 
 	return u, nil
 }
 
-// Update changes a user's email, name, and role (not the password).
-func (s *Users) Update(ctx context.Context, id uuid.UUID, email, name, role string) (*models.User, error) {
+// Update changes a user's email, name, and role (not the password). disabled,
+// when non-nil, locks (true) or unlocks (false) the account; nil leaves the lock
+// state untouched.
+func (s *Users) Update(ctx context.Context, id uuid.UUID, email, name, role string, disabled *bool) (*models.User, error) {
 	u, err := s.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
@@ -163,6 +165,15 @@ func (s *Users) Update(ctx context.Context, id uuid.UUID, email, name, role stri
 	}
 	if role != "" {
 		u.Role = role
+	}
+	if disabled != nil {
+		switch {
+		case *disabled && u.DisabledAt == nil:
+			now := time.Now().UTC()
+			u.DisabledAt = &now
+		case !*disabled:
+			u.DisabledAt = nil
+		}
 	}
 	if err := s.repo.Save(ctx, u); err != nil {
 		return nil, errors.Join(ErrInternal, err)

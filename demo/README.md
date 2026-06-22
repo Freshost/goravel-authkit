@@ -11,27 +11,22 @@ It consumes the package **locally** via a `replace` directive to the repo root
 ## Prerequisites
 
 - Go 1.25+
+- [air](https://github.com/air-verse/air) for hot reload (`go install github.com/air-verse/air@latest`)
 - PostgreSQL on `127.0.0.1:5432` (the package migrations are Postgres-specific)
 
 ## Run (port 8099)
 
-```bash
-cp .env.example .env                 # set DB_USERNAME/DB_PASSWORD for your Postgres
-createdb authkit_demo                # or: psql -c 'create database authkit_demo'
-go run . artisan key:generate
-go run . artisan migrate
-go run . artisan auth:create-user --email=admin@demo.test --password=password123 --name=Admin
-go run .                             # serves http://127.0.0.1:8099
-```
-
-Smoke test:
+Everything is driven through the `Makefile` (`make help` lists targets).
 
 ```bash
-curl -i -c j -b j -XPOST localhost:8099/api/v1/auth/login \
-  -H 'content-type: application/json' \
-  -d '{"email":"admin@demo.test","password":"password123"}'
-curl -c j -b j localhost:8099/api/v1/auth/me
+cp .env.example .env            # set DB_USERNAME/DB_PASSWORD for your Postgres
+go run . artisan key:generate   # one-time, if APP_KEY is empty
+make setup                      # one-time: createdb + migrate + seed admin@demo.test
+make dev                        # hot reload (air) → http://127.0.0.1:8099
 ```
+
+`make run` is the one-shot `go run .` without reload. Smoke-test the running
+backend with `make smoke` (login + `/me` as the seeded admin).
 
 ## The whole authkit integration
 

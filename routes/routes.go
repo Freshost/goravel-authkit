@@ -7,6 +7,7 @@ package routes
 import (
 	"time"
 
+	contractshttp "github.com/goravel/framework/contracts/http"
 	"github.com/goravel/framework/contracts/route"
 	"github.com/goravel/framework/facades"
 
@@ -50,6 +51,19 @@ type Options struct {
 	TwoFactorIssuer string
 	// RecoveryCodeCount is how many recovery codes are generated on confirmation.
 	RecoveryCodeCount int
+	// EnableRememberMe enables the persistent "remember me" login cookie (the
+	// login endpoint honours a `remember` flag; a guarded middleware re-logs the
+	// user in from the cookie when the session has expired).
+	EnableRememberMe bool
+	// RememberLifetime is how long a remember cookie stays valid (sliding on use).
+	RememberLifetime time.Duration
+	// EnableSessions enables active-session tracking: the /sessions endpoints, the
+	// login-history endpoint, and the TrackSession middleware (terminated sessions
+	// are rejected on their next request).
+	EnableSessions bool
+	// SessionActiveWindow is how recently a session must have been active to be
+	// listed (defaults to the configured session lifetime).
+	SessionActiveWindow time.Duration
 }
 
 // DefaultOptions returns the baked-in defaults (matches the published config).
@@ -64,6 +78,10 @@ func DefaultOptions() Options {
 		EnableAuditLog:       true,
 		EnableTwoFactor:      true,
 		RecoveryCodeCount:    services.DefaultRecoveryCodeCount,
+		EnableRememberMe:     true,
+		RememberLifetime:     services.DefaultRememberLifetime,
+		EnableSessions:       true,
+		SessionActiveWindow:  services.DefaultSessionActiveWindow,
 	}
 }
 
@@ -93,6 +111,16 @@ func OptionsFromConfig() Options {
 	o.EnableUserManagement = cfg.GetBool("authkit.features.user_management", o.EnableUserManagement)
 	o.EnableAuditLog = cfg.GetBool("authkit.features.audit_log", o.EnableAuditLog)
 	o.EnableTwoFactor = cfg.GetBool("authkit.features.two_factor", o.EnableTwoFactor)
+	o.EnableRememberMe = cfg.GetBool("authkit.features.remember_me", o.EnableRememberMe)
+	if v := cfg.GetInt("authkit.remember.lifetime_days"); v > 0 {
+		o.RememberLifetime = time.Duration(v) * 24 * time.Hour
+	}
+	o.EnableSessions = cfg.GetBool("authkit.features.sessions", o.EnableSessions)
+	// The active-session window mirrors the session lifetime so the list hides
+	// sessions whose store entry has already expired.
+	if v := cfg.GetInt("session.lifetime"); v > 0 {
+		o.SessionActiveWindow = time.Duration(v) * time.Minute
+	}
 	if v := cfg.GetString("authkit.two_factor.issuer"); v != "" {
 		o.TwoFactorIssuer = v
 	}
@@ -163,13 +191,25 @@ func Register(router route.Router, opts Options) {
 		twoFactorSvc = services.NewTwoFactor(usersRepo, services.NewFacadeCrypter(), opts.TwoFactorIssuer, opts.RecoveryCodeCount)
 	}
 
-	authCtrl := controllers.NewAuthController(authSvc, auditSvc, twoFactorSvc, opts.Guard)
+	var rememberSvc *services.Remember
+	if opts.EnableRememberMe {
+		rememberSvc = services.NewRemember(repositories.NewRemember(), opts.RememberLifetime)
+	}
+
+	var sessionsSvc *services.Sessions
+	if opts.EnableSessions {
+		sessionsSvc = services.NewSessions(repositories.NewSessions(), opts.SessionActiveWindow)
+	}
+
+	authCtrl := controllers.NewAuthController(authSvc, auditSvc, twoFactorSvc, rememberSvc, sessionsSvc, opts.Guard)
 	usersCtrl := controllers.NewUsersController(usersSvc, auditSvc)
-	twoFactorCtrl := controllers.NewTwoFactorController(usersSvc, authSvc, twoFactorSvc, auditSvc, opts.Guard)
+	twoFactorCtrl := controllers.NewTwoFactorController(usersSvc, authSvc, twoFactorSvc, auditSvc, rememberSvc, sessionsSvc, opts.Guard)
+	sessionsCtrl := controllers.NewSessionsController(sessionsSvc, auditSvc, opts.Guard)
 	metaCtrl := controllers.NewMetaController(opts.Roles, opts.MinPasswordLength, responses.MetaFeatures{
 		UserManagement: opts.EnableUserManagement,
 		TwoFactor:      opts.EnableTwoFactor,
 		AuditLog:       opts.EnableAuditLog,
+		Sessions:       opts.EnableSessions,
 	})
 
 	// All package routes live under a single owned namespace ({prefix}/auth/*) so
@@ -191,11 +231,33 @@ func Register(router route.Router, opts Options) {
 				}
 			})
 
-		// Guarded: everything behind the session guard.
-		r.Middleware(middleware.Authenticated(opts.Guard)).Group(func(g route.Router) {
+		// Guarded: everything behind the session guard. When remember-me is on,
+		// RememberLogin runs first so an expired session is silently restored from
+		// a valid remember cookie before Authenticated checks for a live session.
+		guarded := make([]contractshttp.Middleware, 0, 3)
+		if rememberSvc != nil {
+			guarded = append(guarded, middleware.RememberLogin(opts.Guard, rememberSvc, auditSvc, sessionsSvc))
+		}
+		guarded = append(guarded, middleware.Authenticated(opts.Guard))
+		if sessionsSvc != nil {
+			// After Authenticated: refresh the current session row and reject it if
+			// it was terminated elsewhere.
+			guarded = append(guarded, middleware.TrackSession(opts.Guard, sessionsSvc))
+		}
+		r.Middleware(guarded...).Group(func(g route.Router) {
 			g.Post("/logout", authCtrl.Logout)
 			g.Get("/me", authCtrl.Me)
+			g.Put("/me", authCtrl.UpdateProfile)
 			g.Put("/password", authCtrl.ChangePassword)
+
+			if auditSvc != nil {
+				g.Get("/logins", authCtrl.LoginHistory)
+			}
+			if sessionsSvc != nil {
+				g.Get("/sessions", sessionsCtrl.Index)
+				g.Delete("/sessions", sessionsCtrl.DestroyOthers)
+				g.Delete("/sessions/{id}", sessionsCtrl.Destroy)
+			}
 
 			if opts.EnableTwoFactor {
 				g.Post("/two-factor", twoFactorCtrl.Enable)

@@ -24,18 +24,27 @@ import (
 // challenge succeeds.
 const SessionKeyTwoFactorUserID = "authkit_2fa_user_id"
 
+// SessionKeyRememberIntent records, between the password step and the 2FA
+// challenge, that the user asked to be remembered — so the persistent cookie is
+// issued only after the challenge completes (never on the half-finished login).
+const SessionKeyRememberIntent = "authkit_remember_intent"
+
 // AuthController handles the auth endpoints.
 type AuthController struct {
 	auth      *services.Auth
 	audit     *services.Audit     // nil when audit logging is disabled
 	twoFactor *services.TwoFactor // nil when 2FA is disabled
+	remember  *services.Remember  // nil when remember-me is disabled
+	sessions  *services.Sessions  // nil when session tracking is disabled
 	guard     string
 }
 
 // NewAuthController builds the auth controller. Pass a nil audit to disable audit
-// writes, and a nil twoFactor to disable the two-factor login gate.
-func NewAuthController(auth *services.Auth, audit *services.Audit, twoFactor *services.TwoFactor, guard string) *AuthController {
-	return &AuthController{auth: auth, audit: audit, twoFactor: twoFactor, guard: guard}
+// writes, a nil twoFactor to disable the two-factor login gate, a nil remember to
+// disable persistent "remember me" logins, and a nil sessions to disable
+// active-session tracking.
+func NewAuthController(auth *services.Auth, audit *services.Audit, twoFactor *services.TwoFactor, remember *services.Remember, sessions *services.Sessions, guard string) *AuthController {
+	return &AuthController{auth: auth, audit: audit, twoFactor: twoFactor, remember: remember, sessions: sessions, guard: guard}
 }
 
 // Login godoc
@@ -65,6 +74,13 @@ func (c *AuthController) Login(ctx contractshttp.Context) contractshttp.Response
 		return c.mapServiceError(ctx, err)
 	}
 
+	if user.IsDisabled() {
+		c.writeAuditAttempt(ctx, req.Email, "auth.login_disabled")
+		return ctx.Response().Json(http.StatusForbidden, responses.ErrorResponse{
+			Error: "account_disabled", Message: "This account has been disabled",
+		})
+	}
+
 	// Two-step login: if the user has confirmed 2FA, do NOT establish the
 	// session yet. Regenerate the session id (anti-fixation) before stashing the
 	// pending user id; the session stays unauthenticated until the challenge.
@@ -74,17 +90,22 @@ func (c *AuthController) Login(ctx contractshttp.Context) contractshttp.Response
 		}
 		if sess := ctx.Request().Session(); sess != nil {
 			sess.Put(SessionKeyTwoFactorUserID, user.ID.String())
+			if req.Remember {
+				sess.Put(SessionKeyRememberIntent, "1")
+			}
 		}
 		return ctx.Response().Json(http.StatusOK, responses.TwoFactorRequiredResponse{TwoFactor: true})
 	}
 
-	return completeLogin(ctx, c.guard, c.audit, user)
+	return completeLogin(ctx, c.guard, c.audit, c.remember, c.sessions, req.Remember, user)
 }
 
 // completeLogin establishes the authenticated session for a verified user
 // (guard login, session-id regeneration, password stamp, audit) and returns the
-// user response. Shared by password-only login and the 2FA challenge.
-func completeLogin(ctx contractshttp.Context, guard string, audit *services.Audit, user *models.User) contractshttp.Response {
+// user response. Shared by password-only login and the 2FA challenge. When
+// remember is non-nil and wantRemember is true it also issues a persistent
+// "remember me" cookie.
+func completeLogin(ctx contractshttp.Context, guard string, audit *services.Audit, remember *services.Remember, sessions *services.Sessions, wantRemember bool, user *models.User) contractshttp.Response {
 	if _, err := facades.Auth(ctx).Guard(guard).Login(user); err != nil {
 		facades.Log().Errorf("auth: establish session: %v", err)
 		return ctx.Response().Json(http.StatusInternalServerError, responses.ErrorResponse{
@@ -97,6 +118,21 @@ func completeLogin(ctx contractshttp.Context, guard string, audit *services.Audi
 	if sess := ctx.Request().Session(); sess != nil {
 		sess.Put(middleware.SessionKeyPasswordChangedAt, middleware.FormatPasswordTimestamp(user.PasswordChangedAt))
 		sess.Forget(SessionKeyTwoFactorUserID)
+		sess.Forget(SessionKeyRememberIntent)
+	}
+	if remember != nil && wantRemember {
+		if value, err := remember.Issue(ctx.Request().Origin().Context(), user.ID); err != nil {
+			facades.Log().Errorf("auth: issue remember token: %v", err)
+		} else {
+			helpers.SetRememberCookie(ctx, value, remember.TTL())
+		}
+	}
+	if sessions != nil {
+		if sess := ctx.Request().Session(); sess != nil {
+			if err := sessions.Track(ctx.Request().Origin().Context(), sess.GetID(), user.ID, ctx.Request().Ip(), ctx.Request().Header("User-Agent", "")); err != nil {
+				facades.Log().Errorf("auth: track session: %v", err)
+			}
+		}
 	}
 	if audit != nil {
 		id := user.ID
@@ -125,11 +161,32 @@ func (c *AuthController) Logout(ctx contractshttp.Context) contractshttp.Respons
 	var user models.User
 	_ = facades.Auth(ctx).Guard(c.guard).User(&user)
 
+	// Capture the session id before logout invalidates it, to drop its tracking row.
+	sessionID := ""
+	if sess := ctx.Request().Session(); sess != nil {
+		sessionID = sess.GetID()
+	}
+
 	if err := facades.Auth(ctx).Guard(c.guard).Logout(); err != nil {
 		facades.Log().Errorf("auth: logout: %v", err)
 	}
 	if sess := ctx.Request().Session(); sess != nil {
 		sess.Forget(middleware.SessionKeyPasswordChangedAt)
+	}
+	if c.sessions != nil {
+		if err := c.sessions.Forget(ctx.Request().Origin().Context(), sessionID); err != nil {
+			facades.Log().Errorf("auth: forget session: %v", err)
+		}
+	}
+
+	// Drop the persistent remember token (this device) so it can't re-login.
+	if c.remember != nil {
+		if cookie := helpers.ReadRememberCookie(ctx); cookie != "" {
+			if err := c.remember.Revoke(ctx.Request().Origin().Context(), cookie); err != nil {
+				facades.Log().Errorf("auth: revoke remember token: %v", err)
+			}
+		}
+		helpers.ClearRememberCookie(ctx)
 	}
 
 	c.writeAudit(ctx, &user, "auth.logout")
@@ -155,6 +212,74 @@ func (c *AuthController) Me(ctx contractshttp.Context) contractshttp.Response {
 		})
 	}
 	return ctx.Response().Json(http.StatusOK, responses.NewUserResponse(&user))
+}
+
+// UpdateProfile godoc
+//
+//	@ID				updateProfile
+//	@Summary		Update own profile
+//	@Description	Updates the authenticated user's own name and email. The role is not changeable here (admin-managed). A duplicate email returns 409.
+//	@Tags			Auth
+//	@Accept			json
+//	@Produce		json
+//	@Security		CookieAuth
+//	@Param			body	body		responses.UpdateProfileRequest	true	"New name + email"
+//	@Success		200		{object}	responses.UserResponse
+//	@Failure		400		{object}	responses.ErrorResponse
+//	@Failure		401		{object}	responses.ErrorResponse
+//	@Failure		409		{object}	responses.ErrorResponse
+//	@Failure		500		{object}	responses.ErrorResponse
+//	@Router			/auth/me [put]
+func (c *AuthController) UpdateProfile(ctx contractshttp.Context) contractshttp.Response {
+	var req responses.UpdateProfileRequest
+	if err := ctx.Request().Bind(&req); err != nil {
+		return c.badRequest(ctx)
+	}
+
+	userID := helpers.AuthUserID(ctx)
+	if userID == uuid.Nil {
+		return ctx.Response().Json(http.StatusUnauthorized, responses.ErrorResponse{
+			Error: "unauthorized", Message: "Authentication required",
+		})
+	}
+
+	user, changed, err := c.auth.UpdateProfile(ctx.Request().Origin().Context(), userID, req.Email, req.Name)
+	if err != nil {
+		return c.mapServiceError(ctx, err)
+	}
+
+	if changed {
+		c.writeAudit(ctx, user, "auth.profile_updated")
+	}
+	return ctx.Response().Json(http.StatusOK, responses.NewUserResponse(user))
+}
+
+// LoginHistory godoc
+//
+//	@ID				getLoginHistory
+//	@Summary		Recent sign-in activity
+//	@Description	Returns the current user's most recent successful sign-ins (password or remember cookie) with the IP they came from.
+//	@Tags			Auth
+//	@Security		CookieAuth
+//	@Produce		json
+//	@Success		200	{array}		responses.LoginHistoryEntry
+//	@Failure		401	{object}	responses.ErrorResponse
+//	@Router			/auth/logins [get]
+func (c *AuthController) LoginHistory(ctx contractshttp.Context) contractshttp.Response {
+	if c.audit == nil {
+		return ctx.Response().Json(http.StatusOK, []responses.LoginHistoryEntry{})
+	}
+	userID := helpers.AuthUserID(ctx)
+	if userID == uuid.Nil {
+		return ctx.Response().Json(http.StatusUnauthorized, responses.ErrorResponse{
+			Error: "unauthorized", Message: "Authentication required",
+		})
+	}
+	entries, err := c.audit.RecentLogins(ctx.Request().Origin().Context(), userID, 20)
+	if err != nil {
+		return c.internal(ctx)
+	}
+	return ctx.Response().Json(http.StatusOK, responses.NewLoginHistoryResponse(entries))
 }
 
 // ChangePassword godoc
@@ -196,6 +321,26 @@ func (c *AuthController) ChangePassword(ctx contractshttp.Context) contractshttp
 		sess.Put(middleware.SessionKeyPasswordChangedAt, middleware.FormatPasswordTimestamp(changedAt))
 	}
 
+	// A password change invalidates every other session; revoke all persistent
+	// remember tokens too (including this device's) so a leaked cookie can't
+	// outlive the password. This session itself stays valid via the re-stamp.
+	if c.remember != nil {
+		if err := c.remember.RevokeAllForUser(ctx.Request().Origin().Context(), userID); err != nil {
+			facades.Log().Errorf("auth: revoke remember tokens: %v", err)
+		}
+		helpers.ClearRememberCookie(ctx)
+	}
+	// Drop the tracking rows for every other session (this one stays).
+	if c.sessions != nil {
+		currentSessionID := ""
+		if sess := ctx.Request().Session(); sess != nil {
+			currentSessionID = sess.GetID()
+		}
+		if err := c.sessions.TerminateOthers(ctx.Request().Origin().Context(), userID, currentSessionID); err != nil {
+			facades.Log().Errorf("auth: terminate other sessions: %v", err)
+		}
+	}
+
 	c.writeAuditID(ctx, &userID, "auth.password_changed", userID.String())
 	return ctx.Response().Json(http.StatusOK, responses.MessageResponse{Message: "Password changed"})
 }
@@ -213,6 +358,10 @@ func (c *AuthController) mapServiceError(ctx contractshttp.Context, err error) c
 	case errors.Is(err, services.ErrValidation):
 		return ctx.Response().Json(http.StatusBadRequest, responses.ErrorResponse{
 			Error: "validation_error", Message: errMessage(err),
+		})
+	case errors.Is(err, services.ErrAlreadyExists):
+		return ctx.Response().Json(http.StatusConflict, responses.ErrorResponse{
+			Error: "already_exists", Message: "Email already exists",
 		})
 	case errors.Is(err, services.ErrUnauthorized):
 		return ctx.Response().Json(http.StatusUnauthorized, responses.ErrorResponse{

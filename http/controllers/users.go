@@ -95,7 +95,7 @@ func (c *UsersController) Store(ctx contractshttp.Context) contractshttp.Respons
 // Update godoc
 //
 //	@ID				updateUser
-//	@Summary		Update a user (email, name, role)
+//	@Summary		Update a user (email, name, role, disabled)
 //	@Tags			Users
 //	@Security		CookieAuth
 //	@Accept			json
@@ -116,7 +116,13 @@ func (c *UsersController) Update(ctx contractshttp.Context) contractshttp.Respon
 	if err := ctx.Request().Bind(&req); err != nil {
 		return c.badRequest(ctx)
 	}
-	u, err := c.users.Update(ctx.Request().Origin().Context(), id, req.Email, req.Name, req.Role)
+	// Refuse to lock yourself out.
+	if req.Disabled != nil && *req.Disabled && helpers.AuthUserID(ctx) == id {
+		return ctx.Response().Json(http.StatusBadRequest, responses.ErrorResponse{
+			Error: "self_disable", Message: "You cannot disable your own account",
+		})
+	}
+	u, err := c.users.Update(ctx.Request().Origin().Context(), id, req.Email, req.Name, req.Role, req.Disabled)
 	if err != nil {
 		return c.mapError(ctx, err)
 	}
