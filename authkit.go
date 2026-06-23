@@ -29,6 +29,7 @@ func NewAuthkit(app foundation.Application) *Authkit {
 	minPwLen := services.DefaultMinPasswordLength
 	issuer := ""
 	recoveryCount := services.DefaultRecoveryCodeCount
+	var roles, managementRoles []string
 	if cfg := app.MakeConfig(); cfg != nil {
 		if v := cfg.GetInt("authkit.min_password_length", minPwLen); v > 0 {
 			minPwLen = v
@@ -37,12 +38,19 @@ func NewAuthkit(app foundation.Application) *Authkit {
 		if v := cfg.GetInt("authkit.two_factor.recovery_codes", recoveryCount); v > 0 {
 			recoveryCount = v
 		}
+		roles = toStringSlice(cfg.Get("authkit.roles"))
+		managementRoles = toStringSlice(cfg.Get("authkit.user_management_roles"))
+	}
+	// Fail-closed: management roles default to the admin role so the last-admin
+	// guards work even when the app leaves user_management_roles unset.
+	if len(managementRoles) == 0 {
+		managementRoles = []string{services.AdminRole}
 	}
 	repo := repositories.NewUsers()
 	hasher := services.NewFacadeHasher()
 	return &Authkit{
 		auth:      services.NewAuth(repo, hasher, minPwLen),
-		users:     services.NewUsers(repo, hasher, minPwLen, nil),
+		users:     services.NewUsers(repo, hasher, minPwLen, roles, managementRoles),
 		twoFactor: services.NewTwoFactor(repo, services.NewFacadeCrypter(), issuer, recoveryCount),
 	}
 }
@@ -98,4 +106,23 @@ func (a *Authkit) VerifyTwoFactor(ctx context.Context, id uuid.UUID, code string
 
 func (a *Authkit) DisableTwoFactor(ctx context.Context, id uuid.UUID) error {
 	return a.twoFactor.Disable(ctx, id)
+}
+
+// toStringSlice coerces a config value (set as []string or []any in the Go
+// config file) into []string, dropping non-string entries.
+func toStringSlice(v any) []string {
+	switch t := v.(type) {
+	case []string:
+		return t
+	case []any:
+		out := make([]string, 0, len(t))
+		for _, e := range t {
+			if s, ok := e.(string); ok {
+				out = append(out, s)
+			}
+		}
+		return out
+	default:
+		return nil
+	}
 }

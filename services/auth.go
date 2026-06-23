@@ -159,8 +159,8 @@ func (s *Auth) ChangePassword(ctx context.Context, id uuid.UUID, currentPassword
 	if user.PasswordHash == nil || !s.hasher.Check(currentPassword, *user.PasswordHash) {
 		return time.Time{}, ErrWrongPassword
 	}
-	if len([]rune(newPassword)) < s.minPwLen {
-		return time.Time{}, errors.Join(ErrValidation, errors.New("new password is too short"))
+	if err := validatePassword(newPassword, s.minPwLen); err != nil {
+		return time.Time{}, err
 	}
 	if newPassword == currentPassword {
 		return time.Time{}, errors.Join(ErrValidation, errors.New("new password must differ from the current password"))

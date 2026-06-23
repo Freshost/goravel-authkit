@@ -61,6 +61,28 @@ func (f *fakeRepo) List(_ context.Context) ([]models.User, error) {
 
 func (f *fakeRepo) Count(_ context.Context) (int64, error) { return int64(len(f.byID)), nil }
 
+func (f *fakeRepo) CountActiveByRolesExcluding(_ context.Context, roles []string, exclude uuid.UUID) (int64, error) {
+	if len(roles) == 0 {
+		return 0, nil
+	}
+	inRoles := func(role string) bool {
+		for _, r := range roles {
+			if r == role {
+				return true
+			}
+		}
+		return false
+	}
+	var count int64
+	for id, u := range f.byID {
+		if id == exclude || u.IsDisabled() || !inRoles(u.Role) {
+			continue
+		}
+		count++
+	}
+	return count, nil
+}
+
 func (f *fakeRepo) Create(_ context.Context, u *models.User) error {
 	f.seed(u)
 	return nil

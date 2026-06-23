@@ -24,6 +24,11 @@ type UsersRepository interface {
 	FindByID(ctx context.Context, id uuid.UUID) (*models.User, error)
 	List(ctx context.Context) ([]models.User, error)
 	Count(ctx context.Context) (int64, error)
+	// CountActiveByRolesExcluding counts users whose role is in roles and whose
+	// account is not disabled (disabled_at IS NULL), optionally excluding one id.
+	// It backs the "keep at least one active admin" invariants. An empty roles
+	// slice matches nothing (returns 0).
+	CountActiveByRolesExcluding(ctx context.Context, roles []string, exclude uuid.UUID) (int64, error)
 	Create(ctx context.Context, u *models.User) error
 	Save(ctx context.Context, u *models.User) error
 	Delete(ctx context.Context, u *models.User) error
@@ -88,6 +93,19 @@ func (r *Users) List(ctx context.Context) ([]models.User, error) {
 
 func (r *Users) Count(ctx context.Context) (int64, error) {
 	return facades.Orm().WithContext(ctx).Query().Model(&models.User{}).Count()
+}
+
+func (r *Users) CountActiveByRolesExcluding(ctx context.Context, roles []string, exclude uuid.UUID) (int64, error) {
+	if len(roles) == 0 {
+		return 0, nil
+	}
+	q := facades.Orm().WithContext(ctx).Query().Model(&models.User{}).
+		Where("role IN ?", roles).
+		WhereNull("disabled_at")
+	if exclude != uuid.Nil {
+		q = q.Where("id != ?", exclude)
+	}
+	return q.Count()
 }
 
 func (r *Users) Create(ctx context.Context, u *models.User) error {

@@ -95,10 +95,17 @@ type TwoFactorEnrollmentResponse struct {
 	OtpauthURL string `json:"otpauthUrl" example:"otpauth://totp/App:admin@example.com?secret=...&issuer=App"`
 }
 
-// RecoveryCodesResponse carries one-time recovery codes (shown once on
-// confirmation / regeneration; thereafter only the unused ones).
+// RecoveryCodesResponse carries one-time recovery codes. Plaintext codes are
+// shown exactly once, at confirmation / regeneration — they are stored hashed
+// and can never be re-derived afterwards.
 type RecoveryCodesResponse struct {
 	RecoveryCodes []string `json:"recoveryCodes" example:"ABCDE-FGHJK"`
+}
+
+// RecoveryCodesStatusResponse reports how many unused recovery codes remain,
+// without revealing the codes themselves (they are stored hashed).
+type RecoveryCodesStatusResponse struct {
+	Remaining int `json:"remaining" example:"6"`
 }
 
 // MetaResponse exposes the FE-relevant, non-sensitive package config so the UI

@@ -188,20 +188,21 @@ func (c *TwoFactorController) Disable(ctx contractshttp.Context) contractshttp.R
 // RecoveryCodes godoc
 //
 //	@ID				getTwoFactorRecoveryCodes
-//	@Summary		List remaining recovery codes
+//	@Summary		Count remaining recovery codes
+//	@Description	Returns how many unused recovery codes remain. The codes themselves are stored hashed and are shown only once, at confirmation / regeneration — this endpoint never returns plaintext codes.
 //	@Tags			Auth
 //	@Produce		json
 //	@Security		CookieAuth
-//	@Success		200	{object}	responses.RecoveryCodesResponse
+//	@Success		200	{object}	responses.RecoveryCodesStatusResponse
 //	@Failure		401	{object}	responses.ErrorResponse
 //	@Router			/auth/two-factor/recovery-codes [get]
 func (c *TwoFactorController) RecoveryCodes(ctx contractshttp.Context) contractshttp.Response {
 	id := helpers.AuthUserID(ctx)
-	codes, err := c.twoFactor.RecoveryCodes(ctx.Request().Origin().Context(), id)
+	remaining, err := c.twoFactor.RemainingRecoveryCodes(ctx.Request().Origin().Context(), id)
 	if err != nil {
 		return c.mapError(ctx, err)
 	}
-	return ctx.Response().Json(http.StatusOK, responses.RecoveryCodesResponse{RecoveryCodes: codes})
+	return ctx.Response().Json(http.StatusOK, responses.RecoveryCodesStatusResponse{Remaining: remaining})
 }
 
 // RegenerateRecoveryCodes godoc

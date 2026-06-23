@@ -122,7 +122,7 @@ func (c *UsersController) Update(ctx contractshttp.Context) contractshttp.Respon
 			Error: "self_disable", Message: "You cannot disable your own account",
 		})
 	}
-	u, err := c.users.Update(ctx.Request().Origin().Context(), id, req.Email, req.Name, req.Role, req.Disabled)
+	u, err := c.users.Update(ctx.Request().Origin().Context(), id, req.Email, req.Name, req.Role, req.Disabled, helpers.AuthUserID(ctx))
 	if err != nil {
 		return c.mapError(ctx, err)
 	}
@@ -227,7 +227,7 @@ func (c *UsersController) mapError(ctx contractshttp.Context, err error) contrac
 		})
 	case errors.Is(err, services.ErrLastAdmin):
 		return ctx.Response().Json(http.StatusConflict, responses.ErrorResponse{
-			Error: "last_admin", Message: "Cannot delete the last admin user",
+			Error: "last_admin", Message: "Cannot remove, disable, or demote the last admin user",
 		})
 	default:
 		facades.Log().Errorf("users internal error: %v", err)

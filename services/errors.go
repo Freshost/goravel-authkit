@@ -25,7 +25,8 @@ var (
 	ErrUnauthorized = errors.New("unauthorized")
 	// ErrAlreadyExists is returned when an email collides with an existing user.
 	ErrAlreadyExists = errors.New("already exists")
-	// ErrLastAdmin is returned when deleting would remove the last admin user.
+	// ErrLastAdmin is returned when an operation (delete, disable, or demote)
+	// would leave no active user holding a management/admin role.
 	ErrLastAdmin = errors.New("cannot remove the last admin")
 	// ErrInternal wraps an unexpected lower-layer failure.
 	ErrInternal = errors.New("internal error")
@@ -45,3 +46,9 @@ var (
 // DefaultMinPasswordLength is the fallback minimum new-password length when the
 // app does not override authkit.min_password_length.
 const DefaultMinPasswordLength = 8
+
+// MaxPasswordBytes caps accepted passwords at bcrypt's hard limit: bcrypt only
+// consumes the first 72 bytes, so anything longer is silently truncated (two
+// distinct long passwords sharing a 72-byte prefix would compare equal).
+// Rejecting oversize input up front makes that truncation impossible.
+const MaxPasswordBytes = 72

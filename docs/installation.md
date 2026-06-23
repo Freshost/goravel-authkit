@@ -9,15 +9,16 @@ apps (tested against Goravel **v1.17.x**, Go **1.25+**, PostgreSQL). It owns the
 ```bash
 go get github.com/freshost/goravel-authkit
 ./artisan package:install github.com/freshost/goravel-authkit
-# one-time: wire session middleware + routes in bootstrap/app.go (see below)
+# one-time: mount the routes in bootstrap/app.go (see below)
 ./artisan migrate
 ./artisan auth:create-user --email=admin@example.com --password=change-me
 ```
 
-`package:install` registers the provider and writes the config; you then add two
-lines to `bootstrap/app.go` to enable sessions and mount the routes (see
-[Wire sessions + routes](#wire-sessions--routes-one-time)). `auth:create-user`
-also reads `ADMIN_EMAIL` / `ADMIN_PASSWORD` env vars if the flags are omitted.
+`package:install` registers the provider and writes the config; you then add one
+line to `bootstrap/app.go` to mount the routes (see
+[Wire routes](#wire-routes-one-time)) — the package starts its own session, so no
+global session middleware is needed. `auth:create-user` also reads `ADMIN_EMAIL`
+/ `ADMIN_PASSWORD` env vars if the flags are omitted.
 
 ### What `package:install` does
 
@@ -44,33 +45,39 @@ The provider registers, with no edits to `bootstrap/migrations.go`:
 - **Commands** — registers `auth:create-user`.
 - **Publish** — exposes `config/authkit.go` for `./artisan vendor:publish --tag=authkit`.
 
-### Wire sessions + routes (one-time)
+### Wire routes (one-time)
 
-The package is **session-cookie** auth, so two things must be wired in
-`bootstrap/app.go` — the provider cannot do them itself, because Goravel rebuilds
-the HTTP engine when global middleware is set (which happens *after* providers
-boot), discarding any routes a provider registers in its `Boot`. Add:
+The package is **session-cookie** auth, but it starts its own session: `Register`
+mounts Goravel's `StartSession` on its `/auth` group. So you only have to mount
+the routes — no global session middleware needed:
 
 ```go
 import (
-	"github.com/goravel/framework/contracts/foundation/configuration"
-	sessionmiddleware "github.com/goravel/framework/session/middleware"
 	authkitroutes "github.com/freshost/goravel-authkit/routes"
 )
 
 foundation.Setup().
-	// 1) session middleware must run globally
-	WithMiddleware(func(h configuration.Middleware) {
-		h.Append(sessionmiddleware.StartSession())
-	}).
 	WithRouting(func() {
 		routes.Web()
-		// 2) mount authkit routes here (this callback runs after the engine
-		//    rebuild, so the routes survive)
+		// Mount authkit routes. Register starts the session on its own /auth
+		// group, so no global StartSession / WithMiddleware is required.
 		authkitroutes.Register(facades.Route(), authkitroutes.OptionsFromConfig())
 	}).
 	// ...
 ```
+
+Registering from the routing callback (rather than the provider's `Boot`) is the
+robust pattern: any global `WithMiddleware` an app adds rebuilds the HTTP engine
+*after* providers boot, discarding routes a provider registered in `Boot`. The
+routing callback runs after that rebuild, so the routes survive.
+
+> **Sessions on your own routes.** If your app has its *own* (non-authkit)
+> session-backed routes, run `StartSession` per-group on those routes (or set it
+> globally with `WithMiddleware`). A global `StartSession` is also harmless to
+> the package — `StartSession` is idempotent, so the package's group-level start
+> is simply skipped when a session already exists. Prefer per-group over global
+> to avoid the engine rebuild and to keep sessions off stateless endpoints
+> (bearer/machine APIs, health checks).
 
 After that you have `POST /api/v1/auth/login`, `/auth/me`, `/auth/logout`,
 `/auth/password`, the two-factor endpoints, and the `/users` CRUD. See the
@@ -79,8 +86,13 @@ After that you have `POST /api/v1/auth/login`, `/auth/me`, `/auth/logout`,
 ## Production checklist
 
 - Serve over **HTTPS**; set `session.secure=true` and a `session.same_site`.
-- If behind a proxy/CDN, set `http.trusted_proxies` (rate-limit + audit IP
-  depend on it — see [security](security.md)).
+- **Set `http.trusted_proxies` whenever login rate-limiting or audit logging is
+  enabled** (both are on by default). Without it, `X-Forwarded-For` is
+  attacker-controlled: the rate limit can be bypassed and audit IPs forged. If
+  you terminate TLS at a proxy/CDN this is mandatory — see [security](security.md).
+- Keep `/users` admin-gated: `authkit.user_management_roles` defaults to
+  `["admin"]` (fail-closed). Only widen it if you intend non-admins to manage
+  users. The bootstrap `auth:create-user` creates an `admin`.
 - Regenerate your SDK if you use the hey-api/OpenAPI loop (`make swagger` +
   `make generate-api`); run swag with `--parseDependency --parseInternal` so the
   package's annotations are scanned.
@@ -104,18 +116,18 @@ import authkit "github.com/freshost/goravel-authkit"
 Then do by hand what `package:install` would have done: add an `admin` session
 guard → `users` orm provider to `config/auth.go`, set bcrypt `rounds: 12` in
 `config/hashing.go`, and add a `config/authkit.go` (copy from the package's
-`setup/config/authkit.go`). Wire sessions + routes in `bootstrap/app.go` (see
-[above](#wire-sessions--routes-one-time)). Then `./artisan migrate` and create
-the admin.
+`setup/config/authkit.go`). Mount the routes in `bootstrap/app.go` (see
+[above](#wire-routes-one-time)). Then `./artisan migrate` and create the admin.
 
 > A complete, runnable wiring of exactly this lives in the
 > [`authkit-ui` demo backend](https://github.com/Freshost/authkit-ui/tree/main/demo/backend) —
 > copy its `bootstrap/app.go`, `config/auth.go`, `config/authkit.go` and
 > `routes/web.go` if you want a reference.
 
-Migrations are registered by the provider; only the session middleware and the
-one-line `authkitroutes.Register(...)` are wired app-side. All behaviour is tuned
-through the `authkit.*` config. See [configuration](configuration.md).
+Migrations are registered by the provider; only the one-line
+`authkitroutes.Register(...)` is wired app-side (it starts its own session). All
+behaviour is tuned through the `authkit.*` config. See
+[configuration](configuration.md).
 
 ## Adopting into an existing app
 

@@ -3,7 +3,9 @@ package services
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -38,6 +40,9 @@ type Enrollment struct {
 }
 
 // recoveryCode is one single-use recovery code with its consumption marker.
+// Code holds a one-way SHA-256 hash of the plaintext code, never the plaintext:
+// codes are shown to the user exactly once (at generation) and can only be
+// verified thereafter, not recovered.
 type recoveryCode struct {
 	Code   string     `json:"code"`
 	UsedAt *time.Time `json:"used_at,omitempty"`
@@ -192,9 +197,9 @@ func (s *TwoFactor) ConsumeRecoveryCode(ctx context.Context, id uuid.UUID, code 
 		if derr != nil {
 			return derr
 		}
-		trimmed := strings.TrimSpace(code)
+		presented := hashRecoveryCode(code)
 		for i := range codes {
-			if codes[i].UsedAt == nil && subtle.ConstantTimeCompare([]byte(codes[i].Code), []byte(trimmed)) == 1 {
+			if codes[i].UsedAt == nil && subtle.ConstantTimeCompare([]byte(codes[i].Code), []byte(presented)) == 1 {
 				now := time.Now().UTC()
 				codes[i].UsedAt = &now
 				consumed = true
@@ -255,26 +260,28 @@ func (s *TwoFactor) Disable(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-// RecoveryCodes returns the user's remaining (unused) recovery codes.
-func (s *TwoFactor) RecoveryCodes(ctx context.Context, id uuid.UUID) ([]string, error) {
+// RemainingRecoveryCodes returns how many unused recovery codes the user has
+// left. Plaintext codes are never returned after generation: they are stored as
+// one-way hashes, so the only way to see them is once, at (re)generation time.
+func (s *TwoFactor) RemainingRecoveryCodes(ctx context.Context, id uuid.UUID) (int, error) {
 	u, err := s.repo.FindByID(ctx, id)
 	if err != nil {
-		return nil, errors.Join(ErrInternal, err)
+		return 0, errors.Join(ErrInternal, err)
 	}
 	if u == nil || !u.TwoFactorEnabled() || u.TwoFactorRecoveryCodes == nil {
-		return nil, ErrTwoFactorNotEnrolled
+		return 0, ErrTwoFactorNotEnrolled
 	}
 	codes, err := s.decodeRecoveryCodes(*u.TwoFactorRecoveryCodes)
 	if err != nil {
-		return nil, errors.Join(ErrInternal, err)
+		return 0, errors.Join(ErrInternal, err)
 	}
-	out := make([]string, 0, len(codes))
+	remaining := 0
 	for _, c := range codes {
 		if c.UsedAt == nil {
-			out = append(out, c.Code)
+			remaining++
 		}
 	}
-	return out, nil
+	return remaining, nil
 }
 
 // RegenerateRecoveryCodes replaces the recovery codes, invalidating the old set.
@@ -304,7 +311,8 @@ func (s *TwoFactor) generateRecoveryCodes() (plain []string, encrypted string, e
 		if e != nil {
 			return nil, "", e
 		}
-		codes = append(codes, recoveryCode{Code: c})
+		// Persist only the hash; the plaintext is returned for one-time display.
+		codes = append(codes, recoveryCode{Code: hashRecoveryCode(c)})
 		plain = append(plain, c)
 	}
 	encrypted, err = s.encodeRecoveryCodes(codes)
@@ -329,6 +337,17 @@ func (s *TwoFactor) decodeRecoveryCodes(enc string) ([]recoveryCode, error) {
 		return nil, err
 	}
 	return codes, nil
+}
+
+// hashRecoveryCode returns the hex SHA-256 hash of a recovery code, used both
+// to persist codes and to verify a presented one (constant-time compared). The
+// input is trimmed and upper-cased so user-entered codes match regardless of
+// surrounding whitespace or case (the alphabet is all upper-case). This mirrors
+// the remember-token validator hashing (models.RememberToken).
+func hashRecoveryCode(code string) string {
+	normalized := strings.ToUpper(strings.TrimSpace(code))
+	sum := sha256.Sum256([]byte(normalized))
+	return hex.EncodeToString(sum[:])
 }
 
 // randomRecoveryCode returns a 10-character code formatted XXXXX-XXXXX, drawn

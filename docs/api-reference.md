@@ -42,7 +42,7 @@ the session cookie (guarded by `Authenticated`).
 | POST | `/auth/two-factor` | `enableTwoFactor` | cookie | `200` TwoFactorEnrollmentResponse | `401` `409` |
 | POST | `/auth/two-factor/confirm` | `confirmTwoFactor` | cookie | `200` RecoveryCodesResponse | `400` `401` |
 | DELETE | `/auth/two-factor` | `disableTwoFactor` | cookie (+ password re-auth) | `200` MessageResponse | `400` `401` |
-| GET | `/auth/two-factor/recovery-codes` | `getTwoFactorRecoveryCodes` | cookie | `200` RecoveryCodesResponse | `401` |
+| GET | `/auth/two-factor/recovery-codes` | `getTwoFactorRecoveryCodes` | cookie | `200` RecoveryCodesStatusResponse (count only) | `401` |
 | POST | `/auth/two-factor/recovery-codes` | `regenerateTwoFactorRecoveryCodes` | cookie | `200` RecoveryCodesResponse | `401` |
 
 Enrollment flow: `enableTwoFactor` (get secret + otpauth URL → render QR) →
@@ -136,8 +136,11 @@ Login flow with 2FA: `login` → `{two_factor:true}` → `twoFactorChallenge` wi
 // TwoFactorEnrollmentResponse
 { "secret": "JBSWY3DPEHPK3PXP", "otpauthUrl": "otpauth://totp/App:admin@example.com?secret=...&issuer=App" }
 
-// RecoveryCodesResponse
+// RecoveryCodesResponse — shown ONCE, on confirm/regenerate (codes are stored hashed)
 { "recoveryCodes": ["ABCDE-FGHJK", "..."] }
+
+// RecoveryCodesStatusResponse — GET recovery-codes returns only the unused count
+{ "remaining": 6 }
 
 // ErrorResponse — the standard error envelope
 { "error": "invalid_credentials", "message": "Invalid email or password" }

@@ -10,6 +10,7 @@ import (
 	contractshttp "github.com/goravel/framework/contracts/http"
 	"github.com/goravel/framework/contracts/route"
 	"github.com/goravel/framework/facades"
+	sessionmiddleware "github.com/goravel/framework/session/middleware"
 
 	"github.com/freshost/goravel-authkit/http/controllers"
 	"github.com/freshost/goravel-authkit/http/middleware"
@@ -34,10 +35,12 @@ type Options struct {
 	EnableUserManagement bool
 	// EnableAuditLog wires the audit service into the controllers.
 	EnableAuditLog bool
-	// UserManagementRoles, when non-empty, gates the /users endpoints behind a
-	// RequireRole check (the user's role must be one of these). Empty (the v1
-	// default) leaves them open to any authenticated user, since v1 ships no
-	// RBAC. Set e.g. []string{"admin"} once your app assigns roles.
+	// UserManagementRoles gates the /users endpoints behind a RequireRole check:
+	// the authenticated user's role must be one of these. It defaults to
+	// []string{"admin"} (fail-closed) so /users is admin-only out of the box; the
+	// single-admin bootstrap still works because auth:create-user mints an admin.
+	// When EnableUserManagement is true the gate is ALWAYS mounted — an empty list
+	// falls back to []string{"admin"} rather than leaving /users ungated.
 	UserManagementRoles []string
 	// Roles, when non-empty, is the set of role values accepted when creating or
 	// updating a user (the management endpoints reject anything outside it).
@@ -75,6 +78,7 @@ func DefaultOptions() Options {
 		RateLimitAttempts:    5,
 		RateLimitWindow:      time.Minute,
 		EnableUserManagement: true,
+		UserManagementRoles:  []string{services.AdminRole},
 		EnableAuditLog:       true,
 		EnableTwoFactor:      true,
 		RecoveryCodeCount:    services.DefaultRecoveryCodeCount,
@@ -175,11 +179,17 @@ func Register(router route.Router, opts Options) {
 	if opts.RateLimitWindow <= 0 {
 		opts.RateLimitWindow = def.RateLimitWindow
 	}
+	// Fail-closed: /users is always gated. An empty management-role list falls
+	// back to the admin role rather than leaving the endpoints open.
+	managementRoles := opts.UserManagementRoles
+	if len(managementRoles) == 0 {
+		managementRoles = []string{services.AdminRole}
+	}
 
 	usersRepo := repositories.NewUsers()
 	hasher := services.NewFacadeHasher()
 	authSvc := services.NewAuth(usersRepo, hasher, opts.MinPasswordLength)
-	usersSvc := services.NewUsers(usersRepo, hasher, opts.MinPasswordLength, opts.Roles)
+	usersSvc := services.NewUsers(usersRepo, hasher, opts.MinPasswordLength, opts.Roles, managementRoles)
 
 	var auditSvc *services.Audit
 	if opts.EnableAuditLog {
@@ -217,7 +227,17 @@ func Register(router route.Router, opts Options) {
 	// One outer prefixed group, with nested middleware groups for the three
 	// access tiers (public / rate-limited / session-guarded) — Goravel composes
 	// nested groups and their middleware natively.
-	router.Prefix(opts.Prefix + "/auth").Group(func(r route.Router) {
+	//
+	// StartSession is mounted here (not globally) so the package owns the session
+	// for its whole /auth branch — login, the 2FA challenge and the guarded routes
+	// all need it. Carrying it on the group instead of a global WithMiddleware
+	// keeps the host app from rebuilding the HTTP engine (which would drop routes
+	// registered in a provider's Boot), and avoids starting a session on the app's
+	// stateless endpoints. It is idempotent, so a leftover global StartSession is
+	// harmless.
+	authGroup := router.Prefix(opts.Prefix + "/auth").
+		Middleware(sessionmiddleware.StartSession())
+	authGroup.Group(func(r route.Router) {
 		// Public, non-sensitive config for the frontend (role options, features).
 		r.Get("/meta", metaCtrl.Show)
 
@@ -268,19 +288,17 @@ func Register(router route.Router, opts Options) {
 			}
 
 			if opts.EnableUserManagement {
-				userRoutes := func(ur route.Router) {
+				// Fail-closed: the whole /users block (reads and writes) is always
+				// mounted behind the RequireRole gate using the effective management
+				// roles, so no /users endpoint is reachable by a non-admin.
+				g.Middleware(middleware.RequireRole(opts.Guard, managementRoles...)).Group(func(ur route.Router) {
 					ur.Get("/users", usersCtrl.Index)
 					ur.Post("/users", usersCtrl.Store)
 					ur.Get("/users/{id}", usersCtrl.Show)
 					ur.Put("/users/{id}", usersCtrl.Update)
 					ur.Delete("/users/{id}", usersCtrl.Destroy)
 					ur.Post("/users/{id}/password", usersCtrl.SetPassword)
-				}
-				if len(opts.UserManagementRoles) > 0 {
-					g.Middleware(middleware.RequireRole(opts.Guard, opts.UserManagementRoles...)).Group(userRoutes)
-				} else {
-					userRoutes(g)
-				}
+				})
 			}
 		})
 	})

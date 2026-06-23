@@ -31,7 +31,8 @@ func init() {
 		"remember": map[string]any{
 			"lifetime_days": 30,
 		},
-		"user_management_roles": []string{},
+		// Fail-closed: /users is admin-only. Always gated; empty falls back to ["admin"].
+		"user_management_roles": []string{"admin"},
 		"roles":                 []string{"admin", "user"},
 	})
 }

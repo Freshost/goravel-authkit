@@ -61,10 +61,10 @@ func Authenticated(guard string) contractshttp.Middleware {
 }
 
 // RequireRole rejects authenticated users whose role is not in allowed. It must
-// run AFTER Authenticated. An empty allowed list is a no-op (open to any
-// authenticated user) — this is the v1 default, since v1 ships no RBAC. Apps
-// that want to gate user-management behind a role pass one or more roles via
-// routes.Options.UserManagementRoles.
+// run AFTER Authenticated. The /users routes are always mounted with a non-empty
+// allow-list (defaulting to "admin", fail-closed), so this gate is real for
+// them. An empty allowed list is a defensive no-op; callers should never pass
+// one for a route that must be protected.
 func RequireRole(guard string, allowed ...string) contractshttp.Middleware {
 	return func(ctx contractshttp.Context) {
 		if len(allowed) == 0 {

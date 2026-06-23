@@ -46,10 +46,12 @@ func init() {
 			// How long the remember cookie stays valid, in days (sliding on use).
 			"lifetime_days": 30,
 		},
-		// Roles allowed to use the /users endpoints. Empty (default) = any
-		// authenticated user (v1 has no RBAC). Set e.g. []string{"admin"} once
-		// your app assigns roles to gate user management behind a role.
-		"user_management_roles": []string{},
+		// Roles allowed to use the /users endpoints. Defaults to ["admin"]
+		// (fail-closed): /users is admin-only out of the box. The /users routes
+		// are ALWAYS gated — an empty list here falls back to ["admin"], never to
+		// "any authenticated user". The single-admin bootstrap still works because
+		// auth:create-user mints an admin.
+		"user_management_roles": []string{"admin"},
 		// Assignable role values for users. Empty = any role accepted; set a list
 		// to restrict create/update (the backend validates) and to render the
 		// role field as a select in the UI (pass the same list to AuthkitProvider).

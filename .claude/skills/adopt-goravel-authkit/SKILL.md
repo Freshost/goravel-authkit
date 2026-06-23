@@ -12,14 +12,17 @@ the package docs alongside this: `docs/installation.md`, `docs/configuration.md`
 The package **owns the `users` and `audit_logs` tables** and a canonical `User`
 model — there is no model extensibility, the app conforms to the package shape.
 Registering `authkit.ServiceProvider` registers the migrations + the
-`auth:create-user` command. Two things are wired app-side in `bootstrap/app.go`:
-global **`StartSession()`** middleware and a one-line
+`auth:create-user` command. Only **one** thing is wired app-side in
+`bootstrap/app.go`: a one-line
 **`authkitroutes.Register(facades.Route(), authkitroutes.OptionsFromConfig())`**
-in the routing callback (the provider can't register routes itself — Goravel
-rebuilds the HTTP engine when global middleware is set, *after* providers boot,
-so provider-registered routes are discarded; the routing callback runs after
-that rebuild). The questions are getting there without clobbering existing auth,
-and adding those two lines.
+in the routing callback. The package starts its own session (`Register` mounts
+`StartSession` on its `/auth` group), so **no global `StartSession` /
+`WithMiddleware` is needed**. Register from the
+routing callback (not the provider's `Boot`): any global `WithMiddleware` the app
+adds rebuilds the HTTP engine *after* providers boot and discards routes a
+provider registered in `Boot`; the routing callback runs after that rebuild, so
+the routes survive. The questions are getting there without clobbering existing
+auth, and adding that one line.
 
 ## Decide the scenario first
 
@@ -42,26 +45,27 @@ go get github.com/freshost/goravel-authkit
 ```
 
 `package:install` registers the provider and writes `config/auth.go`,
-`config/authkit.go`, `config/hashing.go`. Then wire sessions + routes in
-`bootstrap/app.go`:
+`config/authkit.go`, `config/hashing.go`. Then mount the routes in
+`bootstrap/app.go` (no global session middleware — the package starts its own
+session):
 
 ```go
 import (
-	"github.com/goravel/framework/contracts/foundation/configuration"
-	sessionmiddleware "github.com/goravel/framework/session/middleware"
 	authkitroutes "github.com/freshost/goravel-authkit/routes"
 )
 
 foundation.Setup().
-	WithMiddleware(func(h configuration.Middleware) {
-		h.Append(sessionmiddleware.StartSession())
-	}).
 	WithRouting(func() {
 		routes.Web()
 		authkitroutes.Register(facades.Route(), authkitroutes.OptionsFromConfig())
 	}).
 	// ...providers, migrations, config
 ```
+
+> If the app has its *own* session-backed routes, add `StartSession` per-group
+> on those (or globally). A global `StartSession` is harmless to the package —
+> it's idempotent, so the package's group-level start is skipped when a session
+> already exists.
 
 A complete runnable reference is the `authkit-ui/demo/backend`. Verify with
 [Step V](#step-v--verify).
@@ -136,9 +140,10 @@ Delete (or stop wiring) the now-duplicated code and its references:
   `helpers.AuthUserID(ctx)` (context key `auth_user_id`, set by the package
   middleware) — keep that key consistent if domain code depends on it.
 
-The provider wires migrations + the command itself; you add the global
-`StartSession()` middleware and the one-line `authkitroutes.Register(...)` in
-`bootstrap/app.go` (see Path A). Migration ordering for the reshape is handled by
+The provider wires migrations + the command itself; you add the one-line
+`authkitroutes.Register(...)` in `bootstrap/app.go` (see Path A) — the package
+starts its own session, so no global `StartSession` is required. Migration
+ordering for the reshape is handled by
 doing the SQL in B3 **before** the first `migrate` (above), not by interleaving a
 migration.
 

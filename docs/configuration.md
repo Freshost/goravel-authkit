@@ -31,7 +31,8 @@ func init() {
             "issuer":         "", // defaults to the app name
             "recovery_codes": 8,
         },
-        "user_management_roles": []string{}, // empty = open to any authenticated user
+        "user_management_roles": []string{"admin"}, // fail-closed: /users is admin-only
+        "roles":                 []string{"admin", "user"}, // assignable role values
     })
 }
 ```
@@ -48,7 +49,8 @@ func init() {
 | `authkit.features.two_factor` | bool | `true` | Register the TOTP two-factor endpoints + login gate |
 | `authkit.two_factor.issuer` | string | `""` | Issuer shown in the authenticator app (empty = app name) |
 | `authkit.two_factor.recovery_codes` | int | `8` | Recovery codes generated on confirmation |
-| `authkit.user_management_roles` | []string | `[]` | Roles allowed to use `/users` (empty = any authenticated user) |
+| `authkit.user_management_roles` | []string | `["admin"]` | Roles allowed to use `/users`. Fail-closed: `/users` is always gated; an empty list falls back to `["admin"]`, never to "any authenticated user" |
+| `authkit.roles` | []string | `["admin","user"]` | Assignable role values (create/update reject anything outside it; empty = any). New users default to the first non-admin role, else `user` |
 
 ## Feature toggles
 
@@ -61,13 +63,18 @@ func init() {
 
 ## Gating user management by role
 
-v1 ships **no RBAC** — by default any authenticated user can manage users. When
-your app starts assigning roles, set `authkit.user_management_roles`, e.g.:
+The `/users` endpoints are **admin-gated by default (fail-closed)**:
+`authkit.user_management_roles` defaults to `["admin"]`, and the gate is always
+mounted — a user whose `role` is not in the list gets `403 forbidden`. An empty
+list does **not** open the endpoints; it falls back to `["admin"]`. The
+single-admin bootstrap still works because `auth:create-user` mints an `admin`.
+
+To allow another role to manage users, add it to the list:
 
 ```go
-"user_management_roles": []string{"admin"},
+"user_management_roles": []string{"admin", "manager"},
 ```
 
-The package then wraps the `/users` endpoints with a `RequireRole` check: a user
-whose `role` is not in the list gets `403 forbidden`. Leave it empty to keep the
-v1 open behaviour. See [security](security.md) for the full picture.
+New users are never silently made admins: a create with no explicit `role` gets
+the first configured non-management role (else `user`). See
+[security](security.md) for the full picture.

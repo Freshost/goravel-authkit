@@ -25,7 +25,9 @@ type User struct {
 	Image             *string    `gorm:"type:text" json:"image,omitempty"`
 	PasswordHash      *string    `gorm:"type:text" json:"-"`
 	PasswordChangedAt time.Time  `gorm:"type:timestamptz;not null;autoCreateTime" json:"passwordChangedAt"`
-	Role              string     `gorm:"type:text;not null;default:'admin'" json:"role"`
+	// Role has no DB-level default: the service always sets it explicitly so a
+	// created row can never silently become "admin" (privilege escalation).
+	Role string `gorm:"type:text;not null" json:"role"`
 	// DisabledAt, when set, locks the account: login is refused and any live
 	// session / remember cookie is rejected on its next request. nil = active.
 	DisabledAt *time.Time `gorm:"type:timestamptz" json:"disabledAt,omitempty"`

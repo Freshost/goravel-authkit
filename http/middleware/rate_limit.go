@@ -9,11 +9,13 @@ import (
 )
 
 // rateLimiter is a simple in-memory sliding-window limiter keyed by client IP.
-// A single-process web tier makes this sufficient; no external store is needed.
+// It is per-process: with multiple app instances the effective limit is
+// attempts × instances (a shared-store limiter is out of scope for v1).
 //
 // SECURITY NOTE: keying is by ctx.Request().Ip(), which honours X-Forwarded-For.
 // Behind a proxy, the consuming app MUST configure trusted proxies (Goravel
-// http.trusted_proxies) or the limit is bypassable by spoofing the header.
+// http.trusted_proxies) or the limit is bypassable by spoofing the header — the
+// same requirement applies to audit-log IPs. See docs/security.md.
 type rateLimiter struct {
 	mu        sync.Mutex
 	requests  map[string][]time.Time

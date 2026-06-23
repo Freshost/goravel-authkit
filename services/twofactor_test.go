@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -69,9 +70,31 @@ func TestTwoFactor_RecoveryCodeSingleUse(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, ok, "reuse fails")
 
-	remaining, err := tf.RecoveryCodes(context.Background(), u.ID)
+	remaining, err := tf.RemainingRecoveryCodes(context.Background(), u.ID)
 	require.NoError(t, err)
-	assert.Len(t, remaining, 7)
+	assert.Equal(t, 7, remaining)
+
+	// Stored codes are one-way hashes, never the plaintext.
+	require.NotNil(t, repo.byID[u.ID].TwoFactorRecoveryCodes)
+	stored := *repo.byID[u.ID].TwoFactorRecoveryCodes
+	for _, c := range codes {
+		assert.NotContains(t, stored, c, "plaintext recovery code must not be persisted")
+	}
+}
+
+func TestTwoFactor_RecoveryCodeHashRoundTrip(t *testing.T) {
+	repo := newFakeRepo()
+	u := seedFor2FA(repo, "hash@example.com")
+	tf := newTwoFactor(repo)
+	enr, _ := tf.Enable(context.Background(), u.ID)
+	code, _ := totp.GenerateCode(enr.Secret, time.Now())
+	codes, err := tf.Confirm(context.Background(), u.ID, code)
+	require.NoError(t, err)
+
+	// Codes verify case-insensitively and tolerate surrounding whitespace.
+	ok, err := tf.ConsumeRecoveryCode(context.Background(), u.ID, "  "+strings.ToLower(codes[1])+"  ")
+	require.NoError(t, err)
+	assert.True(t, ok)
 }
 
 func TestTwoFactor_ConfirmWrongCode(t *testing.T) {

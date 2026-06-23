@@ -15,5 +15,6 @@ func Migrations() []schema.Migration {
 		&AddRememberTokenRotation{},
 		&AddDisabledAtToUsers{},
 		&CreateAuthSessions{},
+		&DropUsersRoleDefault{},
 	}
 }
