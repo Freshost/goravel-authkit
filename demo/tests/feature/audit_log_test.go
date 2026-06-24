@@ -71,7 +71,7 @@ func (s *AuditLogTestSuite) login() *http.Cookie {
 }
 
 // A successful login writes an "auth.login" audit row for the authenticating
-// user, and the same entry surfaces through GET /auth/logins.
+// user, and an "auth.login" entry surfaces through GET /auth/logins.
 func (s *AuditLogTestSuite) TestSuccessfulLoginWritesAuditEntry() {
 	t := s.T()
 	cookie := s.login()

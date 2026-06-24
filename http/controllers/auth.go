@@ -426,7 +426,7 @@ func (c *AuthController) writeAuditID(ctx contractshttp.Context, actorID *uuid.U
 	}
 }
 
-// errMessage returns the human-readable tail of a joined validation error.
+// errMessage returns the joined validation error's full text (sentinel + detail).
 func errMessage(err error) string {
 	if msg := err.Error(); msg != "" {
 		return msg

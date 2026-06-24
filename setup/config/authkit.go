@@ -36,7 +36,8 @@ func init() {
 		},
 		// TOTP two-factor settings.
 		"two_factor": map[string]any{
-			// Issuer shown in the authenticator app (defaults to the app name).
+			// Issuer shown in the authenticator app (defaults to "goravel-authkit"
+			// when empty).
 			"issuer": "",
 			// Number of single-use recovery codes generated on confirmation.
 			"recovery_codes": 8,

@@ -1,11 +1,10 @@
 // Package helpers holds small HTTP utilities shared by the goravel-authkit
-// controllers and middleware: route-param parsing, pagination, the
-// authenticated-user context key, and the session-regeneration workaround.
+// controllers and middleware: route-param parsing, the authenticated-user
+// context key, and the session-regeneration workaround.
 package helpers
 
 import (
 	"net/http"
-	"strconv"
 
 	"github.com/google/uuid"
 	contractshttp "github.com/goravel/framework/contracts/http"
@@ -33,27 +32,6 @@ func ParseUUIDParam(ctx contractshttp.Context, name string) (uuid.UUID, *contrac
 		return uuid.Nil, &resp
 	}
 	return id, nil
-}
-
-// ParsePositiveInt parses a string as a positive integer, returning fallback on
-// failure. Used for pagination (page, per_page).
-func ParsePositiveInt(s string, fallback int) int {
-	n, err := strconv.Atoi(s)
-	if err != nil || n < 1 {
-		return fallback
-	}
-	return n
-}
-
-// Pagination resolves page + per_page query params with sane defaults and a
-// hard cap on per_page.
-func Pagination(ctx contractshttp.Context, defaultPerPage, maxPerPage int) (page, perPage int) {
-	page = ParsePositiveInt(ctx.Request().Query("page", "1"), 1)
-	perPage = ParsePositiveInt(ctx.Request().Query("per_page", strconv.Itoa(defaultPerPage)), defaultPerPage)
-	if perPage > maxPerPage {
-		perPage = maxPerPage
-	}
-	return page, perPage
 }
 
 // AuthUserID reads the user id injected by the Authenticated middleware under

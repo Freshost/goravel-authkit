@@ -16,10 +16,10 @@ import (
 	"goravel/tests"
 )
 
-// TwoFactorRecoveryTestSuite drives the recovery-code security fix (M2) entirely
-// over HTTP against a throwaway user. TOTP codes are computed locally from the
-// plaintext secret the enrollment endpoint returns (github.com/pquerna/otp is a
-// package dependency). It asserts:
+// TwoFactorRecoveryTestSuite exercises recovery codes entirely over HTTP against
+// a throwaway user. TOTP codes are computed locally from the plaintext secret the
+// enrollment endpoint returns (github.com/pquerna/otp is a package dependency).
+// It asserts:
 //   - confirm returns plaintext recovery codes,
 //   - GET /recovery-codes returns only {"remaining": N}, never plaintext,
 //   - consuming a recovery code at the login challenge works and decrements the
