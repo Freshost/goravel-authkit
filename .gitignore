@@ -17,3 +17,6 @@ coverage.*
 
 # MkDocs build output
 site/
+
+# Vendored deps (modules are fetched via the proxy; never commit vendor/)
+/vendor/
