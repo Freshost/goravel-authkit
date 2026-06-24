@@ -1,7 +1,35 @@
 # Security model
 
 `goravel-authkit` is session-cookie authentication. This document states the
-guarantees, the operator responsibilities, and the known v1 limitations.
+guarantees, the operator responsibilities, and the known limitations.
+
+## Per-guard isolation (multi-guard)
+
+A guard is an **isolated** authentication domain. When an app runs several guards
+(under `authkit.guards`), each is separated from the others by:
+
+- a **separate user table** (resolved per query via GORM `.Table(name)`),
+- a **separate session key** — Goravel's `auth_<guard>_id` plus authkit's
+  per-guard bookkeeping (`authkit_<guard>_password_changed_at`,
+  `…_two_factor_user_id`, `…_remember_intent`), so one shared session cookie
+  carries multiple guards without collision,
+- a **separate remember cookie** (`authkit_<guard>_remember` by default), so two
+  guards on one origin don't overwrite each other's persistent login,
+- a **separate rate-limit bucket** — `RateLimitAuth` builds its own in-memory
+  limiter per guard, so a failed `client` login never counts against the `admin`
+  limit.
+
+The user record is loaded from the guard's own table through authkit's
+table-aware repository (keyed by the session's `auth_<guard>_id`); the Goravel
+guard is only a per-guard session-id store. **Table names come from config**
+(`authkit.guards.<name>.users_table`, etc.) — they are developer-controlled, not
+user input, and are applied via GORM `.Table()`, so they are not an injection
+vector. The session-cookie model below (httpOnly, no tokens/localStorage) is
+**unchanged** by multi-guard.
+
+The auto-registered Goravel guard uses a `session` driver over a shared
+`authkit_orm` provider and **never clobbers** a guard the host has already
+defined (it only fills in an unset guard).
 
 ## What the package guarantees
 
@@ -14,16 +42,18 @@ guarantees, the operator responsibilities, and the known v1 limitations.
 - **Session-fixation protection.** The session id is regenerated on login and
   the cookie re-emitted.
 - **Multi-session invalidation on password change.** Each session stores the
-  `password_changed_at` captured at login; the `Authenticated` middleware
-  compares it to the live DB value on every request. A password change bumps the
-  DB value, so every *other* session is rejected (`401 session_expired`) on its
-  next request. The session that changed the password is re-stamped and stays in.
+  `password_changed_at` captured at login (under the per-guard key
+  `authkit_<guard>_password_changed_at`); the `Authenticated` middleware compares
+  it to the live DB value on every request. A password change bumps the DB value,
+  so every *other* session is rejected (`401 session_expired`) on its next
+  request. The session that changed the password is re-stamped and stays in.
 - **Login rate-limiting.** A per-IP sliding window (default 5/min) on
-  `/auth/login`, with periodic eviction so the in-memory limiter cannot grow
-  unboundedly. The limiter is **in-memory and per-process**: behind multiple
-  app instances each process keeps its own counters, so the effective limit is
-  `attempts × instances`. A distributed (shared-store) limiter is out of scope
-  for v1.
+  `/auth/login` (and the 2FA challenge), with periodic eviction so the in-memory
+  limiter cannot grow unboundedly. The limiter is **in-memory and per-process**:
+  behind multiple app instances each process keeps its own counters, so the
+  effective limit is `attempts × instances`. Each guard gets its **own** limiter
+  bucket, so guards never share a window. A distributed (shared-store) limiter is
+  out of scope for now.
 - **`/users` is admin-gated by default (fail-closed).** The user-management
   endpoints (read and write) are always mounted behind a `RequireRole` check;
   `authkit.user_management_roles` defaults to `["admin"]`. A non-admin gets 403.
@@ -79,7 +109,21 @@ When `authkit.features.two_factor` is on, users can enroll in TOTP
 - **Disabling 2FA requires re-authentication** with the account password, so a
   stolen session alone cannot silently remove 2FA.
 
-## Known v1 limitations (by design)
+## Multi-guard session isolation
+
+With multiple guards the domains share one session cookie on a single origin
+(Goravel keys each guard's user id separately). Active-session tracking is keyed by
+a **stable per-guard token** stored in the session — not the Goravel session id,
+which rotates on every login (anti-fixation). So concurrent logins to several guards
+in one browser all keep working: a second guard's login rotates the session id but
+the first guard's token (and its tracking row) survives.
+
+For stronger isolation — so a flaw in one (e.g. customer) portal cannot reach
+another (e.g. admin) on the same origin — **run each portal on its own
+subdomain/origin** so the browser separates their cookies. A distinct per-guard
+session cookie name/path is an optional knob for single-origin setups.
+
+## Known limitations (by design)
 
 - **Single-role authorization only.** There is one `role` string per user and a
   single privileged role (`admin`, configurable via
@@ -97,11 +141,13 @@ When `authkit.features.two_factor` is on, users can enroll in TOTP
 
 ## Audit trail
 
-When `EnableAuditLog` is on, the package writes to `audit_logs`:
+When `EnableAuditLog` is on, the package writes to the guard's audit table
+(`audit_logs` by default, `<guard>_audit_logs` for a named guard):
 
 | Action | When |
 | --- | --- |
 | `auth.login` | Successful login |
+| `auth.login_remember` | Silent re-login from a remember cookie |
 | `auth.login_failed` | Failed login (attempted email in metadata) |
 | `auth.logout` | Logout |
 | `auth.password_changed` | Self-service password change |

@@ -7,23 +7,26 @@ import (
 
 // AddDisabledAtToUsers adds the account-lock column: a non-null disabled_at
 // refuses login and rejects any live session / remember cookie.
-type AddDisabledAtToUsers struct{}
+type AddDisabledAtToUsers struct {
+	table     string
+	signature string
+}
 
 func (r *AddDisabledAtToUsers) Signature() string {
-	return "20260101_000007_add_disabled_at_to_users"
+	return r.signature
 }
 
 func (r *AddDisabledAtToUsers) Up() error {
-	if facades.Schema().HasColumn("users", "disabled_at") {
+	if facades.Schema().HasColumn(r.table, "disabled_at") {
 		return nil
 	}
-	return facades.Schema().Table("users", func(table schema.Blueprint) {
+	return facades.Schema().Table(r.table, func(table schema.Blueprint) {
 		table.TimestampTz("disabled_at").Nullable()
 	})
 }
 
 func (r *AddDisabledAtToUsers) Down() error {
-	return facades.Schema().Table("users", func(table schema.Blueprint) {
+	return facades.Schema().Table(r.table, func(table schema.Blueprint) {
 		table.DropColumn("disabled_at")
 	})
 }

@@ -26,53 +26,33 @@ func NewSessionsController(sessions *services.Sessions, audit *services.Audit, g
 	return &SessionsController{sessions: sessions, audit: audit, guard: guard}
 }
 
-func (c *SessionsController) currentSessionID(ctx contractshttp.Context) string {
-	if s := ctx.Request().Session(); s != nil {
-		return s.GetID()
-	}
-	return ""
+// currentToken is the active-session tracking token of the request's session —
+// the value the tracking rows are keyed by, used to flag/skip the current session.
+func (c *SessionsController) currentToken(ctx contractshttp.Context) string {
+	return helpers.SessionTrackingToken(ctx, c.guard)
 }
 
-// Index godoc
-//
-//	@ID				listSessions
-//	@Summary		List active sessions
-//	@Description	Returns the current user's active sessions (most recent first); the current session is flagged.
-//	@Tags			Sessions
-//	@Security		CookieAuth
-//	@Produce		json
-//	@Success		200	{array}		responses.SessionResponse
-//	@Failure		401	{object}	responses.ErrorResponse
-//	@Router			/auth/sessions [get]
+// Index returns the current user's active sessions, most recent first, with the
+// current session flagged. Handles GET {prefix}/auth/sessions.
 func (c *SessionsController) Index(ctx contractshttp.Context) contractshttp.Response {
 	userID := helpers.AuthUserID(ctx)
-	views, err := c.sessions.List(ctx.Request().Origin().Context(), userID, c.currentSessionID(ctx))
+	views, err := c.sessions.List(ctx.Request().Origin().Context(), userID, c.currentToken(ctx))
 	if err != nil {
 		return c.internal(ctx)
 	}
 	return ctx.Response().Json(http.StatusOK, responses.NewSessionListResponse(views))
 }
 
-// Destroy godoc
-//
-//	@ID				terminateSession
-//	@Summary		Terminate a session
-//	@Description	Signs out one of the current user's other sessions by id. The current session cannot be terminated here (use logout).
-//	@Tags			Sessions
-//	@Security		CookieAuth
-//	@Produce		json
-//	@Param			id	path		string	true	"Session ID (UUID)"
-//	@Success		200	{object}	responses.MessageResponse
-//	@Failure		400	{object}	responses.ErrorResponse
-//	@Failure		404	{object}	responses.ErrorResponse
-//	@Router			/auth/sessions/{id} [delete]
+// Destroy signs out one of the current user's other sessions by id. The current
+// session cannot be terminated here (use logout). Handles
+// DELETE {prefix}/auth/sessions/{id}.
 func (c *SessionsController) Destroy(ctx contractshttp.Context) contractshttp.Response {
 	id, errResp := helpers.ParseUUIDParam(ctx, "id")
 	if errResp != nil {
 		return *errResp
 	}
 	userID := helpers.AuthUserID(ctx)
-	err := c.sessions.Terminate(ctx.Request().Origin().Context(), userID, id, c.currentSessionID(ctx))
+	err := c.sessions.Terminate(ctx.Request().Origin().Context(), userID, id, c.currentToken(ctx))
 	switch {
 	case err == nil:
 		c.writeAudit(ctx, &userID, "auth.session_terminated", id.String())
@@ -90,20 +70,11 @@ func (c *SessionsController) Destroy(ctx contractshttp.Context) contractshttp.Re
 	}
 }
 
-// DestroyOthers godoc
-//
-//	@ID				terminateOtherSessions
-//	@Summary		Sign out other sessions
-//	@Description	Terminates every session for the current user except the current one.
-//	@Tags			Sessions
-//	@Security		CookieAuth
-//	@Produce		json
-//	@Success		200	{object}	responses.MessageResponse
-//	@Failure		401	{object}	responses.ErrorResponse
-//	@Router			/auth/sessions [delete]
+// DestroyOthers terminates every session for the current user except the current
+// one. Handles DELETE {prefix}/auth/sessions.
 func (c *SessionsController) DestroyOthers(ctx contractshttp.Context) contractshttp.Response {
 	userID := helpers.AuthUserID(ctx)
-	if err := c.sessions.TerminateOthers(ctx.Request().Origin().Context(), userID, c.currentSessionID(ctx)); err != nil {
+	if err := c.sessions.TerminateOthers(ctx.Request().Origin().Context(), userID, c.currentToken(ctx)); err != nil {
 		return c.internal(ctx)
 	}
 	c.writeAudit(ctx, &userID, "auth.sessions_terminated_others", userID.String())

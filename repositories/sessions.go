@@ -6,11 +6,15 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	ormcontract "github.com/goravel/framework/contracts/database/orm"
 	"github.com/goravel/framework/facades"
 	"gorm.io/gorm"
 
 	"github.com/freshost/goravel-authkit/models"
 )
+
+// DefaultSessionsTable is the table the bare NewSessions() constructor binds to.
+const DefaultSessionsTable = "auth_sessions"
 
 // SessionRepository persists the active-session tracking rows. As elsewhere,
 // FindByID returns (nil, nil) — not an error — when no row matches.
@@ -28,23 +32,33 @@ type SessionRepository interface {
 	DeleteStale(ctx context.Context, before time.Time) error
 }
 
-// Sessions is the ORM-backed SessionRepository.
-type Sessions struct{}
+// Sessions is the ORM-backed SessionRepository, bound to a concrete table.
+type Sessions struct{ table string }
 
-// NewSessions returns an ORM-backed sessions repository.
-func NewSessions() *Sessions {
-	return &Sessions{}
+// NewSessions returns an ORM-backed sessions repository over the default table.
+func NewSessions() *Sessions { return NewSessionsWithTable(DefaultSessionsTable) }
+
+// NewSessionsWithTable returns an ORM-backed sessions repository over the named table.
+func NewSessionsWithTable(table string) *Sessions {
+	if table == "" {
+		table = DefaultSessionsTable
+	}
+	return &Sessions{table: table}
 }
 
 var _ SessionRepository = (*Sessions)(nil)
 
+func (r *Sessions) query(ctx context.Context) ormcontract.Query {
+	return facades.Orm().WithContext(ctx).Query().Table(r.table)
+}
+
 func (r *Sessions) Create(ctx context.Context, s *models.AuthSession) error {
-	return facades.Orm().WithContext(ctx).Query().Create(s)
+	return r.query(ctx).Create(s)
 }
 
 func (r *Sessions) FindByID(ctx context.Context, id uuid.UUID) (*models.AuthSession, error) {
 	var s models.AuthSession
-	err := facades.Orm().WithContext(ctx).Query().Where("id", id).First(&s)
+	err := r.query(ctx).Where("id", id).First(&s)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
@@ -58,7 +72,7 @@ func (r *Sessions) FindByID(ctx context.Context, id uuid.UUID) (*models.AuthSess
 }
 
 func (r *Sessions) TouchLastActive(ctx context.Context, sessionID string, t time.Time) (int64, error) {
-	res, err := facades.Orm().WithContext(ctx).Query().Model(&models.AuthSession{}).
+	res, err := r.query(ctx).
 		Where("session_id", sessionID).Update("last_active_at", t)
 	if err != nil {
 		return 0, err
@@ -68,7 +82,7 @@ func (r *Sessions) TouchLastActive(ctx context.Context, sessionID string, t time
 
 func (r *Sessions) ListByUser(ctx context.Context, userID uuid.UUID, activeSince time.Time) ([]models.AuthSession, error) {
 	var sessions []models.AuthSession
-	if err := facades.Orm().WithContext(ctx).Query().
+	if err := r.query(ctx).
 		Where("user_id", userID).Where("last_active_at >= ?", activeSince).
 		Order("last_active_at desc").Find(&sessions); err != nil {
 		return nil, err
@@ -77,28 +91,28 @@ func (r *Sessions) ListByUser(ctx context.Context, userID uuid.UUID, activeSince
 }
 
 func (r *Sessions) DeleteByID(ctx context.Context, id uuid.UUID) error {
-	_, err := facades.Orm().WithContext(ctx).Query().Where("id", id).Delete(&models.AuthSession{})
+	_, err := r.query(ctx).Where("id", id).Delete(&models.AuthSession{})
 	return err
 }
 
 func (r *Sessions) DeleteBySessionID(ctx context.Context, sessionID string) error {
-	_, err := facades.Orm().WithContext(ctx).Query().Where("session_id", sessionID).Delete(&models.AuthSession{})
+	_, err := r.query(ctx).Where("session_id", sessionID).Delete(&models.AuthSession{})
 	return err
 }
 
 func (r *Sessions) DeleteOthersForUser(ctx context.Context, userID uuid.UUID, exceptSessionID string) error {
-	_, err := facades.Orm().WithContext(ctx).Query().
+	_, err := r.query(ctx).
 		Where("user_id", userID).Where("session_id != ?", exceptSessionID).
 		Delete(&models.AuthSession{})
 	return err
 }
 
 func (r *Sessions) DeleteByUser(ctx context.Context, userID uuid.UUID) error {
-	_, err := facades.Orm().WithContext(ctx).Query().Where("user_id", userID).Delete(&models.AuthSession{})
+	_, err := r.query(ctx).Where("user_id", userID).Delete(&models.AuthSession{})
 	return err
 }
 
 func (r *Sessions) DeleteStale(ctx context.Context, before time.Time) error {
-	_, err := facades.Orm().WithContext(ctx).Query().Where("last_active_at < ?", before).Delete(&models.AuthSession{})
+	_, err := r.query(ctx).Where("last_active_at < ?", before).Delete(&models.AuthSession{})
 	return err
 }

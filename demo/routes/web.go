@@ -2,28 +2,43 @@ package routes
 
 import (
 	"github.com/goravel/framework/contracts/http"
+	"github.com/goravel/framework/contracts/route"
 
 	authkitroutes "github.com/freshost/goravel-authkit/routes"
 
 	"goravel/app/facades"
 )
 
-// Web holds the demo app's own routes plus the goravel-authkit registration.
+// Web holds the demo app's own routes plus the goravel-authkit guards.
 //
-// authkit routes are mounted HERE (in the routing callback), not in the
-// package's ServiceProvider, because routes a provider registers in Boot are
-// discarded if Goravel rebuilds the HTTP engine (which any global WithMiddleware
-// triggers). The demo no longer sets global middleware — the package starts its
-// own session on the /auth group — but registering from the routing callback
-// stays the robust pattern regardless of what middleware the app adds later.
+// Both authkit guards (admin at /api/v1, client at /api/client/v1) are declared in
+// config/authkit.go under "authkit.guards"; RegisterAll mounts them all in one call.
+// authkit auto-registers their Goravel guards and migrations, so there is no
+// config/auth.go and no per-instance route wiring here.
+//
+// Routes are mounted HERE (in the routing callback), not in the package's
+// ServiceProvider, because routes a provider registers in Boot are discarded if
+// Goravel rebuilds the HTTP engine (which any global WithMiddleware triggers).
 func Web() {
 	facades.Route().Get("/", func(ctx http.Context) http.Response {
 		return ctx.Response().Success().Json(http.Json{
-			"app":  "authkit-demo",
-			"auth": "/api/v1",
+			"app":    "authkit-demo",
+			"admin":  "/api/v1",
+			"client": "/api/client/v1",
 		})
 	})
 
-	// All auth / 2FA / user-management endpoints under /api/v1.
-	authkitroutes.Register(facades.Route(), authkitroutes.OptionsFromConfig())
+	authkitroutes.RegisterAll(facades.Route())
+
+	// A host-owned route protected by the "client" guard — shows how to apply an
+	// authkit guard to your own routes and read the current user. Only a logged-in
+	// client (not an admin) reaches it.
+	facades.Route().Prefix("/api/client/v1/portal").Middleware(authkitroutes.Protect("client")...).
+		Group(func(r route.Router) {
+			r.Get("/whoami", func(ctx http.Context) http.Response {
+				return ctx.Response().Success().Json(http.Json{
+					"userId": authkitroutes.AuthUserID(ctx).String(),
+				})
+			})
+		})
 }

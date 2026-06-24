@@ -20,3 +20,6 @@ site/
 
 # Vendored deps (modules are fetched via the proxy; never commit vendor/)
 /vendor/
+
+# Local-only working notes / parked TODOs (never committed)
+/.local/

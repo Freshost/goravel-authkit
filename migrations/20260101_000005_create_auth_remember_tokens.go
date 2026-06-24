@@ -7,17 +7,20 @@ import (
 
 // CreateAuthRememberTokens creates the table backing the "remember me" feature
 // (selector-validator persistent login tokens).
-type CreateAuthRememberTokens struct{}
+type CreateAuthRememberTokens struct {
+	table     string
+	signature string
+}
 
 func (r *CreateAuthRememberTokens) Signature() string {
-	return "20260101_000005_create_auth_remember_tokens"
+	return r.signature
 }
 
 func (r *CreateAuthRememberTokens) Up() error {
-	if facades.Schema().HasTable("auth_remember_tokens") {
+	if facades.Schema().HasTable(r.table) {
 		return nil
 	}
-	return facades.Schema().Create("auth_remember_tokens", func(table schema.Blueprint) {
+	return facades.Schema().Create(r.table, func(table schema.Blueprint) {
 		table.Uuid("id")
 		table.Primary("id")
 		table.Uuid("user_id")
@@ -32,5 +35,5 @@ func (r *CreateAuthRememberTokens) Up() error {
 }
 
 func (r *CreateAuthRememberTokens) Down() error {
-	return facades.Schema().DropIfExists("auth_remember_tokens")
+	return facades.Schema().DropIfExists(r.table)
 }

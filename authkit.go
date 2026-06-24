@@ -12,9 +12,35 @@ import (
 	"github.com/freshost/goravel-authkit/services"
 )
 
-// Authkit is the concrete implementation behind facades.Authkit(). It wraps the
-// auth + user-management + two-factor services so app code can drive them
-// programmatically.
+// Config describes one programmatic authkit instance: which user table it
+// operates on plus the password / two-factor / role policy. Every field is
+// optional — the zero value reproduces the single-instance defaults — so a host
+// running two user domains builds one instance per domain:
+//
+//	client := authkit.New(authkit.Config{Guard: "client", UsersTable: "accounts"})
+//	admin  := authkit.New(authkit.Config{Guard: "admin", UsersTable: "admin_users"})
+type Config struct {
+	// Guard is the Goravel guard this instance represents (e.g. "client"). It is
+	// recorded for symmetry with routes.Options; the programmatic methods operate
+	// directly on UsersTable and do not resolve a guard.
+	Guard string
+	// UsersTable is the table this instance's users live in (default "" → "users").
+	UsersTable string
+	// MinPasswordLength is the minimum accepted new-password length (default → DefaultMinPasswordLength).
+	MinPasswordLength int
+	// TwoFactorIssuer is the issuer shown in the authenticator app.
+	TwoFactorIssuer string
+	// RecoveryCodeCount is how many recovery codes confirmation generates (default → DefaultRecoveryCodeCount).
+	RecoveryCodeCount int
+	// Roles, when non-empty, is the set of role values accepted on create/update.
+	Roles []string
+	// UserManagementRoles gates the management invariants (default → AdminRole).
+	UserManagementRoles []string
+}
+
+// Authkit is the concrete implementation behind facades.Authkit() and the value
+// returned by New. It wraps the auth + user-management + two-factor services so
+// app code can drive them programmatically against a specific user table.
 type Authkit struct {
 	auth      *services.Auth
 	users     *services.Users
@@ -23,36 +49,50 @@ type Authkit struct {
 
 var _ contracts.Authkit = (*Authkit)(nil)
 
-// NewAuthkit builds the service from the application (read lazily at resolve
-// time, so config is available).
-func NewAuthkit(app foundation.Application) *Authkit {
-	minPwLen := services.DefaultMinPasswordLength
-	issuer := ""
-	recoveryCount := services.DefaultRecoveryCodeCount
-	var roles, managementRoles []string
-	if cfg := app.MakeConfig(); cfg != nil {
-		if v := cfg.GetInt("authkit.min_password_length", minPwLen); v > 0 {
-			minPwLen = v
-		}
-		issuer = cfg.GetString("authkit.two_factor.issuer")
-		if v := cfg.GetInt("authkit.two_factor.recovery_codes", recoveryCount); v > 0 {
-			recoveryCount = v
-		}
-		roles = toStringSlice(cfg.Get("authkit.roles"))
-		managementRoles = toStringSlice(cfg.Get("authkit.user_management_roles"))
+// New builds a programmatic authkit instance bound to cfg.UsersTable. Zero-valued
+// fields fall back to the package defaults, so authkit.New(authkit.Config{})
+// behaves exactly like the default single-instance service.
+func New(cfg Config) *Authkit {
+	minPwLen := cfg.MinPasswordLength
+	if minPwLen <= 0 {
+		minPwLen = services.DefaultMinPasswordLength
+	}
+	recoveryCount := cfg.RecoveryCodeCount
+	if recoveryCount <= 0 {
+		recoveryCount = services.DefaultRecoveryCodeCount
 	}
 	// Fail-closed: management roles default to the admin role so the last-admin
-	// guards work even when the app leaves user_management_roles unset.
+	// guards work even when the caller leaves UserManagementRoles unset.
+	managementRoles := cfg.UserManagementRoles
 	if len(managementRoles) == 0 {
 		managementRoles = []string{services.AdminRole}
 	}
-	repo := repositories.NewUsers()
+	repo := repositories.NewUsersWithTable(cfg.UsersTable)
 	hasher := services.NewFacadeHasher()
 	return &Authkit{
 		auth:      services.NewAuth(repo, hasher, minPwLen),
-		users:     services.NewUsers(repo, hasher, minPwLen, roles, managementRoles),
-		twoFactor: services.NewTwoFactor(repo, services.NewFacadeCrypter(), issuer, recoveryCount),
+		users:     services.NewUsers(repo, hasher, minPwLen, cfg.Roles, managementRoles),
+		twoFactor: services.NewTwoFactor(repo, services.NewFacadeCrypter(), cfg.TwoFactorIssuer, recoveryCount),
 	}
+}
+
+// NewAuthkit builds the default instance from the published authkit.* config
+// (read lazily at resolve time, so config is available). It is the thin wrapper
+// behind facades.Authkit(); multi-table hosts use New directly.
+func NewAuthkit(app foundation.Application) *Authkit {
+	var cfg Config
+	if c := app.MakeConfig(); c != nil {
+		cfg = Config{
+			Guard:               c.GetString("authkit.guard"),
+			UsersTable:          c.GetString("authkit.tables.users"),
+			MinPasswordLength:   c.GetInt("authkit.min_password_length"),
+			TwoFactorIssuer:     c.GetString("authkit.two_factor.issuer"),
+			RecoveryCodeCount:   c.GetInt("authkit.two_factor.recovery_codes"),
+			Roles:               toStringSlice(c.Get("authkit.roles")),
+			UserManagementRoles: toStringSlice(c.Get("authkit.user_management_roles")),
+		}
+	}
+	return New(cfg)
 }
 
 func (a *Authkit) Authenticate(ctx context.Context, email, password string) (*models.User, error) {

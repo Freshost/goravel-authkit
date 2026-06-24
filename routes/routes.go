@@ -67,6 +67,19 @@ type Options struct {
 	// SessionActiveWindow is how recently a session must have been active to be
 	// listed (defaults to the configured session lifetime).
 	SessionActiveWindow time.Duration
+	// UsersTable / AuditTable / RememberTokensTable / SessionsTable bind this
+	// instance's repositories to specific tables, so two authkit instances can run
+	// over disjoint user domains (e.g. "accounts" and "admin_users") in one app.
+	// Empty values fall back to the package defaults ("users", "audit_logs",
+	// "auth_remember_tokens", "auth_sessions"), reproducing single-instance behaviour.
+	UsersTable          string
+	AuditTable          string
+	RememberTokensTable string
+	SessionsTable       string
+	// RememberCookieName is the name of this instance's persistent "remember me"
+	// cookie. Two instances on one origin must differ here so their cookies don't
+	// overwrite each other. Empty falls back to the package default ("authkit_remember").
+	RememberCookieName string
 }
 
 // DefaultOptions returns the baked-in defaults (matches the published config).
@@ -137,6 +150,11 @@ func OptionsFromConfig() Options {
 	if v := cfg.Get("authkit.roles"); v != nil {
 		o.Roles = toStringSlice(v)
 	}
+	o.UsersTable = cfg.GetString("authkit.tables.users")
+	o.AuditTable = cfg.GetString("authkit.tables.audit")
+	o.RememberTokensTable = cfg.GetString("authkit.tables.remember_tokens")
+	o.SessionsTable = cfg.GetString("authkit.tables.sessions")
+	o.RememberCookieName = cfg.GetString("authkit.remember.cookie_name")
 	return o
 }
 
@@ -186,14 +204,14 @@ func Register(router route.Router, opts Options) {
 		managementRoles = []string{services.AdminRole}
 	}
 
-	usersRepo := repositories.NewUsers()
+	usersRepo := repositories.NewUsersWithTable(opts.UsersTable)
 	hasher := services.NewFacadeHasher()
 	authSvc := services.NewAuth(usersRepo, hasher, opts.MinPasswordLength)
 	usersSvc := services.NewUsers(usersRepo, hasher, opts.MinPasswordLength, opts.Roles, managementRoles)
 
 	var auditSvc *services.Audit
 	if opts.EnableAuditLog {
-		auditSvc = services.NewAudit(repositories.NewAudit())
+		auditSvc = services.NewAudit(repositories.NewAuditWithTable(opts.AuditTable))
 	}
 
 	var twoFactorSvc *services.TwoFactor
@@ -203,17 +221,17 @@ func Register(router route.Router, opts Options) {
 
 	var rememberSvc *services.Remember
 	if opts.EnableRememberMe {
-		rememberSvc = services.NewRemember(repositories.NewRemember(), opts.RememberLifetime)
+		rememberSvc = services.NewRemember(repositories.NewRememberWithTable(opts.RememberTokensTable), opts.RememberLifetime)
 	}
 
 	var sessionsSvc *services.Sessions
 	if opts.EnableSessions {
-		sessionsSvc = services.NewSessions(repositories.NewSessions(), opts.SessionActiveWindow)
+		sessionsSvc = services.NewSessions(repositories.NewSessionsWithTable(opts.SessionsTable), opts.SessionActiveWindow)
 	}
 
-	authCtrl := controllers.NewAuthController(authSvc, auditSvc, twoFactorSvc, rememberSvc, sessionsSvc, opts.Guard)
+	authCtrl := controllers.NewAuthController(authSvc, auditSvc, twoFactorSvc, rememberSvc, sessionsSvc, opts.Guard, opts.RememberCookieName)
 	usersCtrl := controllers.NewUsersController(usersSvc, auditSvc)
-	twoFactorCtrl := controllers.NewTwoFactorController(usersSvc, authSvc, twoFactorSvc, auditSvc, rememberSvc, sessionsSvc, opts.Guard)
+	twoFactorCtrl := controllers.NewTwoFactorController(usersSvc, authSvc, twoFactorSvc, auditSvc, rememberSvc, sessionsSvc, opts.Guard, opts.RememberCookieName)
 	sessionsCtrl := controllers.NewSessionsController(sessionsSvc, auditSvc, opts.Guard)
 	metaCtrl := controllers.NewMetaController(opts.Roles, opts.MinPasswordLength, responses.MetaFeatures{
 		UserManagement: opts.EnableUserManagement,
@@ -256,9 +274,9 @@ func Register(router route.Router, opts Options) {
 		// a valid remember cookie before Authenticated checks for a live session.
 		guarded := make([]contractshttp.Middleware, 0, 3)
 		if rememberSvc != nil {
-			guarded = append(guarded, middleware.RememberLogin(opts.Guard, rememberSvc, auditSvc, sessionsSvc))
+			guarded = append(guarded, middleware.RememberLogin(opts.Guard, opts.RememberCookieName, usersRepo, rememberSvc, auditSvc, sessionsSvc))
 		}
-		guarded = append(guarded, middleware.Authenticated(opts.Guard))
+		guarded = append(guarded, middleware.Authenticated(opts.Guard, usersRepo))
 		if sessionsSvc != nil {
 			// After Authenticated: refresh the current session row and reject it if
 			// it was terminated elsewhere.
@@ -291,7 +309,7 @@ func Register(router route.Router, opts Options) {
 				// Fail-closed: the whole /users block (reads and writes) is always
 				// mounted behind the RequireRole gate using the effective management
 				// roles, so no /users endpoint is reachable by a non-admin.
-				g.Middleware(middleware.RequireRole(opts.Guard, managementRoles...)).Group(func(ur route.Router) {
+				g.Middleware(middleware.RequireRole(opts.Guard, usersRepo, managementRoles...)).Group(func(ur route.Router) {
 					ur.Get("/users", usersCtrl.Index)
 					ur.Post("/users", usersCtrl.Store)
 					ur.Get("/users/{id}", usersCtrl.Show)

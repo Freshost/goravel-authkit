@@ -6,22 +6,22 @@
 //
 //	./artisan package:install github.com/freshost/goravel-authkit
 //
-// which registers this ServiceProvider and writes the config files
-// (config/auth.go, config/authkit.go, config/hashing.go). The provider registers
-// the migrations and the artisan commands itself; the app mounts the HTTP routes
-// from its own routing callback with one line:
+// which registers this ServiceProvider and publishes config/authkit.go (and
+// config/hashing.go). The app declares its auth domains as guards under
+// authkit.guards in config/authkit.go; the provider then auto-registers a Goravel
+// session guard and the migrations for each guard (no config/auth.go needed). The
+// app mounts the HTTP routes from its own routing callback with one line:
 //
 //	authkitroutes "github.com/freshost/goravel-authkit/routes"
 //	// inside foundation.Setup().WithRouting(func(){ ... })
-//	authkitroutes.Register(facades.Route(), authkitroutes.OptionsFromConfig())
+//	authkitroutes.RegisterAll(facades.Route())
 //
 // Routes are registered app-side (not in the provider) because Goravel rebuilds
 // the HTTP engine when global middleware is set — which happens AFTER providers
 // boot — so any routes a provider registers in Boot are discarded. The routing
-// callback runs after that rebuild, so routes registered there survive. The app
-// must also enable session middleware globally (the package is cookie-based):
-//
-//	WithMiddleware(func(h configuration.Middleware){ h.Append(sessionmiddleware.StartSession()) })
+// callback runs after that rebuild, so routes registered there survive. The
+// package starts its own session on each guard's /auth group, so no global
+// session middleware is required.
 //
 // See the README and docs/installation.md.
 package authkit
@@ -33,11 +33,17 @@ import (
 
 	"github.com/freshost/goravel-authkit/commands"
 	"github.com/freshost/goravel-authkit/migrations"
+	"github.com/freshost/goravel-authkit/routes"
 )
 
 // Binding is the service-container key under which the Authkit service is bound;
 // the facades.Authkit() accessor resolves it.
 const Binding = "authkit"
+
+// ormProviderName is the Goravel auth provider authkit auto-registers for its
+// declared instances (a plain orm provider; authkit loads users from each
+// instance's table via its repository, so one shared provider suffices).
+const ormProviderName = "authkit_orm"
 
 // PackageName is the module path, used as the first argument to Publishes.
 const PackageName = "github.com/freshost/goravel-authkit"
@@ -86,9 +92,50 @@ func (r *ServiceProvider) Register(app foundation.Application) {
 // config (for `vendor:publish`). HTTP routes are NOT registered here — the app
 // calls routes.Register from its routing callback (see the package doc).
 func (r *ServiceProvider) Boot(app foundation.Application) {
-	// Migrations — added to the schema registry so `artisan migrate` runs them.
+	cfg := app.MakeConfig()
+	guards := routes.GuardOptions()
+
+	// Goravel guard registration — the SAME in single- and multi-guard mode:
+	// authkit ensures each of its guards exists in the auth config (session driver
+	// over one shared orm provider), but never clobbers a guard the host already
+	// defined. So a fresh app needs no config/auth.go, while an existing app's
+	// hand-written guards still win. Guard resolution is lazy, so setting this at
+	// boot is honoured at request time. Opt out wholesale with
+	// authkit.register_guards = false to own config/auth.go yourself.
+	if cfg != nil && cfg.GetBool("authkit.register_guards", true) && len(guards) > 0 {
+		cfg.Add("auth.providers."+ormProviderName+".driver", "orm")
+		if cfg.GetString("auth.defaults.guard") == "" {
+			// The framework default guard (used by facades.Auth(ctx) with no
+			// .Guard(name)) is authkit.default_guard if set, else the first declared
+			// guard. authkit itself always passes an explicit guard.
+			def := cfg.GetString("authkit.default_guard")
+			if def == "" {
+				def = guards[0].Guard
+			}
+			cfg.Add("auth.defaults.guard", def)
+		}
+		for _, o := range guards {
+			if cfg.GetString("auth.guards."+o.Guard+".driver") == "" {
+				cfg.Add("auth.guards."+o.Guard+".driver", "session")
+				cfg.Add("auth.guards."+o.Guard+".provider", ormProviderName)
+			}
+		}
+	}
+
+	// Migrations — the SAME in both modes: ForTables for every guard's tables
+	// (single-guard uses the default table names). Opt out with
+	// authkit.register_migrations = false to register migrations.ForTables yourself.
 	if schema := app.MakeSchema(); schema != nil {
-		schema.Register(migrations.Migrations())
+		if cfg == nil || cfg.GetBool("authkit.register_migrations", true) {
+			for _, o := range guards {
+				schema.Register(migrations.ForTables(migrations.MigrationConfig{
+					UsersTable:          o.UsersTable,
+					AuditTable:          o.AuditTable,
+					RememberTokensTable: o.RememberTokensTable,
+					SessionsTable:       o.SessionsTable,
+				}))
+			}
+		}
 	}
 
 	// Artisan commands.

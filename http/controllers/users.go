@@ -25,16 +25,7 @@ func NewUsersController(users *services.Users, audit *services.Audit) *UsersCont
 	return &UsersController{users: users, audit: audit}
 }
 
-// Index godoc
-//
-//	@ID				listUsers
-//	@Summary		List users
-//	@Tags			Users
-//	@Security		CookieAuth
-//	@Produce		json
-//	@Success		200	{array}		responses.UserResponse
-//	@Failure		401	{object}	responses.ErrorResponse
-//	@Router			/auth/users [get]
+// Index lists all users. Handles GET {prefix}/auth/users.
 func (c *UsersController) Index(ctx contractshttp.Context) contractshttp.Response {
 	users, err := c.users.List(ctx.Request().Origin().Context())
 	if err != nil {
@@ -43,17 +34,7 @@ func (c *UsersController) Index(ctx contractshttp.Context) contractshttp.Respons
 	return ctx.Response().Json(http.StatusOK, responses.NewUserListResponse(users))
 }
 
-// Show godoc
-//
-//	@ID				getUser
-//	@Summary		Get a user
-//	@Tags			Users
-//	@Security		CookieAuth
-//	@Produce		json
-//	@Param			id	path		string	true	"User ID (UUID)"
-//	@Success		200	{object}	responses.UserResponse
-//	@Failure		404	{object}	responses.ErrorResponse
-//	@Router			/auth/users/{id} [get]
+// Show returns a single user by id. Handles GET {prefix}/auth/users/{id}.
 func (c *UsersController) Show(ctx contractshttp.Context) contractshttp.Response {
 	id, errResp := helpers.ParseUUIDParam(ctx, "id")
 	if errResp != nil {
@@ -66,19 +47,8 @@ func (c *UsersController) Show(ctx contractshttp.Context) contractshttp.Response
 	return ctx.Response().Json(http.StatusOK, responses.NewUserResponse(u))
 }
 
-// Store godoc
-//
-//	@ID				createUser
-//	@Summary		Create a user
-//	@Tags			Users
-//	@Security		CookieAuth
-//	@Accept			json
-//	@Produce		json
-//	@Param			body	body		responses.CreateUserRequest	true	"User"
-//	@Success		201		{object}	responses.UserResponse
-//	@Failure		400		{object}	responses.ErrorResponse
-//	@Failure		409		{object}	responses.ErrorResponse
-//	@Router			/auth/users [post]
+// Store creates a user. Handles POST {prefix}/auth/users; a duplicate email is
+// rejected with a conflict.
 func (c *UsersController) Store(ctx contractshttp.Context) contractshttp.Response {
 	var req responses.CreateUserRequest
 	if err := ctx.Request().Bind(&req); err != nil {
@@ -92,21 +62,9 @@ func (c *UsersController) Store(ctx contractshttp.Context) contractshttp.Respons
 	return ctx.Response().Json(http.StatusCreated, responses.NewUserResponse(u))
 }
 
-// Update godoc
-//
-//	@ID				updateUser
-//	@Summary		Update a user (email, name, role, disabled)
-//	@Tags			Users
-//	@Security		CookieAuth
-//	@Accept			json
-//	@Produce		json
-//	@Param			id		path		string						true	"User ID (UUID)"
-//	@Param			body	body		responses.UpdateUserRequest	true	"User"
-//	@Success		200		{object}	responses.UserResponse
-//	@Failure		400		{object}	responses.ErrorResponse
-//	@Failure		404		{object}	responses.ErrorResponse
-//	@Failure		409		{object}	responses.ErrorResponse
-//	@Router			/auth/users/{id} [put]
+// Update changes a user's email, name, role, or disabled state. Handles
+// PUT {prefix}/auth/users/{id} and refuses to let an admin disable their own
+// account.
 func (c *UsersController) Update(ctx contractshttp.Context) contractshttp.Response {
 	id, errResp := helpers.ParseUUIDParam(ctx, "id")
 	if errResp != nil {
@@ -130,19 +88,8 @@ func (c *UsersController) Update(ctx contractshttp.Context) contractshttp.Respon
 	return ctx.Response().Json(http.StatusOK, responses.NewUserResponse(u))
 }
 
-// Destroy godoc
-//
-//	@ID				deleteUser
-//	@Summary		Delete a user
-//	@Tags			Users
-//	@Security		CookieAuth
-//	@Produce		json
-//	@Param			id	path		string	true	"User ID (UUID)"
-//	@Success		200	{object}	responses.MessageResponse
-//	@Failure		400	{object}	responses.ErrorResponse
-//	@Failure		404	{object}	responses.ErrorResponse
-//	@Failure		409	{object}	responses.ErrorResponse
-//	@Router			/auth/users/{id} [delete]
+// Destroy deletes a user. Handles DELETE {prefix}/auth/users/{id} and refuses to
+// let a user delete their own account.
 func (c *UsersController) Destroy(ctx contractshttp.Context) contractshttp.Response {
 	id, errResp := helpers.ParseUUIDParam(ctx, "id")
 	if errResp != nil {
@@ -160,20 +107,8 @@ func (c *UsersController) Destroy(ctx contractshttp.Context) contractshttp.Respo
 	return ctx.Response().Json(http.StatusOK, responses.MessageResponse{Message: "deleted"})
 }
 
-// SetPassword godoc
-//
-//	@ID				setUserPassword
-//	@Summary		Reset a user's password
-//	@Tags			Users
-//	@Security		CookieAuth
-//	@Accept			json
-//	@Produce		json
-//	@Param			id		path		string						true	"User ID (UUID)"
-//	@Param			body	body		responses.SetPasswordRequest	true	"New password"
-//	@Success		200		{object}	responses.UserResponse
-//	@Failure		400		{object}	responses.ErrorResponse
-//	@Failure		404		{object}	responses.ErrorResponse
-//	@Router			/auth/users/{id}/password [post]
+// SetPassword resets a user's password as an admin action. Handles
+// POST {prefix}/auth/users/{id}/password.
 func (c *UsersController) SetPassword(ctx contractshttp.Context) contractshttp.Response {
 	id, errResp := helpers.ParseUUIDParam(ctx, "id")
 	if errResp != nil {

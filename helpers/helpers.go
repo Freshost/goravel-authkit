@@ -4,6 +4,8 @@
 package helpers
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -32,6 +34,45 @@ func ParseUUIDParam(ctx contractshttp.Context, name string) (uuid.UUID, *contrac
 		return uuid.Nil, &resp
 	}
 	return id, nil
+}
+
+// NewSessionToken returns a fresh random token for active-session tracking (256
+// bits, hex). An empty string is returned only if the system RNG fails, in which
+// case the session is simply not tracked (the tracking layer treats "" as absent).
+func NewSessionToken() string {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return ""
+	}
+	return hex.EncodeToString(b)
+}
+
+// SessionTrackingToken reads the active-session tracking token for the given
+// guard from the current session, or "" when there is none.
+func SessionTrackingToken(ctx contractshttp.Context, guard string) string {
+	sess := ctx.Request().Session()
+	if sess == nil {
+		return ""
+	}
+	token, _ := sess.Get(SessionTrackingTokenKey(guard)).(string)
+	return token
+}
+
+// GuardUserID returns the id of the user authenticated under the given guard,
+// read from the session via Goravel's session guard (the auth_<guard>_id key).
+// It returns uuid.Nil when there is no authenticated session. authkit then loads
+// the user record itself through its table-aware repository, so the table is
+// resolved per instance rather than by Goravel's model-bound user provider.
+func GuardUserID(ctx contractshttp.Context, guard string) uuid.UUID {
+	idStr, err := facades.Auth(ctx).Guard(guard).ID()
+	if err != nil || idStr == "" {
+		return uuid.Nil
+	}
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		return uuid.Nil
+	}
+	return id
 }
 
 // AuthUserID reads the user id injected by the Authenticated middleware under

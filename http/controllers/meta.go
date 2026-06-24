@@ -21,15 +21,9 @@ func NewMetaController(roles []string, minPasswordLength int, features responses
 	return &MetaController{roles: roles, minPasswordLength: minPasswordLength, features: features}
 }
 
-// Show godoc
-//
-//	@ID				getAuthkitConfig
-//	@Summary		Get frontend config
-//	@Description	Returns the assignable roles, password rules, and feature flags so the UI can adapt without hardcoding them. Unauthenticated and non-sensitive.
-//	@Tags			Meta
-//	@Produce		json
-//	@Success		200	{object}	responses.MetaResponse
-//	@Router			/auth/meta [get]
+// Show returns the assignable roles, password rules, and feature flags so the UI
+// can adapt without hardcoding them. The response is unauthenticated and
+// non-sensitive. Handles GET {prefix}/auth/meta.
 func (c *MetaController) Show(ctx contractshttp.Context) contractshttp.Response {
 	roles := c.roles
 	if roles == nil {

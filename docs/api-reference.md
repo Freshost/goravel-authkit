@@ -1,11 +1,19 @@
 # API Reference
 
-Every package route lives under **`{Options.Prefix}/auth`** (default
-`/api/v1/auth`) — a single owned namespace so the package never collides with the
-host app's own routes (its `/meta`, `/users`, …). The paths below are relative to
-that base. The `@ID` column is the Swagger operation id — it becomes the
-generated TypeScript SDK function name. Auth endpoints other than login require
-the session cookie (guarded by `Authenticated`).
+Every package route lives under **`{prefix}/auth`** — a single owned namespace so
+the package never collides with the host app's own routes (its `/meta`, `/users`,
+…). The paths below are relative to that base. In a single-guard app the prefix is
+`Options.Prefix` (default `/api/v1`). In a **multi-guard** app the *same* endpoint
+set is mounted once **per guard**, each under its own guard's prefix
+(e.g. `/api/v1/auth/login` for the `client` guard and `/api/admin/v1/auth/login`
+for the `admin` guard). The endpoints themselves are unchanged from v0.1.
+
+The `@ID` column is the operation id used by the React `@freshost/authkit-ui`
+client. As of v0.2.0 the controllers carry **no** Swagger/OpenAPI annotations
+(per-guard mounting can't be expressed statically), so these ids no longer flow
+into a host's `swag`-generated SDK — they are documentation of the stable wire
+contract. Auth endpoints other than login require the session cookie (guarded by
+`Authenticated`, which loads the user from the guard's own table).
 
 | Method | Path | `@ID` | Auth |
 | --- | --- | --- | --- |
@@ -203,3 +211,107 @@ Login flow with 2FA: `login` → `{two_factor:true}` → `twoFactorChallenge` wi
   no row (`401 session_terminated`). You can't terminate the current session via
   the API (`400 current_session`) — use logout. A password change drops all other
   session rows; stale rows are pruned by `auth:prune-remember-tokens`.
+
+## Go API (mounting & host integration)
+
+The HTTP surface above is wired by these exported Go entry points. Import
+`authkitroutes "github.com/freshost/goravel-authkit/routes"`.
+
+### Mounting routes
+
+```go
+// Mount every declared guard (authkit.guards), or the single default guard when
+// none are declared. This is the one line an app adds to its routing callback.
+authkitroutes.RegisterAll(facades.Route())
+
+// Mount one guard explicitly from a built Options.
+authkitroutes.Register(facades.Route(), opts)
+```
+
+- **`RegisterAll(router route.Router)`** iterates `GuardOptions()` and calls
+  `Register` for each. Single- and multi-guard apps use the same one-liner.
+- **`Register(router route.Router, opts Options)`** wires the services +
+  controllers and mounts the `{opts.Prefix}/auth/*` routes. Zero-valued `Options`
+  fields fall back to `DefaultOptions`, so `Register(router, Options{})` is safe.
+- **`OptionsFromConfig() Options`** builds `Options` from the top-level
+  `authkit.*` config (the single-guard base).
+- **`OptionsForGuard(name string) Options`** builds the `Options` for one declared
+  guard: starts from `OptionsFromConfig()`, applies the guard's overrides, and
+  derives table names and the remember cookie from the guard name when unset
+  (`<name>_users`, `<name>_audit_logs`, `<name>_remember_tokens`,
+  `<name>_auth_sessions`, `authkit_<name>_remember`).
+- **`GuardOptions() []Options`** is the resolved list both `RegisterAll` and the
+  ServiceProvider iterate — one entry per `authkit.guards` child, or a single
+  `OptionsFromConfig()` entry when none are declared.
+
+### `Options` fields
+
+`Options` configures one guard's routes and controller behaviour:
+
+| Field | Purpose |
+| --- | --- |
+| `Prefix` | Route prefix (e.g. `/api/v1`); routes mount under `{Prefix}/auth`. |
+| `Guard` | Goravel auth guard name backing the session (e.g. `admin`). |
+| `MinPasswordLength` | Minimum accepted new-password length. |
+| `RateLimitAttempts` / `RateLimitWindow` | Per-IP login/challenge limit. |
+| `EnableUserManagement` | Register the `/users` CRUD endpoints. |
+| `EnableAuditLog` | Wire the audit service into the controllers. |
+| `UserManagementRoles` | Roles allowed at `/users` (fail-closed default `["admin"]`). |
+| `Roles` | Accepted role values on create/update (empty = any). |
+| `EnableTwoFactor` / `TwoFactorIssuer` / `RecoveryCodeCount` | TOTP two-factor. |
+| `EnableRememberMe` / `RememberLifetime` | Persistent remember-me login. |
+| `EnableSessions` / `SessionActiveWindow` | Active-session tracking + endpoints. |
+| `UsersTable` / `AuditTable` / `RememberTokensTable` / `SessionsTable` | Bind the repositories to specific tables (empty → package defaults `users` / `audit_logs` / `auth_remember_tokens` / `auth_sessions`). |
+| `RememberCookieName` | This guard's remember cookie (empty → `authkit_remember`). Two guards on one origin must differ. |
+
+### Guarding the host's own routes
+
+```go
+// Authenticate the host's routes behind an authkit guard (the authkit
+// equivalent of Laravel's auth:<guard>).
+facades.Route().Prefix("/api/v1").
+    Middleware(authkitroutes.Protect("client")...).
+    Group(func(r route.Router) {
+        r.Get("/invoices", invoices.Index) // requires a logged-in "client" user
+    })
+```
+
+- **`Protect(guard string) []http.Middleware`** returns `StartSession` +
+  `Authenticated(guard, repo)` (the repo is bound to that guard's user table).
+- **`ProtectRole(guard string, roles ...string) []http.Middleware`** is `Protect`
+  plus a `RequireRole` gate (no roles → behaves like `Protect`).
+- **`AuthUserID(ctx http.Context) uuid.UUID`** reads the current user id inside a
+  protected handler (or `uuid.Nil`).
+
+### Programmatic instance API
+
+`authkit.New` drives auth / user-management / 2FA against a specific table
+(for CLI tools, seeders, custom flows) without going through HTTP:
+
+```go
+client := authkit.New(authkit.Config{Guard: "client", UsersTable: "accounts"})
+admin  := authkit.New(authkit.Config{Guard: "admin", UsersTable: "admin_users"})
+u, err := admin.CreateUser(ctx, email, name, password, "admin")
+```
+
+`authkit.Config` fields (all optional; the zero value reproduces the
+single-instance defaults): `Guard`, `UsersTable`, `MinPasswordLength`,
+`TwoFactorIssuer`, `RecoveryCodeCount`, `Roles`, `UserManagementRoles`. The
+returned `*Authkit` exposes `Authenticate`, `CreateUser`, `GetUser`, `ListUsers`,
+`SetPassword`, `ChangePassword`, `DeleteUser`, `EnableTwoFactor`,
+`ConfirmTwoFactor`, `VerifyTwoFactor`, `DisableTwoFactor`. The default instance
+is also resolvable via `facades.Authkit()`.
+
+### Migrations & repositories
+
+- **`migrations.ForTables(cfg migrations.MigrationConfig) []schema.Migration`**
+  returns the migration set for arbitrary table names, with table-derived
+  signatures (`authkit_<table>_<step>`) so a host can register one set per user
+  domain without collisions. `MigrationConfig` fields: `UsersTable`, `AuditTable`,
+  `RememberTokensTable`, `SessionsTable` (empty → package defaults).
+  `migrations.Migrations()` is `ForTables(MigrationConfig{})`. The ServiceProvider
+  self-registers these per guard unless `authkit.register_migrations = false`.
+- **`repositories.New*WithTable(table string)`** construct table-bound
+  repositories (`NewUsersWithTable`, `NewAuditWithTable`,
+  `NewRememberWithTable`, `NewSessionsWithTable`); an empty name falls back to the
+  package default table. The bare `New*()` constructors use the default tables.

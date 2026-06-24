@@ -11,14 +11,17 @@ import (
 	"github.com/goravel/framework/facades"
 
 	"github.com/freshost/goravel-authkit/helpers"
-	"github.com/freshost/goravel-authkit/models"
+	"github.com/freshost/goravel-authkit/repositories"
 )
 
-// SessionKeyPasswordChangedAt holds the users.password_changed_at value captured
-// at login. Authenticated compares it with the fresh DB value to invalidate
-// every OTHER session after a password change. The authenticated user id itself
-// is owned by Goravel's integrated auth guard, not written here.
-const SessionKeyPasswordChangedAt = "password_changed_at"
+// The authenticated user id is owned by Goravel's session guard (auth_<guard>_id);
+// authkit reads it via helpers.GuardUserID and loads the user record through its
+// own table-aware repository, so each instance resolves its own table.
+//
+// The login-stamped password_changed_at lives under helpers.PasswordChangedAtKey(guard)
+// (namespaced per guard so two instances can share one session cookie).
+// Authenticated compares it with the fresh DB value to invalidate every OTHER
+// session after a password change.
 
 // FormatPasswordTimestamp renders a password_changed_at value in the canonical
 // form stored in the session. Exported so the login handler stamps it in the
@@ -28,15 +31,21 @@ func FormatPasswordTimestamp(t time.Time) string {
 }
 
 // Authenticated guards routes behind the named session guard. It:
-//  1. loads the user via the integrated auth guard (401 on miss / deleted user),
+//  1. resolves the session's user id (401 on no session) and loads the user from
+//     the instance's table (401 on a deleted user),
 //  2. compares the login-stamped password_changed_at with the DB value — a
 //     mismatch means the password changed after this session was issued, so
 //     this (older) session is logged out (401),
 //  3. injects the user id into the request context (helpers.CtxAuthUserID).
-func Authenticated(guard string) contractshttp.Middleware {
+func Authenticated(guard string, users repositories.UsersRepository) contractshttp.Middleware {
 	return func(ctx contractshttp.Context) {
-		var user models.User
-		if err := facades.Auth(ctx).Guard(guard).User(&user); err != nil || user.ID == uuid.Nil {
+		id := helpers.GuardUserID(ctx, guard)
+		if id == uuid.Nil {
+			abortUnauthorized(ctx, "unauthorized", "Authentication required")
+			return
+		}
+		user, err := users.FindByID(ctx.Request().Origin().Context(), id)
+		if err != nil || user == nil {
 			abortUnauthorized(ctx, "unauthorized", "Authentication required")
 			return
 		}
@@ -48,9 +57,10 @@ func Authenticated(guard string) contractshttp.Middleware {
 		}
 
 		session := ctx.Request().Session()
-		if session != nil && !sessionPasswordTimestampValid(session, user.PasswordChangedAt) {
+		pwKey := helpers.PasswordChangedAtKey(guard)
+		if session != nil && !sessionPasswordTimestampValid(session, pwKey, user.PasswordChangedAt) {
 			_ = facades.Auth(ctx).Guard(guard).Logout()
-			session.Forget(SessionKeyPasswordChangedAt)
+			session.Forget(pwKey)
 			abortUnauthorized(ctx, "session_expired", "Please log in again")
 			return
 		}
@@ -65,14 +75,21 @@ func Authenticated(guard string) contractshttp.Middleware {
 // allow-list (defaulting to "admin", fail-closed), so this gate is real for
 // them. An empty allowed list is a defensive no-op; callers should never pass
 // one for a route that must be protected.
-func RequireRole(guard string, allowed ...string) contractshttp.Middleware {
+func RequireRole(guard string, users repositories.UsersRepository, allowed ...string) contractshttp.Middleware {
 	return func(ctx contractshttp.Context) {
 		if len(allowed) == 0 {
 			ctx.Request().Next()
 			return
 		}
-		var user models.User
-		if err := facades.Auth(ctx).Guard(guard).User(&user); err != nil || user.ID == uuid.Nil {
+		// Runs after Authenticated, which injected the user id; load the user from
+		// the guard's table to read the role.
+		id := helpers.AuthUserID(ctx)
+		if id == uuid.Nil {
+			abortUnauthorized(ctx, "unauthorized", "Authentication required")
+			return
+		}
+		user, err := users.FindByID(ctx.Request().Origin().Context(), id)
+		if err != nil || user == nil {
 			abortUnauthorized(ctx, "unauthorized", "Authentication required")
 			return
 		}
@@ -98,8 +115,8 @@ func abortUnauthorized(ctx contractshttp.Context, code, message string) {
 
 func sessionPasswordTimestampValid(session interface {
 	Get(key string, defaultValue ...any) any
-}, dbValue time.Time) bool {
-	stored, ok := session.Get(SessionKeyPasswordChangedAt).(string)
+}, key string, dbValue time.Time) bool {
+	stored, ok := session.Get(key).(string)
 	if !ok || stored == "" {
 		return false
 	}

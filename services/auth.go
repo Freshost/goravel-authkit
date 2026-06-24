@@ -60,13 +60,15 @@ func (s *Auth) Authenticate(ctx context.Context, email, password string) (*model
 	return user, nil
 }
 
-// Me returns the authenticated user, or ErrUnauthorized if it no longer exists.
+// Me returns the authenticated user, or ErrUnauthorized if it no longer exists or
+// has been disabled. The disabled check mirrors the Authenticated middleware so the
+// method is safe to use as a standalone "load current user" primitive.
 func (s *Auth) Me(ctx context.Context, id uuid.UUID) (*models.User, error) {
 	user, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		return nil, errors.Join(ErrInternal, err)
 	}
-	if user == nil {
+	if user == nil || user.IsDisabled() {
 		return nil, ErrUnauthorized
 	}
 	return user, nil

@@ -22,21 +22,24 @@ type rateLimiter struct {
 	lastSweep time.Time
 }
 
-var authLimiter = &rateLimiter{requests: make(map[string][]time.Time)}
-
 // RateLimitAuth limits the login endpoint to maxAttempts per window per IP.
 // Recommended: 5/min. Pass a large maxAttempts in local/dev env to relax it.
+//
+// Each call builds its OWN limiter, captured in the returned middleware closure,
+// so two authkit instances mounted in one app never share a single IP-keyed
+// bucket (a client login failure must not count against the admin limit).
 func RateLimitAuth(maxAttempts int, window time.Duration) contractshttp.Middleware {
+	limiter := &rateLimiter{requests: make(map[string][]time.Time)}
 	return func(ctx contractshttp.Context) {
 		ip := ctx.Request().Ip()
-		if authLimiter.isLimited(ip, maxAttempts, window) {
+		if limiter.isLimited(ip, maxAttempts, window) {
 			_ = ctx.Response().Json(nethttp.StatusTooManyRequests, contractshttp.Json{
 				"error":   "rate_limited",
 				"message": "Too many attempts. Please try again later.",
 			}).Abort()
 			return
 		}
-		authLimiter.record(ip, window)
+		limiter.record(ip, window)
 		ctx.Request().Next()
 	}
 }
@@ -89,12 +92,4 @@ func (rl *rateLimiter) sweepLocked(cutoff time.Time) {
 			rl.requests[k] = valid
 		}
 	}
-}
-
-// ResetRateLimiters clears the limiter state (used by tests).
-func ResetRateLimiters() {
-	authLimiter.mu.Lock()
-	authLimiter.requests = make(map[string][]time.Time)
-	authLimiter.lastSweep = time.Time{}
-	authLimiter.mu.Unlock()
 }

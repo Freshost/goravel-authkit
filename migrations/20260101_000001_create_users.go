@@ -1,7 +1,8 @@
 // Package migrations holds the code-based migrations owned by goravel-authkit. A
-// consuming app appends Migrations() to its own migration registry (see
-// bootstrap/migrations.go) so the framework runner applies them in order. Each
-// migration is idempotent.
+// consuming app appends Migrations() (or ForTables() for explicit table names) to
+// its own migration registry (see bootstrap/migrations.go) so the framework
+// runner applies them in order. Each migration is idempotent and operates on the
+// table it was constructed with.
 package migrations
 
 import (
@@ -12,17 +13,20 @@ import (
 // CreateUsers creates the canonical users table backing authentication. The
 // first admin is created by the `auth:create-user` command or an app installer;
 // this migration only owns the schema.
-type CreateUsers struct{}
+type CreateUsers struct {
+	table     string
+	signature string
+}
 
 func (r *CreateUsers) Signature() string {
-	return "20260101_000001_create_users"
+	return r.signature
 }
 
 func (r *CreateUsers) Up() error {
-	if facades.Schema().HasTable("users") {
+	if facades.Schema().HasTable(r.table) {
 		return nil
 	}
-	return facades.Schema().Create("users", func(table schema.Blueprint) {
+	return facades.Schema().Create(r.table, func(table schema.Blueprint) {
 		// No DB-side default: every insert sets the id in Go (uuid.New()), so the
 		// schema stays driver-agnostic (a gen_random_uuid() default breaks SQLite).
 		table.Uuid("id")
@@ -48,5 +52,5 @@ func (r *CreateUsers) Up() error {
 }
 
 func (r *CreateUsers) Down() error {
-	return facades.Schema().DropIfExists("users")
+	return facades.Schema().DropIfExists(r.table)
 }

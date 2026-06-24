@@ -7,8 +7,9 @@ import (
 )
 
 // AuthSession tracks one active login so a user can see and terminate their
-// sessions (Goravel's session store is not indexed by user). SessionID is the
-// secret session identifier and is never serialized; the public ID is used to
+// sessions (Goravel's session store is not indexed by user). SessionID holds
+// authkit's stable per-guard tracking token (NOT the Goravel session id, which
+// rotates on every login) and is never serialized; the public ID is used to
 // address a session for termination. A request whose session has no row is
 // treated as terminated.
 type AuthSession struct {

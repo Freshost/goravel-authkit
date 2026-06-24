@@ -7,17 +7,20 @@ import (
 
 // CreateAuthSessions creates the table backing the active-session list and
 // per-session termination.
-type CreateAuthSessions struct{}
+type CreateAuthSessions struct {
+	table     string
+	signature string
+}
 
 func (r *CreateAuthSessions) Signature() string {
-	return "20260101_000008_create_auth_sessions"
+	return r.signature
 }
 
 func (r *CreateAuthSessions) Up() error {
-	if facades.Schema().HasTable("auth_sessions") {
+	if facades.Schema().HasTable(r.table) {
 		return nil
 	}
-	return facades.Schema().Create("auth_sessions", func(table schema.Blueprint) {
+	return facades.Schema().Create(r.table, func(table schema.Blueprint) {
 		table.Uuid("id")
 		table.Primary("id")
 		table.String("session_id", 255)
@@ -33,5 +36,5 @@ func (r *CreateAuthSessions) Up() error {
 }
 
 func (r *CreateAuthSessions) Down() error {
-	return facades.Schema().DropIfExists("auth_sessions")
+	return facades.Schema().DropIfExists(r.table)
 }

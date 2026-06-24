@@ -6,17 +6,20 @@ import (
 )
 
 // CreateAuditLogs creates the audit_logs table written by the audit service.
-type CreateAuditLogs struct{}
+type CreateAuditLogs struct {
+	table     string
+	signature string
+}
 
 func (r *CreateAuditLogs) Signature() string {
-	return "20260101_000002_create_audit_logs"
+	return r.signature
 }
 
 func (r *CreateAuditLogs) Up() error {
-	if facades.Schema().HasTable("audit_logs") {
+	if facades.Schema().HasTable(r.table) {
 		return nil
 	}
-	return facades.Schema().Create("audit_logs", func(table schema.Blueprint) {
+	return facades.Schema().Create(r.table, func(table schema.Blueprint) {
 		table.Uuid("id")
 		table.Primary("id")
 		table.Uuid("actor_id").Nullable()
@@ -33,5 +36,5 @@ func (r *CreateAuditLogs) Up() error {
 }
 
 func (r *CreateAuditLogs) Down() error {
-	return facades.Schema().DropIfExists("audit_logs")
+	return facades.Schema().DropIfExists(r.table)
 }

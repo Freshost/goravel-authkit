@@ -6,11 +6,15 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	ormcontract "github.com/goravel/framework/contracts/database/orm"
 	"github.com/goravel/framework/facades"
 	"gorm.io/gorm"
 
 	"github.com/freshost/goravel-authkit/models"
 )
+
+// DefaultRememberTokensTable is the table the bare NewRemember() constructor binds to.
+const DefaultRememberTokensTable = "auth_remember_tokens"
 
 // RememberRepository is the data-access seam for "remember me" tokens. As with
 // UsersRepository, FindBySelector returns (nil, nil) — not an error — when no row
@@ -29,23 +33,33 @@ type RememberRepository interface {
 	DeleteExpired(ctx context.Context, now time.Time) error
 }
 
-// Remember is the ORM-backed RememberRepository.
-type Remember struct{}
+// Remember is the ORM-backed RememberRepository, bound to a concrete table.
+type Remember struct{ table string }
 
-// NewRemember returns an ORM-backed remember-token repository.
-func NewRemember() *Remember {
-	return &Remember{}
+// NewRemember returns an ORM-backed remember-token repository over the default table.
+func NewRemember() *Remember { return NewRememberWithTable(DefaultRememberTokensTable) }
+
+// NewRememberWithTable returns an ORM-backed remember-token repository over the named table.
+func NewRememberWithTable(table string) *Remember {
+	if table == "" {
+		table = DefaultRememberTokensTable
+	}
+	return &Remember{table: table}
 }
 
 var _ RememberRepository = (*Remember)(nil)
 
+func (r *Remember) query(ctx context.Context) ormcontract.Query {
+	return facades.Orm().WithContext(ctx).Query().Table(r.table)
+}
+
 func (r *Remember) Create(ctx context.Context, t *models.RememberToken) error {
-	return facades.Orm().WithContext(ctx).Query().Create(t)
+	return r.query(ctx).Create(t)
 }
 
 func (r *Remember) FindBySelector(ctx context.Context, selector string) (*models.RememberToken, error) {
 	var t models.RememberToken
-	err := facades.Orm().WithContext(ctx).Query().Where("selector", selector).First(&t)
+	err := r.query(ctx).Where("selector", selector).First(&t)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
@@ -61,7 +75,7 @@ func (r *Remember) FindBySelector(ctx context.Context, selector string) (*models
 }
 
 func (r *Remember) RotateValidator(ctx context.Context, id uuid.UUID, expectedCurrentHash, newCurrentHash, newPreviousHash string, rotatedAt, expiresAt time.Time) (int64, error) {
-	res, err := facades.Orm().WithContext(ctx).Query().Model(&models.RememberToken{}).
+	res, err := r.query(ctx).
 		Where("id", id).Where("validator_hash", expectedCurrentHash).
 		Update(map[string]any{
 			"validator_hash":          newCurrentHash,
@@ -76,16 +90,16 @@ func (r *Remember) RotateValidator(ctx context.Context, id uuid.UUID, expectedCu
 }
 
 func (r *Remember) Delete(ctx context.Context, id uuid.UUID) error {
-	_, err := facades.Orm().WithContext(ctx).Query().Where("id", id).Delete(&models.RememberToken{})
+	_, err := r.query(ctx).Where("id", id).Delete(&models.RememberToken{})
 	return err
 }
 
 func (r *Remember) DeleteByUser(ctx context.Context, userID uuid.UUID) error {
-	_, err := facades.Orm().WithContext(ctx).Query().Where("user_id", userID).Delete(&models.RememberToken{})
+	_, err := r.query(ctx).Where("user_id", userID).Delete(&models.RememberToken{})
 	return err
 }
 
 func (r *Remember) DeleteExpired(ctx context.Context, now time.Time) error {
-	_, err := facades.Orm().WithContext(ctx).Query().Where("expires_at < ?", now).Delete(&models.RememberToken{})
+	_, err := r.query(ctx).Where("expires_at < ?", now).Delete(&models.RememberToken{})
 	return err
 }

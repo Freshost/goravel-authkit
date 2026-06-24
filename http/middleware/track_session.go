@@ -4,6 +4,7 @@ import (
 	contractshttp "github.com/goravel/framework/contracts/http"
 	"github.com/goravel/framework/facades"
 
+	"github.com/freshost/goravel-authkit/helpers"
 	"github.com/freshost/goravel-authkit/services"
 )
 
@@ -20,7 +21,7 @@ func TrackSession(guard string, sessions *services.Sessions) contractshttp.Middl
 			ctx.Request().Next()
 			return
 		}
-		alive, err := sessions.Touch(ctx.Request().Origin().Context(), sess.GetID())
+		alive, err := sessions.Touch(ctx.Request().Origin().Context(), helpers.SessionTrackingToken(ctx, guard))
 		if err != nil {
 			facades.Log().Errorf("track session: %v", err)
 			ctx.Request().Next()

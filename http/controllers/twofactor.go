@@ -17,42 +17,34 @@ import (
 // TwoFactorController handles TOTP two-factor: the login challenge (completing a
 // pending login) and the management endpoints (enable/confirm/disable/recovery).
 type TwoFactorController struct {
-	users     *services.Users
-	auth      *services.Auth
-	twoFactor *services.TwoFactor
-	audit     *services.Audit
-	remember  *services.Remember // nil when remember-me is disabled
-	sessions  *services.Sessions // nil when session tracking is disabled
-	guard     string
+	users              *services.Users
+	auth               *services.Auth
+	twoFactor          *services.TwoFactor
+	audit              *services.Audit
+	remember           *services.Remember // nil when remember-me is disabled
+	sessions           *services.Sessions // nil when session tracking is disabled
+	guard              string
+	rememberCookieName string
 }
 
 // NewTwoFactorController builds the two-factor controller. Pass a nil remember to
 // disable persistent "remember me" logins, and a nil sessions to disable
-// active-session tracking.
-func NewTwoFactorController(users *services.Users, auth *services.Auth, twoFactor *services.TwoFactor, audit *services.Audit, remember *services.Remember, sessions *services.Sessions, guard string) *TwoFactorController {
-	return &TwoFactorController{users: users, auth: auth, twoFactor: twoFactor, audit: audit, remember: remember, sessions: sessions, guard: guard}
+// active-session tracking. rememberCookieName is the per-instance remember cookie
+// name (empty → the package default).
+func NewTwoFactorController(users *services.Users, auth *services.Auth, twoFactor *services.TwoFactor, audit *services.Audit, remember *services.Remember, sessions *services.Sessions, guard, rememberCookieName string) *TwoFactorController {
+	return &TwoFactorController{users: users, auth: auth, twoFactor: twoFactor, audit: audit, remember: remember, sessions: sessions, guard: guard, rememberCookieName: rememberCookieName}
 }
 
-// Challenge godoc
-//
-//	@ID				twoFactorChallenge
-//	@Summary		Complete a 2FA login
-//	@Description	Completes a login that returned {two_factor:true} by verifying a TOTP code or a single-use recovery code against the pending user. Establishes the session on success. Rate-limited.
-//	@Tags			Auth
-//	@Accept			json
-//	@Produce		json
-//	@Param			body	body		responses.TwoFactorChallengeRequest	true	"TOTP or recovery code"
-//	@Success		200		{object}	responses.UserResponse
-//	@Failure		400		{object}	responses.ErrorResponse
-//	@Failure		401		{object}	responses.ErrorResponse
-//	@Failure		429		{object}	responses.ErrorResponse
-//	@Router			/auth/two-factor-challenge [post]
+// Challenge completes a login that returned {two_factor:true} by verifying a TOTP
+// code or a single-use recovery code against the pending user, establishing the
+// session on success. It is rate-limited and handles
+// POST {prefix}/auth/two-factor-challenge.
 func (c *TwoFactorController) Challenge(ctx contractshttp.Context) contractshttp.Response {
 	sess := ctx.Request().Session()
 	if sess == nil {
 		return c.unauthorized(ctx, "no pending two-factor challenge")
 	}
-	raw, _ := sess.Get(SessionKeyTwoFactorUserID).(string)
+	raw, _ := sess.Get(helpers.TwoFactorUserIDKey(c.guard)).(string)
 	id, err := uuid.Parse(raw)
 	if err != nil || id == uuid.Nil {
 		return c.unauthorized(ctx, "no pending two-factor challenge")
@@ -90,25 +82,16 @@ func (c *TwoFactorController) Challenge(ctx contractshttp.Context) contractshttp
 
 	// Honour the remember-me intent stashed during the password step.
 	wantRemember := false
-	if raw, ok := sess.Get(SessionKeyRememberIntent).(string); ok && raw == "1" {
+	if raw, ok := sess.Get(helpers.RememberIntentKey(c.guard)).(string); ok && raw == "1" {
 		wantRemember = true
 	}
 
-	return completeLogin(ctx, c.guard, c.audit, c.remember, c.sessions, wantRemember, user)
+	return completeLogin(ctx, c.guard, c.rememberCookieName, c.audit, c.remember, c.sessions, wantRemember, user)
 }
 
-// Enable godoc
-//
-//	@ID				enableTwoFactor
-//	@Summary		Start 2FA enrollment
-//	@Description	Generates a TOTP secret (not yet active) and returns the secret + otpauth URL for QR rendering. Confirm with a code to activate.
-//	@Tags			Auth
-//	@Produce		json
-//	@Security		CookieAuth
-//	@Success		200	{object}	responses.TwoFactorEnrollmentResponse
-//	@Failure		401	{object}	responses.ErrorResponse
-//	@Failure		409	{object}	responses.ErrorResponse
-//	@Router			/auth/two-factor [post]
+// Enable starts 2FA enrollment by generating a TOTP secret (not yet active) and
+// returning the secret plus otpauth URL for QR rendering; confirm with a code to
+// activate. Handles POST {prefix}/auth/two-factor.
 func (c *TwoFactorController) Enable(ctx contractshttp.Context) contractshttp.Response {
 	id := helpers.AuthUserID(ctx)
 	enr, err := c.twoFactor.Enable(ctx.Request().Origin().Context(), id)
@@ -121,20 +104,9 @@ func (c *TwoFactorController) Enable(ctx contractshttp.Context) contractshttp.Re
 	})
 }
 
-// Confirm godoc
-//
-//	@ID				confirmTwoFactor
-//	@Summary		Confirm 2FA enrollment
-//	@Description	Verifies a TOTP code against the pending secret, activates 2FA, and returns one-time recovery codes (shown once).
-//	@Tags			Auth
-//	@Accept			json
-//	@Produce		json
-//	@Security		CookieAuth
-//	@Param			body	body		responses.TwoFactorConfirmRequest	true	"TOTP code"
-//	@Success		200		{object}	responses.RecoveryCodesResponse
-//	@Failure		400		{object}	responses.ErrorResponse
-//	@Failure		401		{object}	responses.ErrorResponse
-//	@Router			/auth/two-factor/confirm [post]
+// Confirm verifies a TOTP code against the pending secret, activates 2FA, and
+// returns the one-time recovery codes (shown only once). Handles
+// POST {prefix}/auth/two-factor/confirm.
 func (c *TwoFactorController) Confirm(ctx contractshttp.Context) contractshttp.Response {
 	id := helpers.AuthUserID(ctx)
 	var req responses.TwoFactorConfirmRequest
@@ -149,19 +121,9 @@ func (c *TwoFactorController) Confirm(ctx contractshttp.Context) contractshttp.R
 	return ctx.Response().Json(http.StatusOK, responses.RecoveryCodesResponse{RecoveryCodes: codes})
 }
 
-// Disable godoc
-//
-//	@ID				disableTwoFactor
-//	@Summary		Disable 2FA
-//	@Description	Clears the user's two-factor secret and recovery codes. Requires the account password to confirm (re-auth), so a stolen session alone cannot silently remove 2FA.
-//	@Tags			Auth
-//	@Accept			json
-//	@Produce		json
-//	@Security		CookieAuth
-//	@Param			body	body		responses.TwoFactorDisableRequest	true	"Account password"
-//	@Success		200		{object}	responses.MessageResponse
-//	@Failure		401		{object}	responses.ErrorResponse
-//	@Router			/auth/two-factor [delete]
+// Disable clears the user's two-factor secret and recovery codes, handling
+// DELETE {prefix}/auth/two-factor. It requires the account password to confirm
+// (re-auth), so a stolen session alone cannot silently remove 2FA.
 func (c *TwoFactorController) Disable(ctx contractshttp.Context) contractshttp.Response {
 	id := helpers.AuthUserID(ctx)
 
@@ -185,17 +147,10 @@ func (c *TwoFactorController) Disable(ctx contractshttp.Context) contractshttp.R
 	return ctx.Response().Json(http.StatusOK, responses.MessageResponse{Message: "Two-factor disabled"})
 }
 
-// RecoveryCodes godoc
-//
-//	@ID				getTwoFactorRecoveryCodes
-//	@Summary		Count remaining recovery codes
-//	@Description	Returns how many unused recovery codes remain. The codes themselves are stored hashed and are shown only once, at confirmation / regeneration — this endpoint never returns plaintext codes.
-//	@Tags			Auth
-//	@Produce		json
-//	@Security		CookieAuth
-//	@Success		200	{object}	responses.RecoveryCodesStatusResponse
-//	@Failure		401	{object}	responses.ErrorResponse
-//	@Router			/auth/two-factor/recovery-codes [get]
+// RecoveryCodes returns how many unused recovery codes remain, handling
+// GET {prefix}/auth/two-factor/recovery-codes. The codes are stored hashed and
+// shown only once (at confirmation or regeneration); this endpoint never returns
+// plaintext codes.
 func (c *TwoFactorController) RecoveryCodes(ctx contractshttp.Context) contractshttp.Response {
 	id := helpers.AuthUserID(ctx)
 	remaining, err := c.twoFactor.RemainingRecoveryCodes(ctx.Request().Origin().Context(), id)
@@ -205,17 +160,8 @@ func (c *TwoFactorController) RecoveryCodes(ctx contractshttp.Context) contracts
 	return ctx.Response().Json(http.StatusOK, responses.RecoveryCodesStatusResponse{Remaining: remaining})
 }
 
-// RegenerateRecoveryCodes godoc
-//
-//	@ID				regenerateTwoFactorRecoveryCodes
-//	@Summary		Regenerate recovery codes
-//	@Description	Replaces the recovery codes, invalidating the previous set.
-//	@Tags			Auth
-//	@Produce		json
-//	@Security		CookieAuth
-//	@Success		200	{object}	responses.RecoveryCodesResponse
-//	@Failure		401	{object}	responses.ErrorResponse
-//	@Router			/auth/two-factor/recovery-codes [post]
+// RegenerateRecoveryCodes replaces the recovery codes, invalidating the previous
+// set. Handles POST {prefix}/auth/two-factor/recovery-codes.
 func (c *TwoFactorController) RegenerateRecoveryCodes(ctx contractshttp.Context) contractshttp.Response {
 	id := helpers.AuthUserID(ctx)
 	codes, err := c.twoFactor.RegenerateRecoveryCodes(ctx.Request().Origin().Context(), id)

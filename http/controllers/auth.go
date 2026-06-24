@@ -19,49 +19,37 @@ import (
 	"github.com/freshost/goravel-authkit/services"
 )
 
-// SessionKeyTwoFactorUserID holds the id of a user who passed the password step
-// but still owes a 2FA challenge. The session is NOT authenticated until the
-// challenge succeeds.
-const SessionKeyTwoFactorUserID = "authkit_2fa_user_id"
-
-// SessionKeyRememberIntent records, between the password step and the 2FA
-// challenge, that the user asked to be remembered — so the persistent cookie is
-// issued only after the challenge completes (never on the half-finished login).
-const SessionKeyRememberIntent = "authkit_remember_intent"
+// The pending-2FA user id and the remember-me intent are stashed in the session
+// between the password step and the 2FA challenge under
+// helpers.TwoFactorUserIDKey(guard) / helpers.RememberIntentKey(guard) — both
+// namespaced per guard so two instances can share one session cookie. The session
+// is NOT authenticated until the challenge succeeds.
 
 // AuthController handles the auth endpoints.
 type AuthController struct {
-	auth      *services.Auth
-	audit     *services.Audit     // nil when audit logging is disabled
-	twoFactor *services.TwoFactor // nil when 2FA is disabled
-	remember  *services.Remember  // nil when remember-me is disabled
-	sessions  *services.Sessions  // nil when session tracking is disabled
-	guard     string
+	auth               *services.Auth
+	audit              *services.Audit     // nil when audit logging is disabled
+	twoFactor          *services.TwoFactor // nil when 2FA is disabled
+	remember           *services.Remember  // nil when remember-me is disabled
+	sessions           *services.Sessions  // nil when session tracking is disabled
+	guard              string
+	rememberCookieName string
 }
 
 // NewAuthController builds the auth controller. Pass a nil audit to disable audit
 // writes, a nil twoFactor to disable the two-factor login gate, a nil remember to
 // disable persistent "remember me" logins, and a nil sessions to disable
-// active-session tracking.
-func NewAuthController(auth *services.Auth, audit *services.Audit, twoFactor *services.TwoFactor, remember *services.Remember, sessions *services.Sessions, guard string) *AuthController {
-	return &AuthController{auth: auth, audit: audit, twoFactor: twoFactor, remember: remember, sessions: sessions, guard: guard}
+// active-session tracking. rememberCookieName is the per-instance remember cookie
+// name (empty → the package default).
+func NewAuthController(auth *services.Auth, audit *services.Audit, twoFactor *services.TwoFactor, remember *services.Remember, sessions *services.Sessions, guard, rememberCookieName string) *AuthController {
+	return &AuthController{auth: auth, audit: audit, twoFactor: twoFactor, remember: remember, sessions: sessions, guard: guard, rememberCookieName: rememberCookieName}
 }
 
-// Login godoc
-//
-//	@ID				login
-//	@Summary		Login
-//	@Description	Verifies credentials and establishes an httpOnly session cookie. Stamps password_changed_at into the session so a later password change invalidates other sessions. Rate-limited.
-//	@Tags			Auth
-//	@Accept			json
-//	@Produce		json
-//	@Param			body	body		responses.LoginRequest	true	"Login credentials"
-//	@Success		200		{object}	responses.UserResponse "Logged in (or {two_factor:true} when a 2FA challenge is required)"
-//	@Failure		400		{object}	responses.ErrorResponse
-//	@Failure		401		{object}	responses.ErrorResponse
-//	@Failure		429		{object}	responses.ErrorResponse
-//	@Failure		500		{object}	responses.ErrorResponse
-//	@Router			/auth/login [post]
+// Login verifies credentials and establishes an httpOnly session cookie, handling
+// POST {prefix}/auth/login. It stamps password_changed_at into the session so a
+// later password change invalidates other sessions, and is rate-limited. When the
+// user has 2FA enabled it returns {two_factor:true} and defers the session until
+// the challenge succeeds.
 func (c *AuthController) Login(ctx contractshttp.Context) contractshttp.Response {
 	var req responses.LoginRequest
 	if err := ctx.Request().Bind(&req); err != nil {
@@ -89,15 +77,15 @@ func (c *AuthController) Login(ctx contractshttp.Context) contractshttp.Response
 			facades.Log().Errorf("auth: regenerate session: %v", err)
 		}
 		if sess := ctx.Request().Session(); sess != nil {
-			sess.Put(SessionKeyTwoFactorUserID, user.ID.String())
+			sess.Put(helpers.TwoFactorUserIDKey(c.guard), user.ID.String())
 			if req.Remember {
-				sess.Put(SessionKeyRememberIntent, "1")
+				sess.Put(helpers.RememberIntentKey(c.guard), "1")
 			}
 		}
 		return ctx.Response().Json(http.StatusOK, responses.TwoFactorRequiredResponse{TwoFactor: true})
 	}
 
-	return completeLogin(ctx, c.guard, c.audit, c.remember, c.sessions, req.Remember, user)
+	return completeLogin(ctx, c.guard, c.rememberCookieName, c.audit, c.remember, c.sessions, req.Remember, user)
 }
 
 // completeLogin establishes the authenticated session for a verified user
@@ -105,7 +93,7 @@ func (c *AuthController) Login(ctx contractshttp.Context) contractshttp.Response
 // user response. Shared by password-only login and the 2FA challenge. When
 // remember is non-nil and wantRemember is true it also issues a persistent
 // "remember me" cookie.
-func completeLogin(ctx contractshttp.Context, guard string, audit *services.Audit, remember *services.Remember, sessions *services.Sessions, wantRemember bool, user *models.User) contractshttp.Response {
+func completeLogin(ctx contractshttp.Context, guard, rememberCookieName string, audit *services.Audit, remember *services.Remember, sessions *services.Sessions, wantRemember bool, user *models.User) contractshttp.Response {
 	if _, err := facades.Auth(ctx).Guard(guard).Login(user); err != nil {
 		facades.Log().Errorf("auth: establish session: %v", err)
 		return ctx.Response().Json(http.StatusInternalServerError, responses.ErrorResponse{
@@ -116,20 +104,29 @@ func completeLogin(ctx contractshttp.Context, guard string, audit *services.Audi
 		facades.Log().Errorf("auth: regenerate session: %v", err)
 	}
 	if sess := ctx.Request().Session(); sess != nil {
-		sess.Put(middleware.SessionKeyPasswordChangedAt, middleware.FormatPasswordTimestamp(user.PasswordChangedAt))
-		sess.Forget(SessionKeyTwoFactorUserID)
-		sess.Forget(SessionKeyRememberIntent)
+		sess.Put(helpers.PasswordChangedAtKey(guard), middleware.FormatPasswordTimestamp(user.PasswordChangedAt))
+		sess.Forget(helpers.TwoFactorUserIDKey(guard))
+		sess.Forget(helpers.RememberIntentKey(guard))
 	}
 	if remember != nil && wantRemember {
 		if value, err := remember.Issue(ctx.Request().Origin().Context(), user.ID); err != nil {
 			facades.Log().Errorf("auth: issue remember token: %v", err)
 		} else {
-			helpers.SetRememberCookie(ctx, value, remember.TTL())
+			helpers.SetRememberCookie(ctx, rememberCookieName, value, remember.TTL())
 		}
 	}
 	if sessions != nil {
 		if sess := ctx.Request().Session(); sess != nil {
-			if err := sessions.Track(ctx.Request().Origin().Context(), sess.GetID(), user.ID, ctx.Request().Ip(), ctx.Request().Header("User-Agent", "")); err != nil {
+			// Active-session tracking is keyed by a stable per-guard token, not the
+			// Goravel session id (which rotates on every login, including another
+			// guard's login on this shared cookie). Drop any prior token's row
+			// (re-login) and issue a fresh one into the session.
+			if old := helpers.SessionTrackingToken(ctx, guard); old != "" {
+				_ = sessions.Forget(ctx.Request().Origin().Context(), old)
+			}
+			token := helpers.NewSessionToken()
+			sess.Put(helpers.SessionTrackingTokenKey(guard), token)
+			if err := sessions.Track(ctx.Request().Origin().Context(), token, user.ID, ctx.Request().Ip(), ctx.Request().Header("User-Agent", "")); err != nil {
 				facades.Log().Errorf("auth: track session: %v", err)
 			}
 		}
@@ -146,90 +143,57 @@ func completeLogin(ctx contractshttp.Context, guard string, audit *services.Audi
 	return ctx.Response().Json(http.StatusOK, responses.NewUserResponse(user))
 }
 
-// Logout godoc
-//
-//	@ID				logout
-//	@Summary		Logout
-//	@Description	Invalidates the current session and clears the session cookie.
-//	@Tags			Auth
-//	@Security		CookieAuth
-//	@Produce		json
-//	@Success		200	{object}	responses.MessageResponse
-//	@Failure		401	{object}	responses.ErrorResponse
-//	@Router			/auth/logout [post]
+// Logout invalidates the current session and clears the session cookie. Handles
+// POST {prefix}/auth/logout.
 func (c *AuthController) Logout(ctx contractshttp.Context) contractshttp.Response {
-	var user models.User
-	_ = facades.Auth(ctx).Guard(c.guard).User(&user)
+	// Best-effort load of the current user (for the audit row) from the instance's
+	// table; the id was injected by Authenticated.
+	user, _ := c.auth.Me(ctx.Request().Origin().Context(), helpers.AuthUserID(ctx))
 
-	// Capture the session id before logout invalidates it, to drop its tracking row.
-	sessionID := ""
-	if sess := ctx.Request().Session(); sess != nil {
-		sessionID = sess.GetID()
-	}
+	// Capture this session's tracking token before logout, to drop its row.
+	trackingToken := helpers.SessionTrackingToken(ctx, c.guard)
 
 	if err := facades.Auth(ctx).Guard(c.guard).Logout(); err != nil {
 		facades.Log().Errorf("auth: logout: %v", err)
 	}
 	if sess := ctx.Request().Session(); sess != nil {
-		sess.Forget(middleware.SessionKeyPasswordChangedAt)
+		sess.Forget(helpers.PasswordChangedAtKey(c.guard))
+		sess.Forget(helpers.SessionTrackingTokenKey(c.guard))
 	}
 	if c.sessions != nil {
-		if err := c.sessions.Forget(ctx.Request().Origin().Context(), sessionID); err != nil {
+		if err := c.sessions.Forget(ctx.Request().Origin().Context(), trackingToken); err != nil {
 			facades.Log().Errorf("auth: forget session: %v", err)
 		}
 	}
 
 	// Drop the persistent remember token (this device) so it can't re-login.
 	if c.remember != nil {
-		if cookie := helpers.ReadRememberCookie(ctx); cookie != "" {
+		if cookie := helpers.ReadRememberCookie(ctx, c.rememberCookieName); cookie != "" {
 			if err := c.remember.Revoke(ctx.Request().Origin().Context(), cookie); err != nil {
 				facades.Log().Errorf("auth: revoke remember token: %v", err)
 			}
 		}
-		helpers.ClearRememberCookie(ctx)
+		helpers.ClearRememberCookie(ctx, c.rememberCookieName)
 	}
 
-	c.writeAudit(ctx, &user, "auth.logout")
+	c.writeAudit(ctx, user, "auth.logout")
 	return ctx.Response().Json(http.StatusOK, responses.MessageResponse{Message: "logged out"})
 }
 
-// Me godoc
-//
-//	@ID				getMe
-//	@Summary		Get current user
-//	@Description	Returns the currently authenticated user.
-//	@Tags			Auth
-//	@Security		CookieAuth
-//	@Produce		json
-//	@Success		200	{object}	responses.UserResponse
-//	@Failure		401	{object}	responses.ErrorResponse
-//	@Router			/auth/me [get]
+// Me returns the currently authenticated user. Handles GET {prefix}/auth/me.
 func (c *AuthController) Me(ctx contractshttp.Context) contractshttp.Response {
-	var user models.User
-	if err := facades.Auth(ctx).Guard(c.guard).User(&user); err != nil || user.ID == uuid.Nil {
+	user, err := c.auth.Me(ctx.Request().Origin().Context(), helpers.AuthUserID(ctx))
+	if err != nil {
 		return ctx.Response().Json(http.StatusUnauthorized, responses.ErrorResponse{
 			Error: "unauthorized", Message: "Authentication required",
 		})
 	}
-	return ctx.Response().Json(http.StatusOK, responses.NewUserResponse(&user))
+	return ctx.Response().Json(http.StatusOK, responses.NewUserResponse(user))
 }
 
-// UpdateProfile godoc
-//
-//	@ID				updateProfile
-//	@Summary		Update own profile
-//	@Description	Updates the authenticated user's own name and email. The role is not changeable here (admin-managed). A duplicate email returns 409.
-//	@Tags			Auth
-//	@Accept			json
-//	@Produce		json
-//	@Security		CookieAuth
-//	@Param			body	body		responses.UpdateProfileRequest	true	"New name + email"
-//	@Success		200		{object}	responses.UserResponse
-//	@Failure		400		{object}	responses.ErrorResponse
-//	@Failure		401		{object}	responses.ErrorResponse
-//	@Failure		409		{object}	responses.ErrorResponse
-//	@Failure		500		{object}	responses.ErrorResponse
-//	@Router			/auth/me [put]
+// UpdateProfile updates the authenticated user's own name and email, handling
+// PUT {prefix}/auth/me. The role is not changeable here (it is admin-managed) and
+// a duplicate email is rejected with a conflict.
 func (c *AuthController) UpdateProfile(ctx contractshttp.Context) contractshttp.Response {
 	var req responses.UpdateProfileRequest
 	if err := ctx.Request().Bind(&req); err != nil {
@@ -254,17 +218,9 @@ func (c *AuthController) UpdateProfile(ctx contractshttp.Context) contractshttp.
 	return ctx.Response().Json(http.StatusOK, responses.NewUserResponse(user))
 }
 
-// LoginHistory godoc
-//
-//	@ID				getLoginHistory
-//	@Summary		Recent sign-in activity
-//	@Description	Returns the current user's most recent successful sign-ins (password or remember cookie) with the IP they came from.
-//	@Tags			Auth
-//	@Security		CookieAuth
-//	@Produce		json
-//	@Success		200	{array}		responses.LoginHistoryEntry
-//	@Failure		401	{object}	responses.ErrorResponse
-//	@Router			/auth/logins [get]
+// LoginHistory returns the current user's most recent successful sign-ins
+// (password or remember cookie) with the IP they came from. Handles
+// GET {prefix}/auth/logins.
 func (c *AuthController) LoginHistory(ctx contractshttp.Context) contractshttp.Response {
 	if c.audit == nil {
 		return ctx.Response().Json(http.StatusOK, []responses.LoginHistoryEntry{})
@@ -282,21 +238,9 @@ func (c *AuthController) LoginHistory(ctx contractshttp.Context) contractshttp.R
 	return ctx.Response().Json(http.StatusOK, responses.NewLoginHistoryResponse(entries))
 }
 
-// ChangePassword godoc
-//
-//	@ID				changePassword
-//	@Summary		Change own password
-//	@Description	Verifies the current password, validates the new one, updates the hash and bumps password_changed_at so every OTHER session is logged out on its next request. This session stays valid.
-//	@Tags			Auth
-//	@Accept			json
-//	@Produce		json
-//	@Security		CookieAuth
-//	@Param			body	body		responses.ChangePasswordRequest	true	"Current + new password"
-//	@Success		200		{object}	responses.MessageResponse
-//	@Failure		400		{object}	responses.ErrorResponse
-//	@Failure		401		{object}	responses.ErrorResponse
-//	@Failure		500		{object}	responses.ErrorResponse
-//	@Router			/auth/password [put]
+// ChangePassword verifies the current password, validates the new one, updates the
+// hash, and bumps password_changed_at so every OTHER session is logged out on its
+// next request while this session stays valid. Handles PUT {prefix}/auth/password.
 func (c *AuthController) ChangePassword(ctx contractshttp.Context) contractshttp.Response {
 	var req responses.ChangePasswordRequest
 	if err := ctx.Request().Bind(&req); err != nil {
@@ -318,7 +262,7 @@ func (c *AuthController) ChangePassword(ctx contractshttp.Context) contractshttp
 	// Re-stamp THIS session so it survives the invalidation that just killed
 	// every other session.
 	if sess := ctx.Request().Session(); sess != nil {
-		sess.Put(middleware.SessionKeyPasswordChangedAt, middleware.FormatPasswordTimestamp(changedAt))
+		sess.Put(helpers.PasswordChangedAtKey(c.guard), middleware.FormatPasswordTimestamp(changedAt))
 	}
 
 	// A password change invalidates every other session; revoke all persistent
@@ -328,15 +272,12 @@ func (c *AuthController) ChangePassword(ctx contractshttp.Context) contractshttp
 		if err := c.remember.RevokeAllForUser(ctx.Request().Origin().Context(), userID); err != nil {
 			facades.Log().Errorf("auth: revoke remember tokens: %v", err)
 		}
-		helpers.ClearRememberCookie(ctx)
+		helpers.ClearRememberCookie(ctx, c.rememberCookieName)
 	}
 	// Drop the tracking rows for every other session (this one stays).
 	if c.sessions != nil {
-		currentSessionID := ""
-		if sess := ctx.Request().Session(); sess != nil {
-			currentSessionID = sess.GetID()
-		}
-		if err := c.sessions.TerminateOthers(ctx.Request().Origin().Context(), userID, currentSessionID); err != nil {
+		currentToken := helpers.SessionTrackingToken(ctx, c.guard)
+		if err := c.sessions.TerminateOthers(ctx.Request().Origin().Context(), userID, currentToken); err != nil {
 			facades.Log().Errorf("auth: terminate other sessions: %v", err)
 		}
 	}

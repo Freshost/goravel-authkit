@@ -15,10 +15,13 @@ import (
 // SQLite cannot ALTER a column's default and never benefits from this change
 // (its create path already omits the default), so the migration is a no-op
 // there.
-type DropUsersRoleDefault struct{}
+type DropUsersRoleDefault struct {
+	table     string
+	signature string
+}
 
 func (r *DropUsersRoleDefault) Signature() string {
-	return "20260101_000009_drop_users_role_default"
+	return r.signature
 }
 
 func (r *DropUsersRoleDefault) Up() error {
@@ -26,12 +29,12 @@ func (r *DropUsersRoleDefault) Up() error {
 	if facades.Config().GetString("database.connections."+conn+".driver") == "sqlite" {
 		return nil
 	}
-	if !facades.Schema().HasColumn("users", "role") {
+	if !facades.Schema().HasColumn(r.table, "role") {
 		return nil
 	}
 	// Change() re-emits the column definition without a default, which drops the
 	// existing DB-level default on PostgreSQL / MySQL / SQL Server.
-	return facades.Schema().Table("users", func(table schema.Blueprint) {
+	return facades.Schema().Table(r.table, func(table schema.Blueprint) {
 		table.Text("role").Change()
 	})
 }
@@ -41,7 +44,7 @@ func (r *DropUsersRoleDefault) Down() error {
 	if facades.Config().GetString("database.connections."+conn+".driver") == "sqlite" {
 		return nil
 	}
-	return facades.Schema().Table("users", func(table schema.Blueprint) {
+	return facades.Schema().Table(r.table, func(table schema.Blueprint) {
 		table.Text("role").Default("admin").Change()
 	})
 }
