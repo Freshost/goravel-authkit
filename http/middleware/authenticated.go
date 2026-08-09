@@ -4,6 +4,7 @@ package middleware
 
 import (
 	nethttp "net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -38,36 +39,49 @@ func FormatPasswordTimestamp(t time.Time) string {
 //     this (older) session is logged out (401),
 //  3. injects the user id into the request context (helpers.CtxAuthUserID).
 func Authenticated(guard string, users repositories.UsersRepository) contractshttp.Middleware {
-	return func(ctx contractshttp.Context) {
-		id := helpers.GuardUserID(ctx, guard)
-		if id == uuid.Nil {
-			abortUnauthorized(ctx, "unauthorized", "Authentication required")
-			return
-		}
-		user, err := users.FindByID(ctx.Request().Origin().Context(), id)
-		if err != nil || user == nil {
-			abortUnauthorized(ctx, "unauthorized", "Authentication required")
-			return
-		}
+	return &authenticatedMiddleware{guard: guard, users: users}
+}
 
-		if user.IsDisabled() {
-			_ = facades.Auth(ctx).Guard(guard).Logout()
-			abortUnauthorized(ctx, "account_disabled", "This account has been disabled")
-			return
-		}
+type authenticatedMiddleware struct {
+	guard string
+	users repositories.UsersRepository
+}
 
-		session := ctx.Request().Session()
-		pwKey := helpers.PasswordChangedAtKey(guard)
-		if session != nil && !sessionPasswordTimestampValid(session, pwKey, user.PasswordChangedAt) {
-			_ = facades.Auth(ctx).Guard(guard).Logout()
-			session.Forget(pwKey)
-			abortUnauthorized(ctx, "session_expired", "Please log in again")
-			return
-		}
-
-		ctx.WithValue(helpers.CtxAuthUserID, user.ID.String())
-		ctx.Request().Next()
+func (middleware *authenticatedMiddleware) Handle(ctx contractshttp.Context) {
+	guard := middleware.guard
+	users := middleware.users
+	id := helpers.GuardUserID(ctx, guard)
+	if id == uuid.Nil {
+		abortUnauthorized(ctx, "unauthorized", "Authentication required")
+		return
 	}
+	user, err := users.FindByID(ctx.Context(), id)
+	if err != nil || user == nil {
+		abortUnauthorized(ctx, "unauthorized", "Authentication required")
+		return
+	}
+
+	if user.IsDisabled() {
+		_ = facades.Auth(ctx).Guard(guard).Logout()
+		abortUnauthorized(ctx, "account_disabled", "This account has been disabled")
+		return
+	}
+
+	session := ctx.Request().Session()
+	pwKey := helpers.PasswordChangedAtKey(guard)
+	if session != nil && !sessionPasswordTimestampValid(session, pwKey, user.PasswordChangedAt) {
+		_ = facades.Auth(ctx).Guard(guard).Logout()
+		session.Forget(pwKey)
+		abortUnauthorized(ctx, "session_expired", "Please log in again")
+		return
+	}
+
+	ctx.WithValue(helpers.CtxAuthUserID, user.ID.String())
+	ctx.Request().Next()
+}
+
+func (middleware *authenticatedMiddleware) Signature() string {
+	return "goravel-authkit.authenticated." + middleware.guard
 }
 
 // RequireRole rejects authenticated users whose role is not in allowed. It must
@@ -76,34 +90,48 @@ func Authenticated(guard string, users repositories.UsersRepository) contractsht
 // them. An empty allowed list is a defensive no-op; callers should never pass
 // one for a route that must be protected.
 func RequireRole(guard string, users repositories.UsersRepository, allowed ...string) contractshttp.Middleware {
-	return func(ctx contractshttp.Context) {
-		if len(allowed) == 0 {
+	return &requireRoleMiddleware{guard: guard, users: users, allowed: allowed}
+}
+
+type requireRoleMiddleware struct {
+	guard   string
+	users   repositories.UsersRepository
+	allowed []string
+}
+
+func (middleware *requireRoleMiddleware) Handle(ctx contractshttp.Context) {
+	users := middleware.users
+	allowed := middleware.allowed
+	if len(allowed) == 0 {
+		ctx.Request().Next()
+		return
+	}
+	// Runs after Authenticated, which injected the user id; load the user from
+	// the guard's table to read the role.
+	id := helpers.AuthUserID(ctx)
+	if id == uuid.Nil {
+		abortUnauthorized(ctx, "unauthorized", "Authentication required")
+		return
+	}
+	user, err := users.FindByID(ctx.Context(), id)
+	if err != nil || user == nil {
+		abortUnauthorized(ctx, "unauthorized", "Authentication required")
+		return
+	}
+	for _, role := range allowed {
+		if user.Role == role {
 			ctx.Request().Next()
 			return
 		}
-		// Runs after Authenticated, which injected the user id; load the user from
-		// the guard's table to read the role.
-		id := helpers.AuthUserID(ctx)
-		if id == uuid.Nil {
-			abortUnauthorized(ctx, "unauthorized", "Authentication required")
-			return
-		}
-		user, err := users.FindByID(ctx.Request().Origin().Context(), id)
-		if err != nil || user == nil {
-			abortUnauthorized(ctx, "unauthorized", "Authentication required")
-			return
-		}
-		for _, role := range allowed {
-			if user.Role == role {
-				ctx.Request().Next()
-				return
-			}
-		}
-		_ = ctx.Response().Json(nethttp.StatusForbidden, contractshttp.Json{
-			"error":   "forbidden",
-			"message": "Insufficient permissions",
-		}).Abort()
 	}
+	_ = ctx.Response().Json(nethttp.StatusForbidden, contractshttp.Json{
+		"error":   "forbidden",
+		"message": "Insufficient permissions",
+	}).Abort()
+}
+
+func (middleware *requireRoleMiddleware) Signature() string {
+	return "goravel-authkit.require-role." + middleware.guard + "." + strings.Join(middleware.allowed, ",")
 }
 
 func abortUnauthorized(ctx contractshttp.Context, code, message string) {

@@ -69,6 +69,33 @@ Login flow with 2FA: `login` → `{two_factor:true}` → `twoFactorChallenge` wi
 | DELETE | `/auth/users/{id}` | `deleteUser` | `200` MessageResponse | `400` `404` `409` |
 | POST | `/auth/users/{id}/password` | `setUserPassword` | `200` UserResponse | `400` `404` |
 
+## Impersonation (when `EnableImpersonation`)
+
+An authorized actor switches into another user's session — within its own guard or
+across guards — and back. Both endpoints sit behind the session guard. See
+[security](security.md) and [configuration](configuration.md#impersonation) for the
+authorization gate.
+
+| Method | Path | `@ID` | Auth | Success | Errors |
+| --- | --- | --- | --- | --- | --- |
+| POST | `/auth/impersonate` | `impersonate` | cookie | `200` UserResponse (the target, with `impersonatedBy`) | `400` `403` `404` `409` `500` |
+| POST | `/auth/impersonate/stop` | `stopImpersonating` | cookie | `200` MessageResponse | `400` |
+
+- **`impersonate`** establishes the target user's session. On success it returns the
+  **target's** `UserResponse` with the `impersonatedBy` field populated (the actor's
+  guard / id / email), so the UI can render a banner and an exit action. No remember
+  cookie is issued — impersonation is ephemeral. `impersonate` is blocked while a
+  switch is already active on this guard (`409 already_impersonating`) so it cannot
+  nest.
+- **`stop`** ends the switch on this guard. For a same-guard switch it restores the
+  original actor; for a cross-guard switch it drops only the target session (the
+  actor's own-guard session, a different key in the shared cookie, is untouched). It
+  stays reachable from the impersonated session.
+
+The reject-while-impersonating guard returns `403 impersonation_forbidden` on
+`PUT /auth/password`, the `/auth/users*` endpoints and a nested
+`POST /auth/impersonate` while a switch is active.
+
 ## Request bodies
 
 ```jsonc
@@ -99,6 +126,10 @@ Login flow with 2FA: `login` → `{two_factor:true}` → `twoFactorChallenge` wi
 
 // TwoFactorDisableRequest — re-auth before disabling 2FA
 { "password": "secret" }
+
+// ImpersonateRequest — `guard` is the target's guard (empty/omitted = the actor's
+// own guard, i.e. same-guard); `userId` is the target user's uuid
+{ "guard": "client", "userId": "3f2504e0-4f89-41d3-9a0c-0305e82c3301" }
 ```
 
 ## Response shapes
@@ -112,14 +143,16 @@ Login flow with 2FA: `login` → `{two_factor:true}` → `twoFactorChallenge` wi
   "role": "admin",
   "twoFactorEnabled": false,
   "disabled": false,
-  "createdAt": "2026-01-01T00:00:00Z"
+  "createdAt": "2026-01-01T00:00:00Z",
+  // present ONLY while this user is being impersonated (a UI banner + exit cue)
+  "impersonatedBy": { "guard": "admin", "id": "…", "email": "admin@example.com" }
 }
 
 // MetaResponse — GET /auth/meta (public; the UI reads roles/features from here)
 {
   "roles": ["admin", "user"],
   "minPasswordLength": 8,
-  "features": { "userManagement": true, "twoFactor": true, "auditLog": true, "sessions": true }
+  "features": { "userManagement": true, "twoFactor": true, "auditLog": true, "sessions": true, "impersonation": false }
 }
 
 // SessionResponse — one active session (secret session id never exposed)
@@ -169,8 +202,10 @@ Login flow with 2FA: `login` → `{two_factor:true}` → `twoFactorChallenge` wi
 | 401 | `invalid_credentials` | Login failed (unknown email **or** wrong password — never distinguished) |
 | 401 | `unauthorized` | Missing/invalid session |
 | 401 | `session_expired` | Password changed elsewhere → other sessions invalidated |
-| 403 | `forbidden` | `RequireRole` gate failed |
-| 404 | `not_found` | User does not exist |
+| 403 | `forbidden` | `RequireRole` gate failed, or the impersonation gate denied the actor |
+| 403 | `impersonation_forbidden` | Action blocked while impersonating (password change, user management, nested impersonation) |
+| 409 | `already_impersonating` | An impersonation is already active on this guard (no nesting) |
+| 404 | `not_found` | User does not exist (or the impersonation target is unknown) |
 | 409 | `already_exists` | Email already taken |
 | 409 | `last_admin` | Deleting the last user |
 | 429 | `rate_limited` | Too many login attempts |
@@ -211,6 +246,17 @@ Login flow with 2FA: `login` → `{two_factor:true}` → `twoFactorChallenge` wi
   no row (`401 session_terminated`). You can't terminate the current session via
   the API (`400 current_session`) — use logout. A password change drops all other
   session rows; stale rows are pruned by `auth:prune-remember-tokens`.
+- **Impersonation** (when `EnableImpersonation`): `POST /auth/impersonate`
+  establishes the target's session and regenerates the session id; **no remember
+  cookie** is issued (the switch is ephemeral and not restorable from a persistent
+  cookie). The target must exist (`404 not_found`) and not be disabled
+  (`403 account_disabled`), and must not hold a `protected_role`
+  (`403 forbidden`). While a switch is active, `GET /auth/me` returns the
+  impersonated user with an `impersonatedBy` object ({ guard, id, email }), and the
+  password-change, user-management and nested-impersonate routes return
+  `403 impersonation_forbidden`. `GET /auth/meta` reports
+  `features.impersonation`. Both the start and stop are audited
+  (`auth.impersonation_started` / `auth.impersonation_stopped`).
 
 ## Go API (mounting & host integration)
 
@@ -263,6 +309,39 @@ authkitroutes.Register(facades.Route(), opts)
 | `EnableSessions` / `SessionActiveWindow` | Active-session tracking + endpoints. |
 | `UsersTable` / `AuditTable` / `RememberTokensTable` / `SessionsTable` | Bind the repositories to specific tables (empty → package defaults `users` / `audit_logs` / `auth_remember_tokens` / `auth_sessions`). |
 | `RememberCookieName` | This guard's remember cookie (empty → `authkit_remember`). Two guards on one origin must differ. |
+| `EnableImpersonation` | Mount the impersonation endpoints + the reject-while-impersonating guards (off by default). |
+| `ImpersonationRoles` | The actor must hold one of these roles to impersonate (empty = any authenticated user in this guard). |
+| `ImpersonationTargetGuards` | Guards this guard's actors may impersonate into (`"*"` = any; include this guard's own name for same-guard; empty = cannot impersonate). |
+| `ImpersonationProtectedRoles` | Target users holding one of these roles can never be impersonated. |
+
+### Impersonation policy hook
+
+The config gate (`ImpersonationRoles` / `ImpersonationTargetGuards` /
+`ImpersonationProtectedRoles`) decides authorization declaratively. For finer rules
+a config table can't express, register a host hook — it runs **only after** the
+config gate has passed, so it can only tighten the decision:
+
+```go
+import "github.com/freshost/goravel-authkit"
+
+type myPolicy struct{}
+
+func (myPolicy) CanImpersonate(ctx context.Context, actor authkit.Principal, targetGuard string, target authkit.Principal) (bool, error) {
+    return actor.Guard == "admin" && target.Role != "owner", nil // example
+}
+
+// Once at boot:
+authkit.RegisterImpersonationPolicy(myPolicy{})
+```
+
+- **`authkit.RegisterImpersonationPolicy(p authkit.Impersonator)`** registers the
+  hook process-wide (call once at boot). When none is registered, the config gate
+  alone decides.
+- **`authkit.Impersonator`** is the one-method interface
+  `CanImpersonate(ctx, actor, targetGuard, target) (bool, error)` — return `false`
+  to deny.
+- **`authkit.Principal`** identifies one party in the decision:
+  `{ Guard string; UserID uuid.UUID; Email string; Role string }`.
 
 ### Guarding the host's own routes
 

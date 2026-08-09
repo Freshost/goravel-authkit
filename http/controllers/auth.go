@@ -56,7 +56,7 @@ func (c *AuthController) Login(ctx contractshttp.Context) contractshttp.Response
 		return c.badRequest(ctx)
 	}
 
-	user, err := c.auth.Authenticate(ctx.Request().Origin().Context(), req.Email, req.Password)
+	user, err := c.auth.Authenticate(ctx.Context(), req.Email, req.Password)
 	if err != nil {
 		c.writeAuditAttempt(ctx, req.Email, "auth.login_failed")
 		return c.mapServiceError(ctx, err)
@@ -109,7 +109,7 @@ func completeLogin(ctx contractshttp.Context, guard, rememberCookieName string, 
 		sess.Forget(helpers.RememberIntentKey(guard))
 	}
 	if remember != nil && wantRemember {
-		if value, err := remember.Issue(ctx.Request().Origin().Context(), user.ID); err != nil {
+		if value, err := remember.Issue(ctx.Context(), user.ID); err != nil {
 			facades.Log().Errorf("auth: issue remember token: %v", err)
 		} else {
 			helpers.SetRememberCookie(ctx, rememberCookieName, value, remember.TTL())
@@ -122,11 +122,11 @@ func completeLogin(ctx contractshttp.Context, guard, rememberCookieName string, 
 			// guard's login on this shared cookie). Drop any prior token's row
 			// (re-login) and issue a fresh one into the session.
 			if old := helpers.SessionTrackingToken(ctx, guard); old != "" {
-				_ = sessions.Forget(ctx.Request().Origin().Context(), old)
+				_ = sessions.Forget(ctx.Context(), old)
 			}
 			token := helpers.NewSessionToken()
 			sess.Put(helpers.SessionTrackingTokenKey(guard), token)
-			if err := sessions.Track(ctx.Request().Origin().Context(), token, user.ID, ctx.Request().Ip(), ctx.Request().Header("User-Agent", "")); err != nil {
+			if err := sessions.Track(ctx.Context(), token, user.ID, ctx.Request().Ip(), ctx.Request().Header("User-Agent", "")); err != nil {
 				facades.Log().Errorf("auth: track session: %v", err)
 			}
 		}
@@ -134,7 +134,7 @@ func completeLogin(ctx contractshttp.Context, guard, rememberCookieName string, 
 	if audit != nil {
 		id := user.ID
 		rid := id.String()
-		if err := audit.Log(ctx.Request().Origin().Context(), services.AuditEntry{
+		if err := audit.Log(ctx.Context(), services.AuditEntry{
 			ActorID: &id, ActorEmail: user.Email, Action: "auth.login", ResourceType: "user", ResourceID: &rid, IP: ctx.Request().Ip(),
 		}); err != nil {
 			facades.Log().Errorf("audit auth.login: %v", err)
@@ -148,7 +148,7 @@ func completeLogin(ctx contractshttp.Context, guard, rememberCookieName string, 
 func (c *AuthController) Logout(ctx contractshttp.Context) contractshttp.Response {
 	// Best-effort load of the current user (for the audit row) from the instance's
 	// table; the id was injected by Authenticated.
-	user, _ := c.auth.Me(ctx.Request().Origin().Context(), helpers.AuthUserID(ctx))
+	user, _ := c.auth.Me(ctx.Context(), helpers.AuthUserID(ctx))
 
 	// Capture this session's tracking token before logout, to drop its row.
 	trackingToken := helpers.SessionTrackingToken(ctx, c.guard)
@@ -161,7 +161,7 @@ func (c *AuthController) Logout(ctx contractshttp.Context) contractshttp.Respons
 		sess.Forget(helpers.SessionTrackingTokenKey(c.guard))
 	}
 	if c.sessions != nil {
-		if err := c.sessions.Forget(ctx.Request().Origin().Context(), trackingToken); err != nil {
+		if err := c.sessions.Forget(ctx.Context(), trackingToken); err != nil {
 			facades.Log().Errorf("auth: forget session: %v", err)
 		}
 	}
@@ -169,7 +169,7 @@ func (c *AuthController) Logout(ctx contractshttp.Context) contractshttp.Respons
 	// Drop the persistent remember token (this device) so it can't re-login.
 	if c.remember != nil {
 		if cookie := helpers.ReadRememberCookie(ctx, c.rememberCookieName); cookie != "" {
-			if err := c.remember.Revoke(ctx.Request().Origin().Context(), cookie); err != nil {
+			if err := c.remember.Revoke(ctx.Context(), cookie); err != nil {
 				facades.Log().Errorf("auth: revoke remember token: %v", err)
 			}
 		}
@@ -182,13 +182,17 @@ func (c *AuthController) Logout(ctx contractshttp.Context) contractshttp.Respons
 
 // Me returns the currently authenticated user. Handles GET {prefix}/auth/me.
 func (c *AuthController) Me(ctx contractshttp.Context) contractshttp.Response {
-	user, err := c.auth.Me(ctx.Request().Origin().Context(), helpers.AuthUserID(ctx))
+	user, err := c.auth.Me(ctx.Context(), helpers.AuthUserID(ctx))
 	if err != nil {
 		return ctx.Response().Json(http.StatusUnauthorized, responses.ErrorResponse{
 			Error: "unauthorized", Message: "Authentication required",
 		})
 	}
-	return ctx.Response().Json(http.StatusOK, responses.NewUserResponse(user))
+	resp := responses.NewUserResponse(user)
+	if m, ok := helpers.Impersonator(ctx, c.guard); ok {
+		resp.ImpersonatedBy = &responses.ImpersonatorRef{Guard: m.Guard, ID: m.UserID.String(), Email: m.Email}
+	}
+	return ctx.Response().Json(http.StatusOK, resp)
 }
 
 // UpdateProfile updates the authenticated user's own name and email, handling
@@ -207,7 +211,7 @@ func (c *AuthController) UpdateProfile(ctx contractshttp.Context) contractshttp.
 		})
 	}
 
-	user, changed, err := c.auth.UpdateProfile(ctx.Request().Origin().Context(), userID, req.Email, req.Name)
+	user, changed, err := c.auth.UpdateProfile(ctx.Context(), userID, req.Email, req.Name)
 	if err != nil {
 		return c.mapServiceError(ctx, err)
 	}
@@ -231,7 +235,7 @@ func (c *AuthController) LoginHistory(ctx contractshttp.Context) contractshttp.R
 			Error: "unauthorized", Message: "Authentication required",
 		})
 	}
-	entries, err := c.audit.RecentLogins(ctx.Request().Origin().Context(), userID, 20)
+	entries, err := c.audit.RecentLogins(ctx.Context(), userID, 20)
 	if err != nil {
 		return c.internal(ctx)
 	}
@@ -254,7 +258,7 @@ func (c *AuthController) ChangePassword(ctx contractshttp.Context) contractshttp
 		})
 	}
 
-	changedAt, err := c.auth.ChangePassword(ctx.Request().Origin().Context(), userID, req.CurrentPassword, req.NewPassword)
+	changedAt, err := c.auth.ChangePassword(ctx.Context(), userID, req.CurrentPassword, req.NewPassword)
 	if err != nil {
 		return c.mapServiceError(ctx, err)
 	}
@@ -269,7 +273,7 @@ func (c *AuthController) ChangePassword(ctx contractshttp.Context) contractshttp
 	// remember tokens too (including this device's) so a leaked cookie can't
 	// outlive the password. This session itself stays valid via the re-stamp.
 	if c.remember != nil {
-		if err := c.remember.RevokeAllForUser(ctx.Request().Origin().Context(), userID); err != nil {
+		if err := c.remember.RevokeAllForUser(ctx.Context(), userID); err != nil {
 			facades.Log().Errorf("auth: revoke remember tokens: %v", err)
 		}
 		helpers.ClearRememberCookie(ctx, c.rememberCookieName)
@@ -277,7 +281,7 @@ func (c *AuthController) ChangePassword(ctx contractshttp.Context) contractshttp
 	// Drop the tracking rows for every other session (this one stays).
 	if c.sessions != nil {
 		currentToken := helpers.SessionTrackingToken(ctx, c.guard)
-		if err := c.sessions.TerminateOthers(ctx.Request().Origin().Context(), userID, currentToken); err != nil {
+		if err := c.sessions.TerminateOthers(ctx.Context(), userID, currentToken); err != nil {
 			facades.Log().Errorf("auth: terminate other sessions: %v", err)
 		}
 	}
@@ -341,7 +345,7 @@ func (c *AuthController) writeAuditAttempt(ctx contractshttp.Context, email, act
 	if c.audit == nil {
 		return
 	}
-	if err := c.audit.Log(ctx.Request().Origin().Context(), services.AuditEntry{
+	if err := c.audit.Log(ctx.Context(), services.AuditEntry{
 		Action:       action,
 		ResourceType: "user",
 		Metadata:     map[string]any{"email": email},
@@ -356,7 +360,7 @@ func (c *AuthController) writeAuditID(ctx contractshttp.Context, actorID *uuid.U
 		return
 	}
 	rid := resourceID
-	if err := c.audit.Log(ctx.Request().Origin().Context(), services.AuditEntry{
+	if err := c.audit.Log(ctx.Context(), services.AuditEntry{
 		ActorID:      actorID,
 		Action:       action,
 		ResourceType: "user",

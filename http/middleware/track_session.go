@@ -15,26 +15,39 @@ import (
 // session was terminated remotely (or predates the feature). A DB error fails
 // open so a transient outage doesn't lock everyone out.
 func TrackSession(guard string, sessions *services.Sessions) contractshttp.Middleware {
-	return func(ctx contractshttp.Context) {
-		sess := ctx.Request().Session()
-		if sess == nil {
-			ctx.Request().Next()
-			return
-		}
-		alive, err := sessions.Touch(ctx.Request().Origin().Context(), helpers.SessionTrackingToken(ctx, guard))
-		if err != nil {
-			facades.Log().Errorf("track session: %v", err)
-			ctx.Request().Next()
-			return
-		}
-		if !alive {
-			_ = facades.Auth(ctx).Guard(guard).Logout()
-			_ = ctx.Response().Json(401, contractshttp.Json{
-				"error":   "session_terminated",
-				"message": "This session has been signed out",
-			}).Abort()
-			return
-		}
+	return &trackSessionMiddleware{guard: guard, sessions: sessions}
+}
+
+type trackSessionMiddleware struct {
+	guard    string
+	sessions *services.Sessions
+}
+
+func (middleware *trackSessionMiddleware) Handle(ctx contractshttp.Context) {
+	guard := middleware.guard
+	sessions := middleware.sessions
+	sess := ctx.Request().Session()
+	if sess == nil {
 		ctx.Request().Next()
+		return
 	}
+	alive, err := sessions.Touch(ctx.Context(), helpers.SessionTrackingToken(ctx, guard))
+	if err != nil {
+		facades.Log().Errorf("track session: %v", err)
+		ctx.Request().Next()
+		return
+	}
+	if !alive {
+		_ = facades.Auth(ctx).Guard(guard).Logout()
+		_ = ctx.Response().Json(401, contractshttp.Json{
+			"error":   "session_terminated",
+			"message": "This session has been signed out",
+		}).Abort()
+		return
+	}
+	ctx.Request().Next()
+}
+
+func (middleware *trackSessionMiddleware) Signature() string {
+	return "goravel-authkit.track-session." + middleware.guard
 }

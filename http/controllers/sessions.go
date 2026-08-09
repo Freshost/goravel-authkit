@@ -36,7 +36,7 @@ func (c *SessionsController) currentToken(ctx contractshttp.Context) string {
 // current session flagged. Handles GET {prefix}/auth/sessions.
 func (c *SessionsController) Index(ctx contractshttp.Context) contractshttp.Response {
 	userID := helpers.AuthUserID(ctx)
-	views, err := c.sessions.List(ctx.Request().Origin().Context(), userID, c.currentToken(ctx))
+	views, err := c.sessions.List(ctx.Context(), userID, c.currentToken(ctx))
 	if err != nil {
 		return c.internal(ctx)
 	}
@@ -52,7 +52,7 @@ func (c *SessionsController) Destroy(ctx contractshttp.Context) contractshttp.Re
 		return *errResp
 	}
 	userID := helpers.AuthUserID(ctx)
-	err := c.sessions.Terminate(ctx.Request().Origin().Context(), userID, id, c.currentToken(ctx))
+	err := c.sessions.Terminate(ctx.Context(), userID, id, c.currentToken(ctx))
 	switch {
 	case err == nil:
 		c.writeAudit(ctx, &userID, "auth.session_terminated", id.String())
@@ -74,7 +74,7 @@ func (c *SessionsController) Destroy(ctx contractshttp.Context) contractshttp.Re
 // one. Handles DELETE {prefix}/auth/sessions.
 func (c *SessionsController) DestroyOthers(ctx contractshttp.Context) contractshttp.Response {
 	userID := helpers.AuthUserID(ctx)
-	if err := c.sessions.TerminateOthers(ctx.Request().Origin().Context(), userID, c.currentToken(ctx)); err != nil {
+	if err := c.sessions.TerminateOthers(ctx.Context(), userID, c.currentToken(ctx)); err != nil {
 		return c.internal(ctx)
 	}
 	c.writeAudit(ctx, &userID, "auth.sessions_terminated_others", userID.String())
@@ -86,7 +86,7 @@ func (c *SessionsController) writeAudit(ctx contractshttp.Context, actorID *uuid
 		return
 	}
 	rid := resourceID
-	if err := c.audit.Log(ctx.Request().Origin().Context(), services.AuditEntry{
+	if err := c.audit.Log(ctx.Context(), services.AuditEntry{
 		ActorID:      actorID,
 		Action:       action,
 		ResourceType: "session",

@@ -128,6 +128,18 @@ func OptionsForGuard(name string) Options {
 		o.RememberLifetime = time.Duration(v) * 24 * time.Hour
 	}
 
+	// Impersonation: enabling is global (authkit.impersonation.enabled, inherited
+	// above); the gate (who/where/protected) is per guard.
+	if v := cfg.Get(base + "impersonation.roles"); v != nil {
+		o.ImpersonationRoles = toStringSlice(v)
+	}
+	if v := cfg.Get(base + "impersonation.target_guards"); v != nil {
+		o.ImpersonationTargetGuards = toStringSlice(v)
+	}
+	if v := cfg.Get(base + "impersonation.protected_roles"); v != nil {
+		o.ImpersonationProtectedRoles = toStringSlice(v)
+	}
+
 	// Per-guard feature overrides default to the global feature flag.
 	o.EnableUserManagement = cfg.GetBool(base+"features.user_management", o.EnableUserManagement)
 	o.EnableAuditLog = cfg.GetBool(base+"features.audit_log", o.EnableAuditLog)

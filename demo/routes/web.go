@@ -1,13 +1,26 @@
 package routes
 
 import (
+	"context"
+	"strings"
+
 	"github.com/goravel/framework/contracts/http"
 	"github.com/goravel/framework/contracts/route"
 
+	authkit "github.com/freshost/goravel-authkit"
 	authkitroutes "github.com/freshost/goravel-authkit/routes"
 
 	"goravel/app/facades"
 )
+
+// demoImpersonationPolicy is the optional fine-grained impersonation hook. authkit's
+// config gate (roles / target_guards / protected_roles) runs first; this only
+// tightens it. Here it refuses any target whose email carries a "+nohook" tag.
+type demoImpersonationPolicy struct{}
+
+func (demoImpersonationPolicy) CanImpersonate(_ context.Context, _ authkit.Principal, _ string, target authkit.Principal) (bool, error) {
+	return !strings.Contains(target.Email, "+nohook@"), nil
+}
 
 // Web holds the demo app's own routes plus the goravel-authkit guards.
 //
@@ -16,9 +29,9 @@ import (
 // authkit auto-registers their Goravel guards and migrations, so there is no
 // config/auth.go and no per-instance route wiring here.
 //
-// Routes are mounted HERE (in the routing callback), not in the package's
-// ServiceProvider, because routes a provider registers in Boot are discarded if
-// Goravel rebuilds the HTTP engine (which any global WithMiddleware triggers).
+// Routes are mounted HERE as Authkit's explicit integration contract. This keeps
+// dynamic guard registration visible in the host's routing callback and avoids
+// duplicate provider-side route registration.
 func Web() {
 	facades.Route().Get("/", func(ctx http.Context) http.Response {
 		return ctx.Response().Success().Json(http.Json{
@@ -27,6 +40,9 @@ func Web() {
 			"client": "/api/client/v1",
 		})
 	})
+
+	// Optional fine-grained impersonation rule (config gate still applies first).
+	authkit.RegisterImpersonationPolicy(demoImpersonationPolicy{})
 
 	authkitroutes.RegisterAll(facades.Route())
 

@@ -55,7 +55,7 @@ func (c *TwoFactorController) Challenge(ctx contractshttp.Context) contractshttp
 		return c.badRequest(ctx, "Invalid request body")
 	}
 
-	user, err := c.users.GetByID(ctx.Request().Origin().Context(), id)
+	user, err := c.users.GetByID(ctx.Context(), id)
 	if err != nil {
 		return c.unauthorized(ctx, "no pending two-factor challenge")
 	}
@@ -63,9 +63,9 @@ func (c *TwoFactorController) Challenge(ctx contractshttp.Context) contractshttp
 	var ok bool
 	switch {
 	case strings.TrimSpace(req.Code) != "":
-		ok, err = c.twoFactor.VerifyLoginCode(ctx.Request().Origin().Context(), id, req.Code)
+		ok, err = c.twoFactor.VerifyLoginCode(ctx.Context(), id, req.Code)
 	case strings.TrimSpace(req.RecoveryCode) != "":
-		ok, err = c.twoFactor.ConsumeRecoveryCode(ctx.Request().Origin().Context(), id, req.RecoveryCode)
+		ok, err = c.twoFactor.ConsumeRecoveryCode(ctx.Context(), id, req.RecoveryCode)
 	default:
 		return c.badRequest(ctx, "A code or recoveryCode is required")
 	}
@@ -94,7 +94,7 @@ func (c *TwoFactorController) Challenge(ctx contractshttp.Context) contractshttp
 // activate. Handles POST {prefix}/auth/two-factor.
 func (c *TwoFactorController) Enable(ctx contractshttp.Context) contractshttp.Response {
 	id := helpers.AuthUserID(ctx)
-	enr, err := c.twoFactor.Enable(ctx.Request().Origin().Context(), id)
+	enr, err := c.twoFactor.Enable(ctx.Context(), id)
 	if err != nil {
 		return c.mapError(ctx, err)
 	}
@@ -113,7 +113,7 @@ func (c *TwoFactorController) Confirm(ctx contractshttp.Context) contractshttp.R
 	if err := ctx.Request().Bind(&req); err != nil {
 		return c.badRequest(ctx, "Invalid request body")
 	}
-	codes, err := c.twoFactor.Confirm(ctx.Request().Origin().Context(), id, req.Code)
+	codes, err := c.twoFactor.Confirm(ctx.Context(), id, req.Code)
 	if err != nil {
 		return c.mapError(ctx, err)
 	}
@@ -131,16 +131,16 @@ func (c *TwoFactorController) Disable(ctx contractshttp.Context) contractshttp.R
 	if err := ctx.Request().Bind(&req); err != nil {
 		return c.badRequest(ctx, "Invalid request body")
 	}
-	user, err := c.users.GetByID(ctx.Request().Origin().Context(), id)
+	user, err := c.users.GetByID(ctx.Context(), id)
 	if err != nil {
 		return c.mapError(ctx, err)
 	}
 	// Re-auth: confirm the account password before removing 2FA.
-	if _, err := c.auth.Authenticate(ctx.Request().Origin().Context(), user.Email, req.Password); err != nil {
+	if _, err := c.auth.Authenticate(ctx.Context(), user.Email, req.Password); err != nil {
 		return c.unauthorized(ctx, "Password confirmation failed")
 	}
 
-	if err := c.twoFactor.Disable(ctx.Request().Origin().Context(), id); err != nil {
+	if err := c.twoFactor.Disable(ctx.Context(), id); err != nil {
 		return c.mapError(ctx, err)
 	}
 	c.writeAudit(ctx, &id, "auth.two_factor_disabled")
@@ -153,7 +153,7 @@ func (c *TwoFactorController) Disable(ctx contractshttp.Context) contractshttp.R
 // plaintext codes.
 func (c *TwoFactorController) RecoveryCodes(ctx contractshttp.Context) contractshttp.Response {
 	id := helpers.AuthUserID(ctx)
-	remaining, err := c.twoFactor.RemainingRecoveryCodes(ctx.Request().Origin().Context(), id)
+	remaining, err := c.twoFactor.RemainingRecoveryCodes(ctx.Context(), id)
 	if err != nil {
 		return c.mapError(ctx, err)
 	}
@@ -164,7 +164,7 @@ func (c *TwoFactorController) RecoveryCodes(ctx contractshttp.Context) contracts
 // set. Handles POST {prefix}/auth/two-factor/recovery-codes.
 func (c *TwoFactorController) RegenerateRecoveryCodes(ctx contractshttp.Context) contractshttp.Response {
 	id := helpers.AuthUserID(ctx)
-	codes, err := c.twoFactor.RegenerateRecoveryCodes(ctx.Request().Origin().Context(), id)
+	codes, err := c.twoFactor.RegenerateRecoveryCodes(ctx.Context(), id)
 	if err != nil {
 		return c.mapError(ctx, err)
 	}
@@ -180,7 +180,7 @@ func (c *TwoFactorController) writeAudit(ctx contractshttp.Context, actorID *uui
 	if actorID != nil {
 		rid = actorID.String()
 	}
-	if err := c.audit.Log(ctx.Request().Origin().Context(), services.AuditEntry{
+	if err := c.audit.Log(ctx.Context(), services.AuditEntry{
 		ActorID: actorID, Action: action, ResourceType: "user", ResourceID: &rid, IP: ctx.Request().Ip(),
 	}); err != nil {
 		facades.Log().Errorf("audit %s: %v", action, err)

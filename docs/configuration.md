@@ -211,3 +211,80 @@ To allow another role to manage users, add it to the list:
 New users are never silently made admins: a create with no explicit `role` gets
 the first configured non-management role (else `user`). See
 [security](security.md) for the full picture.
+
+## Impersonation
+
+Impersonation ("login as user") lets an authorized actor switch into another
+user's session — within its own guard or across guards — and back. It is
+**opt-in and fail-closed**: off by default, and a guard with no gate config
+cannot impersonate (it can still be a *target* of another guard).
+
+Two things turn it on:
+
+- **`authkit.impersonation.enabled`** — a single global switch that mounts the
+  endpoints (`POST {prefix}/auth/impersonate`, `POST {prefix}/auth/impersonate/stop`).
+- A **per-guard gate** under `authkit.guards.<name>.impersonation` (or, in a
+  single-guard app, at the top level `authkit.impersonation.*`) that decides who
+  may impersonate into which guards:
+
+| Key | Type | Meaning |
+| --- | --- | --- |
+| `roles` | []string | The actor must hold one of these roles. Empty = any authenticated user in this guard may impersonate |
+| `target_guards` | []string | Guards this guard's actors may impersonate into — `"*"` = any, specific guard names, or this guard's own name for same-guard. **Empty = this guard cannot impersonate** (fail-closed) |
+| `protected_roles` | []string | Target users holding one of these roles can never be impersonated |
+
+Cross-guard adds the target guard's session alongside the actor's (one shared
+cookie), so the actor stays signed in to its own guard and "stop" just drops the
+target session; same-guard replaces the user, and "stop" restores the actor.
+
+### Worked example (the demo)
+
+The demo enables impersonation globally and lets `admin` actors impersonate users
+in the `client` portal and in their own guard, but never another admin:
+
+```go
+facades.Config().Add("authkit", map[string]any{
+    // Global switch.
+    "impersonation": map[string]any{"enabled": true},
+
+    "guards": map[string]any{
+        "admin": map[string]any{
+            "prefix":      "/api/v1",
+            "users_table": "users",
+            // Per-guard gate: who may impersonate, into which guards, and who is off-limits.
+            "impersonation": map[string]any{
+                "roles":           []string{"admin"},           // actor must be an admin
+                "target_guards":   []string{"client", "admin"}, // client portal + same-guard
+                "protected_roles": []string{"admin"},           // never impersonate another admin
+            },
+        },
+        "client": map[string]any{
+            "prefix":      "/api/client/v1",
+            "users_table": "client_users",
+            // No "impersonation" block: the client guard cannot impersonate, but
+            // (being a target_guard above) its users can be impersonated by admin.
+        },
+    },
+})
+```
+
+In a single-guard app the same keys live at the top level:
+
+```go
+"impersonation": map[string]any{
+    "enabled":         true,
+    "roles":           []string{"admin"},
+    "target_guards":   []string{"admin"},
+    "protected_roles": []string{"admin"},
+},
+```
+
+### Optional host hook
+
+The config gate handles roles / target guards / protected roles declaratively.
+For finer rules a config table can't express (tenant scoping, relationship
+checks), register a host hook with `authkit.RegisterImpersonationPolicy(p)` where
+`p` implements `authkit.Impersonator`. It runs **only after** the config gate has
+passed, so it can only ever *tighten* the decision; when no hook is registered the
+config gate alone decides. See [API reference](api-reference.md) and
+[security](security.md) for the hook signature and security properties.

@@ -95,10 +95,10 @@ whole integration.
     config for `vendor:publish` (`app.Publishes(...)`).
   - It declares its framework dependencies via `Relationship()` (Config, Orm,
     Hash, Auth, Crypt, Schema, Route) so it boots after them.
-- **Routes are NOT mounted by the provider.** Goravel rebuilds the HTTP engine
-  when global middleware is set — which happens *after* providers boot — so any
-  routes a provider registers in `Boot` are discarded. Instead the app mounts
-  them from its own routing callback with one line:
+- **Routes are NOT mounted by the provider.** Authkit keeps route mounting an
+  explicit host integration contract so configured dynamic guards are visible in
+  the routing callback and are never registered twice. The app mounts them with
+  one line:
 
   ```go
   authkitroutes "github.com/freshost/goravel-authkit/routes"
@@ -107,8 +107,8 @@ whole integration.
   ```
 
   `RegisterAll` iterates the same `GuardOptions()` list and mounts every guard's
-  routes under its own prefix. The app must also enable session middleware
-  globally (the package is cookie-based).
+  routes under its own prefix. Authkit starts session middleware on each guard's
+  route group, so it does not require global session middleware.
 - **`setup/setup.go`** implements `package:install`: it registers the provider
   (`modify.RegisterProvider`), writes `config/authkit.go`
   (`modify.File().Overwrite()`), and injects `bcrypt rounds: 12` into

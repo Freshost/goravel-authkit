@@ -80,6 +80,21 @@ type Options struct {
 	// cookie. Two instances on one origin must differ here so their cookies don't
 	// overwrite each other. Empty falls back to the package default ("authkit_remember").
 	RememberCookieName string
+	// EnableImpersonation mounts the impersonation endpoints (POST /auth/impersonate
+	// and /auth/impersonate/stop) and the reject-while-impersonating guards. Off by
+	// default. Who may impersonate whom is decided by the config gate below plus an
+	// optional host hook (authkit.RegisterImpersonationPolicy).
+	EnableImpersonation bool
+	// ImpersonationRoles: the actor must hold one of these roles to impersonate
+	// (empty = any authenticated user in this guard).
+	ImpersonationRoles []string
+	// ImpersonationTargetGuards: the guards this guard's actors may impersonate into
+	// ("*" = any; include this guard's own name for same-guard). Empty = this guard
+	// cannot impersonate (it may still be a target of another guard).
+	ImpersonationTargetGuards []string
+	// ImpersonationProtectedRoles: target users holding one of these roles can never
+	// be impersonated.
+	ImpersonationProtectedRoles []string
 }
 
 // DefaultOptions returns the baked-in defaults (matches the published config).
@@ -155,6 +170,10 @@ func OptionsFromConfig() Options {
 	o.RememberTokensTable = cfg.GetString("authkit.tables.remember_tokens")
 	o.SessionsTable = cfg.GetString("authkit.tables.sessions")
 	o.RememberCookieName = cfg.GetString("authkit.remember.cookie_name")
+	o.EnableImpersonation = cfg.GetBool("authkit.impersonation.enabled", o.EnableImpersonation)
+	o.ImpersonationRoles = toStringSlice(cfg.Get("authkit.impersonation.roles"))
+	o.ImpersonationTargetGuards = toStringSlice(cfg.Get("authkit.impersonation.target_guards"))
+	o.ImpersonationProtectedRoles = toStringSlice(cfg.Get("authkit.impersonation.protected_roles"))
 	return o
 }
 
@@ -238,7 +257,22 @@ func Register(router route.Router, opts Options) {
 		TwoFactor:      opts.EnableTwoFactor,
 		AuditLog:       opts.EnableAuditLog,
 		Sessions:       opts.EnableSessions,
+		Impersonation:  opts.EnableImpersonation,
 	})
+
+	// Impersonation: build the controller with a guard -> users-table map (so a
+	// target in ANY configured guard can be loaded) and this guard's authorization
+	// gate. The gate is fail-closed: with no target_guards, this guard cannot
+	// impersonate (it may still be a target of another guard).
+	var impersonationCtrl *controllers.ImpersonationController
+	if opts.EnableImpersonation {
+		guardTables := map[string]string{opts.Guard: opts.UsersTable}
+		for _, g := range GuardOptions() {
+			guardTables[g.Guard] = g.UsersTable
+		}
+		gate := services.NewImpersonation(opts.ImpersonationRoles, opts.ImpersonationTargetGuards, opts.ImpersonationProtectedRoles)
+		impersonationCtrl = controllers.NewImpersonationController(opts.Guard, guardTables, gate, auditSvc)
+	}
 
 	// All package routes live under a single owned namespace ({prefix}/auth/*) so
 	// they never collide with the host app's own routes (its /meta, /users, …).
@@ -248,9 +282,7 @@ func Register(router route.Router, opts Options) {
 	//
 	// StartSession is mounted here (not globally) so the package owns the session
 	// for its whole /auth branch — login, the 2FA challenge and the guarded routes
-	// all need it. Carrying it on the group instead of a global WithMiddleware
-	// keeps the host app from rebuilding the HTTP engine (which would drop routes
-	// registered in a provider's Boot), and avoids starting a session on the app's
+	// all need it. Carrying it on the group avoids starting a session on the app's
 	// stateless endpoints. It is idempotent, so a leftover global StartSession is
 	// harmless.
 	authGroup := router.Prefix(opts.Prefix + "/auth").
@@ -286,7 +318,12 @@ func Register(router route.Router, opts Options) {
 			g.Post("/logout", authCtrl.Logout)
 			g.Get("/me", authCtrl.Me)
 			g.Put("/me", authCtrl.UpdateProfile)
-			g.Put("/password", authCtrl.ChangePassword)
+			if opts.EnableImpersonation {
+				// An actor acting "as" a user must not change that user's password.
+				g.Middleware(middleware.RejectWhileImpersonating(opts.Guard)).Put("/password", authCtrl.ChangePassword)
+			} else {
+				g.Put("/password", authCtrl.ChangePassword)
+			}
 
 			if auditSvc != nil {
 				g.Get("/logins", authCtrl.LoginHistory)
@@ -305,11 +342,24 @@ func Register(router route.Router, opts Options) {
 				g.Post("/two-factor/recovery-codes", twoFactorCtrl.RegenerateRecoveryCodes)
 			}
 
+			if opts.EnableImpersonation {
+				// Start is blocked while already impersonating (no nesting); stop must
+				// stay reachable from the impersonated session, so it is left ungated.
+				g.Middleware(middleware.RejectWhileImpersonating(opts.Guard)).Post("/impersonate", impersonationCtrl.Start)
+				g.Post("/impersonate/stop", impersonationCtrl.Stop)
+			}
+
 			if opts.EnableUserManagement {
 				// Fail-closed: the whole /users block (reads and writes) is always
 				// mounted behind the RequireRole gate using the effective management
 				// roles, so no /users endpoint is reachable by a non-admin.
-				g.Middleware(middleware.RequireRole(opts.Guard, usersRepo, managementRoles...)).Group(func(ur route.Router) {
+				userMw := make([]contractshttp.Middleware, 0, 2)
+				if opts.EnableImpersonation {
+					// An actor acting "as" a user must not manage users as them.
+					userMw = append(userMw, middleware.RejectWhileImpersonating(opts.Guard))
+				}
+				userMw = append(userMw, middleware.RequireRole(opts.Guard, usersRepo, managementRoles...))
+				g.Middleware(userMw...).Group(func(ur route.Router) {
 					ur.Get("/users", usersCtrl.Index)
 					ur.Post("/users", usersCtrl.Store)
 					ur.Get("/users/{id}", usersCtrl.Show)

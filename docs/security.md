@@ -109,6 +109,40 @@ When `authkit.features.two_factor` is on, users can enroll in TOTP
 - **Disabling 2FA requires re-authentication** with the account password, so a
   stolen session alone cannot silently remove 2FA.
 
+## Impersonation
+
+When `authkit.impersonation.enabled` is on, an authorized actor can switch into
+another user's session ("login as user") — within its own guard or across guards.
+Because this **bypasses the target's password by design**, authorization is the
+*only* gate, so it must be strong and the activity must be audited.
+
+- **Fail-closed gate.** Impersonation is off by default. A per-actor-guard config
+  gate decides who may impersonate whom: `roles` (the actor must hold one — empty =
+  any authenticated user in this guard), `target_guards` (which guards may be
+  targeted; **empty = this guard cannot impersonate at all**), and `protected_roles`
+  (targets holding one of these can never be impersonated). A guard with no gate
+  config cannot impersonate (it can still be a target of another guard).
+- **Optional host hook.** `authkit.RegisterImpersonationPolicy` registers an
+  `authkit.Impersonator` for finer rules (tenant scoping, relationship checks). It
+  runs **only after** the config gate has passed, so it can only ever *tighten* the
+  decision — never loosen it. With no hook, the config gate alone decides.
+- **Audited.** Every switch and exit is written to the audit log
+  (`auth.impersonation_started` / `auth.impersonation_stopped`, with actor/target
+  ids and both guards in the metadata).
+- **Ephemeral — no remember cookie.** A switch issues **no** persistent
+  remember-me cookie and no active-session tracking token, so it cannot be restored
+  from a stored cookie; it lives only for the current session and ends on "stop".
+- **Target must be live.** The target user must exist and must not be disabled;
+  `protected_roles` blocks impersonating privileged accounts.
+- **Reject while impersonating.** While a switch is active, the guard blocks the
+  credential- and privilege-sensitive routes — password change
+  (`PUT /auth/password`), user management (`/auth/users*`) and a nested
+  impersonation — with `403 impersonation_forbidden`, so an actor acting "as" a user
+  cannot change that user's password, manage users as them, or chain switches.
+- **Session-id regeneration** happens on both the switch and the stop
+  (anti-fixation), the same as login. `GET /auth/me` exposes `impersonatedBy` while
+  impersonating so a UI can show a banner and an exit control.
+
 ## Multi-guard session isolation
 
 With multiple guards the domains share one session cookie on a single origin
@@ -156,6 +190,7 @@ When `EnableAuditLog` is on, the package writes to the guard's audit table
 | `auth.two_factor_enrolled` / `auth.two_factor_confirmed` | 2FA enrollment |
 | `auth.two_factor_disabled` / `auth.two_factor_recovery_regenerated` | 2FA changes |
 | `auth.two_factor_failed` | Failed 2FA challenge |
+| `auth.impersonation_started` / `auth.impersonation_stopped` | An actor switched into / out of another user's session |
 
 Audit writes are best-effort: a write failure is logged but does not fail the
 parent request.

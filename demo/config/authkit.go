@@ -35,6 +35,10 @@ func init() {
 		"user_management_roles": []string{"admin"},
 		"roles":                 []string{"admin", "user"},
 
+		// Impersonation is enabled globally; the per-guard "impersonation" block (see
+		// the admin guard below) gates who may impersonate into which guards.
+		"impersonation": map[string]any{"enabled": true},
+
 		// Two guards (independent auth domains), declared in one place. authkit
 		// auto-registers a Goravel session guard and the migrations for each guard's
 		// tables, and routes.RegisterAll mounts them — so config/auth.go and
@@ -53,6 +57,13 @@ func init() {
 				"remember_tokens_table": "auth_remember_tokens",
 				"sessions_table":        "auth_sessions",
 				"remember_cookie_name":  "authkit_remember",
+				// Admins may impersonate users in the client portal and in their own
+				// guard, but never another admin (protected_roles).
+				"impersonation": map[string]any{
+					"roles":           []string{"admin"},
+					"target_guards":   []string{"client", "admin"},
+					"protected_roles": []string{"admin"},
+				},
 			},
 			"client": map[string]any{
 				"prefix":      "/api/client/v1",

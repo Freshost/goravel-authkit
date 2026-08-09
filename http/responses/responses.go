@@ -124,6 +124,7 @@ type MetaFeatures struct {
 	TwoFactor      bool `json:"twoFactor" example:"true"`
 	AuditLog       bool `json:"auditLog" example:"true"`
 	Sessions       bool `json:"sessions" example:"true"`
+	Impersonation  bool `json:"impersonation" example:"false"`
 }
 
 // UserResponse is the public view of a user (never includes the password hash).
@@ -135,6 +136,24 @@ type UserResponse struct {
 	TwoFactorEnabled bool   `json:"twoFactorEnabled" example:"false"`
 	Disabled         bool   `json:"disabled" example:"false"`
 	CreatedAt        string `json:"createdAt" example:"2026-01-01T00:00:00Z"`
+	// ImpersonatedBy is set only while this user is being impersonated, so the UI
+	// can show a banner and an "exit impersonation" action.
+	ImpersonatedBy *ImpersonatorRef `json:"impersonatedBy,omitempty"`
+}
+
+// ImpersonatorRef identifies the actor currently impersonating the user.
+type ImpersonatorRef struct {
+	Guard string `json:"guard"`
+	ID    string `json:"id"`
+	Email string `json:"email"`
+}
+
+// ImpersonateRequest is the body of POST /auth/impersonate.
+type ImpersonateRequest struct {
+	// Guard is the target user's guard (empty = the actor's own guard, i.e. same-guard).
+	Guard string `json:"guard"`
+	// UserID is the target user's id.
+	UserID string `json:"userId"`
 }
 
 // NewUserResponse maps a User model to its public DTO.

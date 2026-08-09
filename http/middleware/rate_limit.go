@@ -25,23 +25,38 @@ type rateLimiter struct {
 // RateLimitAuth limits the login endpoint to maxAttempts per window per IP.
 // Recommended: 5/min. Pass a large maxAttempts in local/dev env to relax it.
 //
-// Each call builds its OWN limiter, captured in the returned middleware closure,
+// Each call builds its OWN limiter, stored on the returned middleware instance,
 // so two authkit instances mounted in one app never share a single IP-keyed
 // bucket (a client login failure must not count against the admin limit).
 func RateLimitAuth(maxAttempts int, window time.Duration) contractshttp.Middleware {
-	limiter := &rateLimiter{requests: make(map[string][]time.Time)}
-	return func(ctx contractshttp.Context) {
-		ip := ctx.Request().Ip()
-		if limiter.isLimited(ip, maxAttempts, window) {
-			_ = ctx.Response().Json(nethttp.StatusTooManyRequests, contractshttp.Json{
-				"error":   "rate_limited",
-				"message": "Too many attempts. Please try again later.",
-			}).Abort()
-			return
-		}
-		limiter.record(ip, window)
-		ctx.Request().Next()
+	return &rateLimitAuthMiddleware{
+		limiter:     &rateLimiter{requests: make(map[string][]time.Time)},
+		maxAttempts: maxAttempts,
+		window:      window,
 	}
+}
+
+type rateLimitAuthMiddleware struct {
+	limiter     *rateLimiter
+	maxAttempts int
+	window      time.Duration
+}
+
+func (middleware *rateLimitAuthMiddleware) Handle(ctx contractshttp.Context) {
+	ip := ctx.Request().Ip()
+	if middleware.limiter.isLimited(ip, middleware.maxAttempts, middleware.window) {
+		_ = ctx.Response().Json(nethttp.StatusTooManyRequests, contractshttp.Json{
+			"error":   "rate_limited",
+			"message": "Too many attempts. Please try again later.",
+		}).Abort()
+		return
+	}
+	middleware.limiter.record(ip, middleware.window)
+	ctx.Request().Next()
+}
+
+func (middleware *rateLimitAuthMiddleware) Signature() string {
+	return "goravel-authkit.rate-limit-auth"
 }
 
 func (rl *rateLimiter) isLimited(key string, maxAttempts int, window time.Duration) bool {

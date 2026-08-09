@@ -1,9 +1,13 @@
 # Installation
 
 `goravel-authkit` is a backend Go module for [Goravel](https://www.goravel.dev)
-apps (tested against Goravel **v1.17.x**, Go **1.25+**, PostgreSQL). It owns the
+apps (tested against Goravel **v1.18.x**, Go **1.25+**, PostgreSQL). It owns the
 `users` and `audit_logs` tables (plus a guard's remember-token and session
 tables) — or, in multi-guard mode, the per-guard tables you declare.
+
+Goravel 1.18 changed `http.Middleware` from a function to an interface. Normal
+Authkit factory usage through `router.Middleware(...)` is unchanged; code that
+manually invoked a returned middleware value must use `middleware.Handle(ctx)`.
 
 ## Quick install (fresh app)
 
@@ -87,17 +91,16 @@ entry points are still there: `Register(router, authkitroutes.Options{...})`,
 `OptionsForGuard(name)` (one guard's resolved options) and `GuardOptions()` (the
 slice for all guards).
 
-Registering from the routing callback (rather than the provider's `Boot`) is the
-robust pattern: any global `WithMiddleware` an app adds rebuilds the HTTP engine
-*after* providers boot, discarding routes a provider registered in `Boot`. The
-routing callback runs after that rebuild, so the routes survive.
+Registering from the routing callback (rather than the provider's `Boot`) is
+Authkit's stable explicit mount contract: configured dynamic guards stay visible
+in host routing and existing integrations avoid duplicate registration.
 
 > **Sessions on your own routes.** If your app has its *own* (non-authkit)
 > session-backed routes, run `StartSession` per-group on those routes (or set it
 > globally with `WithMiddleware`). A global `StartSession` is also harmless to
 > the package — `StartSession` is idempotent, so the package's group-level start
 > is simply skipped when a session already exists. Prefer per-group over global
-> to avoid the engine rebuild and to keep sessions off stateless endpoints
+> to keep sessions off stateless endpoints
 > (bearer/machine APIs, health checks).
 
 After that you have `POST /api/v1/auth/login`, `/auth/me`, `/auth/logout`,

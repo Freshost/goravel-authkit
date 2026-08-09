@@ -6,6 +6,47 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 While the package is pre-1.0, minor versions may contain breaking changes.
 
+## [Unreleased]
+
+## [0.3.0] - 2026-08-09
+
+### Changed
+
+- **Goravel 1.18 is now required.** Authkit's HTTP middleware implementations
+  adopt Goravel 1.18's `Handle` / `Signature` interface. Consumer calls to the
+  exported middleware factories are unchanged. Consumers that manually invoked a
+  returned middleware value as a function must call `middleware.Handle(ctx)`;
+  the package is no longer source-compatible with Goravel 1.17.
+
+### Added
+
+- **User impersonation ("login as user").** An authorized actor can switch into
+  another user's session and back — within its own guard or across guards — so an
+  admin can reproduce what a customer sees. Opt-in and fail-closed (off by default).
+  - Endpoints (per guard, behind the session guard): `POST {prefix}/auth/impersonate`
+    (`{ "guard": "<target guard>", "userId": "<uuid>" }`; `guard` empty = same guard)
+    and `POST {prefix}/auth/impersonate/stop`.
+  - **Universal:** same-guard and cross-guard. A cross-guard switch adds the target
+    guard's session alongside the actor's (one shared cookie), so the actor stays
+    signed in to its own guard and "stop" just drops the target session; a same-guard
+    switch replaces the user and "stop" restores the original.
+  - **Layered authorization** (fail-closed): a declarative config gate per actor
+    guard — `authkit.guards.<g>.impersonation.{roles, target_guards, protected_roles}`
+    plus the global `authkit.impersonation.enabled` — and an optional host hook
+    `authkit.RegisterImpersonationPolicy` (the `authkit.Impersonator` interface over
+    `authkit.Principal`) that runs only after the gate passes, so it can only tighten
+    the decision. `target_guards` accepts `"*"`, specific guard names, or the actor's
+    own guard for same-guard.
+  - **Security:** audit entries (`auth.impersonation_started` / `_stopped`);
+    session-id regeneration on switch and stop; **no remember cookie** is issued
+    (impersonation is ephemeral); the target must exist and not be disabled;
+    `protected_roles` blocks impersonating privileged targets; a
+    reject-while-impersonating guard blocks password change, user management and
+    nested impersonation during a switch; `/auth/me` exposes `impersonatedBy`
+    (for a UI banner + exit) and `/auth/meta` exposes `features.impersonation`.
+  - New `routes.Options` fields: `EnableImpersonation`, `ImpersonationRoles`,
+    `ImpersonationTargetGuards`, `ImpersonationProtectedRoles`.
+
 ## [0.2.0] - 2026-06-24
 
 Multi-guard (multi-instance) support: run several fully independent authentication
@@ -103,5 +144,7 @@ set — in one Goravel app, while a single-domain app keeps working unchanged.
 - Initial release: session-based auth, user management, TOTP two-factor, audit log,
   remember-me, active-session tracking — single guard.
 
+[Unreleased]: https://github.com/Freshost/goravel-authkit/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Freshost/goravel-authkit/releases/tag/v0.3.0
 [0.2.0]: https://github.com/Freshost/goravel-authkit/releases/tag/v0.2.0
 [0.1.0]: https://github.com/Freshost/goravel-authkit/releases/tag/v0.1.0

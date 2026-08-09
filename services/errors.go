@@ -23,6 +23,9 @@ var (
 	ErrNotFound = errors.New("not found")
 	// ErrUnauthorized is returned when the authenticated user no longer exists.
 	ErrUnauthorized = errors.New("unauthorized")
+	// ErrForbidden is returned when an authenticated actor is not permitted to
+	// perform an action (e.g. an impersonation the authorization gate denies).
+	ErrForbidden = errors.New("forbidden")
 	// ErrAlreadyExists is returned when an email collides with an existing user.
 	ErrAlreadyExists = errors.New("already exists")
 	// ErrLastAdmin is returned when an operation (delete, disable, or demote)

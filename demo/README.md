@@ -77,9 +77,9 @@ reading the current user with `authkitroutes.AuthUserID(ctx)` — so only a logg
 client (not an admin) can reach it. Use `ProtectRole("client", "admin")` to also
 require a role.
 
-Routes are registered in the routing callback (not in the provider) because
-Goravel rebuilds the HTTP engine when global middleware is set — see the package
-[installation docs](../docs/installation.md).
+Routes are registered explicitly in the routing callback (not in the provider),
+which keeps dynamic guard wiring visible and prevents duplicate registration. See
+the package [installation docs](../docs/installation.md).
 
 ## Frontend
 

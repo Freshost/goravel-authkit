@@ -16,12 +16,10 @@
 //	// inside foundation.Setup().WithRouting(func(){ ... })
 //	authkitroutes.RegisterAll(facades.Route())
 //
-// Routes are registered app-side (not in the provider) because Goravel rebuilds
-// the HTTP engine when global middleware is set — which happens AFTER providers
-// boot — so any routes a provider registers in Boot are discarded. The routing
-// callback runs after that rebuild, so routes registered there survive. The
-// package starts its own session on each guard's /auth group, so no global
-// session middleware is required.
+// Routes remain an explicit app-side mount so configured dynamic guards are
+// registered from the host's routing callback and existing integrations keep a
+// stable, duplicate-free contract. The package starts its own session on each
+// guard's /auth group, so no global session middleware is required.
 //
 // See the README and docs/installation.md.
 package authkit
@@ -56,8 +54,7 @@ var App foundation.Application
 
 // ServiceProvider registers the goravel-authkit migrations, commands, and
 // publishable config. HTTP routes are mounted app-side via routes.Register (see
-// the package doc) because provider-registered routes do not survive the engine
-// rebuild that global middleware triggers.
+// the package doc), preserving Authkit's explicit dynamic-route contract.
 type ServiceProvider struct{}
 
 // Relationship declares the framework services the package depends on so it

@@ -27,7 +27,7 @@ func NewUsersController(users *services.Users, audit *services.Audit) *UsersCont
 
 // Index lists all users. Handles GET {prefix}/auth/users.
 func (c *UsersController) Index(ctx contractshttp.Context) contractshttp.Response {
-	users, err := c.users.List(ctx.Request().Origin().Context())
+	users, err := c.users.List(ctx.Context())
 	if err != nil {
 		return c.mapError(ctx, err)
 	}
@@ -40,7 +40,7 @@ func (c *UsersController) Show(ctx contractshttp.Context) contractshttp.Response
 	if errResp != nil {
 		return *errResp
 	}
-	u, err := c.users.GetByID(ctx.Request().Origin().Context(), id)
+	u, err := c.users.GetByID(ctx.Context(), id)
 	if err != nil {
 		return c.mapError(ctx, err)
 	}
@@ -54,7 +54,7 @@ func (c *UsersController) Store(ctx contractshttp.Context) contractshttp.Respons
 	if err := ctx.Request().Bind(&req); err != nil {
 		return c.badRequest(ctx)
 	}
-	u, err := c.users.Create(ctx.Request().Origin().Context(), req.Email, req.Name, req.Password, req.Role)
+	u, err := c.users.Create(ctx.Context(), req.Email, req.Name, req.Password, req.Role)
 	if err != nil {
 		return c.mapError(ctx, err)
 	}
@@ -80,7 +80,7 @@ func (c *UsersController) Update(ctx contractshttp.Context) contractshttp.Respon
 			Error: "self_disable", Message: "You cannot disable your own account",
 		})
 	}
-	u, err := c.users.Update(ctx.Request().Origin().Context(), id, req.Email, req.Name, req.Role, req.Disabled, helpers.AuthUserID(ctx))
+	u, err := c.users.Update(ctx.Context(), id, req.Email, req.Name, req.Role, req.Disabled, helpers.AuthUserID(ctx))
 	if err != nil {
 		return c.mapError(ctx, err)
 	}
@@ -100,7 +100,7 @@ func (c *UsersController) Destroy(ctx contractshttp.Context) contractshttp.Respo
 			Error: "self_delete", Message: "You cannot delete your own account",
 		})
 	}
-	if err := c.users.Delete(ctx.Request().Origin().Context(), id); err != nil {
+	if err := c.users.Delete(ctx.Context(), id); err != nil {
 		return c.mapError(ctx, err)
 	}
 	c.writeAudit(ctx, "user.delete", id)
@@ -118,7 +118,7 @@ func (c *UsersController) SetPassword(ctx contractshttp.Context) contractshttp.R
 	if err := ctx.Request().Bind(&req); err != nil {
 		return c.badRequest(ctx)
 	}
-	u, err := c.users.SetPassword(ctx.Request().Origin().Context(), id, req.Password)
+	u, err := c.users.SetPassword(ctx.Context(), id, req.Password)
 	if err != nil {
 		return c.mapError(ctx, err)
 	}
@@ -135,7 +135,7 @@ func (c *UsersController) writeAudit(ctx contractshttp.Context, action string, r
 		actorID = &id
 	}
 	rid := resourceID.String()
-	if err := c.audit.Log(ctx.Request().Origin().Context(), services.AuditEntry{
+	if err := c.audit.Log(ctx.Context(), services.AuditEntry{
 		ActorID:      actorID,
 		Action:       action,
 		ResourceType: "user",
