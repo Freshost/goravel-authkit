@@ -130,15 +130,21 @@ func (r *ServiceProvider) Boot(app foundation.Application) {
 					AuditTable:          o.AuditTable,
 					RememberTokensTable: o.RememberTokensTable,
 					SessionsTable:       o.SessionsTable,
+					APITokensTable:      o.APITokensTable,
 				}))
 			}
 		}
 	}
 
 	// Artisan commands.
+	tokenTables := make([]string, 0, len(guards))
+	for _, o := range guards {
+		tokenTables = append(tokenTables, o.APITokensTable)
+	}
 	app.Commands([]console.Command{
 		commands.NewCreateUser(),
 		commands.NewPruneRememberTokens(),
+		commands.NewPruneAPITokens(tokenTables...),
 	})
 
 	// Publishable config — `./artisan vendor:publish --tag=authkit` writes

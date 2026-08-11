@@ -113,9 +113,18 @@ type RecoveryCodesStatusResponse struct {
 // hardcoding or duplicating it. Served unauthenticated at {prefix}/meta.
 type MetaResponse struct {
 	// Roles are the assignable role values (from authkit.roles). Empty = any.
-	Roles             []string     `json:"roles"`
-	MinPasswordLength int          `json:"minPasswordLength" example:"8"`
-	Features          MetaFeatures `json:"features"`
+	Roles             []string      `json:"roles"`
+	MinPasswordLength int           `json:"minPasswordLength" example:"8"`
+	Features          MetaFeatures  `json:"features"`
+	APITokens         *APITokenMeta `json:"apiTokens,omitempty"`
+}
+
+// APITokenMeta describes the non-sensitive token policy used by account UIs.
+type APITokenMeta struct {
+	AllowedScopes       []string `json:"allowedScopes"`
+	DefaultLifetimeDays int      `json:"defaultLifetimeDays"`
+	MaxLifetimeDays     int      `json:"maxLifetimeDays"`
+	MaxPerUser          int      `json:"maxPerUser"`
 }
 
 // MetaFeatures mirrors the authkit.features toggles for the frontend.
@@ -125,6 +134,47 @@ type MetaFeatures struct {
 	AuditLog       bool `json:"auditLog" example:"true"`
 	Sessions       bool `json:"sessions" example:"true"`
 	Impersonation  bool `json:"impersonation" example:"false"`
+	APITokens      bool `json:"apiTokens" example:"false"`
+}
+
+// CreateAPITokenRequest is the POST /auth/api-tokens body. The password and,
+// when enabled for the user, a live TOTP code re-authenticate this sensitive
+// operation. Expiration is mandatory and must be RFC3339.
+type CreateAPITokenRequest struct {
+	Name          string   `json:"name" binding:"required"`
+	ExpiresAt     string   `json:"expiresAt" binding:"required"`
+	Scopes        []string `json:"scopes"`
+	Password      string   `json:"password" binding:"required"`
+	TwoFactorCode string   `json:"twoFactorCode"`
+}
+
+// APITokenResponse deliberately omits the selector and validator hash.
+type APITokenResponse struct {
+	ID         string   `json:"id"`
+	Name       string   `json:"name"`
+	Scopes     []string `json:"scopes"`
+	ExpiresAt  string   `json:"expiresAt"`
+	LastUsedAt *string  `json:"lastUsedAt"`
+	CreatedAt  string   `json:"createdAt"`
+}
+
+// IssuedAPITokenResponse contains plaintext exactly once at creation time.
+type IssuedAPITokenResponse struct {
+	APITokenResponse
+	Token string `json:"token"`
+}
+
+func NewAPITokenResponse(token *models.APIToken) APITokenResponse {
+	var lastUsedAt *string
+	if token.LastUsedAt != nil {
+		formatted := token.LastUsedAt.UTC().Format(time.RFC3339)
+		lastUsedAt = &formatted
+	}
+	return APITokenResponse{
+		ID: token.ID.String(), Name: token.Name, Scopes: []string(token.Scopes),
+		ExpiresAt: token.ExpiresAt.UTC().Format(time.RFC3339), LastUsedAt: lastUsedAt,
+		CreatedAt: token.CreatedAt.UTC().Format(time.RFC3339),
+	}
 }
 
 // UserResponse is the public view of a user (never includes the password hash).

@@ -41,7 +41,7 @@ func NewAuth(repo repositories.UsersRepository, hasher Hasher, minPwLen int) *Au
 // ErrInvalidCredentials is returned for both unknown-email and wrong-password.
 func (s *Auth) Authenticate(ctx context.Context, email, password string) (*models.User, error) {
 	email = normalizeEmail(email)
-	if email == "" || password == "" {
+	if validateEmail(email) != nil || password == "" {
 		return nil, ErrInvalidCredentials
 	}
 
@@ -91,8 +91,8 @@ func (s *Auth) UpdateProfile(ctx context.Context, id uuid.UUID, email, name stri
 
 	email = normalizeEmail(email)
 	name = strings.TrimSpace(name)
-	if email == "" {
-		return nil, false, errors.Join(ErrValidation, errors.New("email is required"))
+	if err := validateEmail(email); err != nil {
+		return nil, false, err
 	}
 
 	currentName := ""

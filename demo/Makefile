@@ -32,13 +32,14 @@ create-user: ## Seed the admin (override EMAIL=/PASSWORD=/NAME=)
 
 smoke: ## Smoke-test login + /me against the running backend
 	curl -i -c /tmp/authkit-demo.jar -b /tmp/authkit-demo.jar -XPOST localhost:8099/api/v1/auth/login \
+		-H 'origin: http://localhost:8099' \
 		-H 'content-type: application/json' \
 		-d '{"email":"$(EMAIL)","password":"$(PASSWORD)"}'
 	@echo
 	curl -s -c /tmp/authkit-demo.jar -b /tmp/authkit-demo.jar localhost:8099/api/v1/auth/me
 
 test: ## Run Go tests (raises the login rate limit so the feature suite isn't throttled)
-	AUTHKIT_RATE_LIMIT_ATTEMPTS=100000 go test ./...
+	AUTHKIT_RATE_LIMIT_IP_ATTEMPTS=100000 AUTHKIT_RATE_LIMIT_ACCOUNT_ATTEMPTS=100000 AUTHKIT_RATE_LIMIT_PASSWORD_ATTEMPTS=100000 go test ./...
 
 tidy: ## Tidy go modules
 	go mod tidy

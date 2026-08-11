@@ -1,110 +1,142 @@
 package middleware
 
 import (
-	nethttp "net/http"
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
+	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
 	contractshttp "github.com/goravel/framework/contracts/http"
+	"github.com/goravel/framework/facades"
+
+	authcontracts "github.com/freshost/goravel-authkit/contracts"
 )
 
-// rateLimiter is a simple in-memory sliding-window limiter keyed by client IP.
-// It is per-process: with multiple app instances the effective limit is
-// attempts × instances (a shared-store limiter is out of scope for v1).
-//
-// SECURITY NOTE: keying is by ctx.Request().Ip(), which honours X-Forwarded-For.
-// Behind a proxy, the consuming app MUST configure trusted proxies (Goravel
-// http.trusted_proxies) or the limit is bypassable by spoofing the header — the
-// same requirement applies to audit-log IPs. See docs/security.md.
-type rateLimiter struct {
+// MemoryRateLimitStore is the default atomic sliding-window store. It is safe
+// for concurrent use but process-local; multi-instance deployments should
+// register a shared authkit.RateLimitStore implementation.
+type MemoryRateLimitStore struct {
 	mu        sync.Mutex
 	requests  map[string][]time.Time
 	lastSweep time.Time
 }
 
-// RateLimitAuth limits the login endpoint to maxAttempts per window per IP.
-// Recommended: 5/min. Pass a large maxAttempts in local/dev env to relax it.
-//
-// Each call builds its OWN limiter, stored on the returned middleware instance,
-// so two authkit instances mounted in one app never share a single IP-keyed
-// bucket (a client login failure must not count against the admin limit).
-func RateLimitAuth(maxAttempts int, window time.Duration) contractshttp.Middleware {
-	return &rateLimitAuthMiddleware{
-		limiter:     &rateLimiter{requests: make(map[string][]time.Time)},
-		maxAttempts: maxAttempts,
-		window:      window,
+// NewMemoryRateLimitStore creates an empty process-local store.
+func NewMemoryRateLimitStore() *MemoryRateLimitStore {
+	return &MemoryRateLimitStore{requests: make(map[string][]time.Time)}
+}
+
+var defaultRateLimitStore = NewMemoryRateLimitStore()
+
+// DefaultRateLimitStore returns the shared process-local fallback store.
+func DefaultRateLimitStore() authcontracts.RateLimitStore {
+	return defaultRateLimitStore
+}
+
+// Hit atomically checks and records a sliding-window attempt.
+func (store *MemoryRateLimitStore) Hit(_ context.Context, key string, limit int, window time.Duration) (authcontracts.RateLimitResult, error) {
+	if key == "" || limit <= 0 || window <= 0 {
+		return authcontracts.RateLimitResult{}, errors.New("invalid rate-limit bucket configuration")
 	}
-}
-
-type rateLimitAuthMiddleware struct {
-	limiter     *rateLimiter
-	maxAttempts int
-	window      time.Duration
-}
-
-func (middleware *rateLimitAuthMiddleware) Handle(ctx contractshttp.Context) {
-	ip := ctx.Request().Ip()
-	if middleware.limiter.isLimited(ip, middleware.maxAttempts, middleware.window) {
-		_ = ctx.Response().Json(nethttp.StatusTooManyRequests, contractshttp.Json{
-			"error":   "rate_limited",
-			"message": "Too many attempts. Please try again later.",
-		}).Abort()
-		return
-	}
-	middleware.limiter.record(ip, middleware.window)
-	ctx.Request().Next()
-}
-
-func (middleware *rateLimitAuthMiddleware) Signature() string {
-	return "goravel-authkit.rate-limit-auth"
-}
-
-func (rl *rateLimiter) isLimited(key string, maxAttempts int, window time.Duration) bool {
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
-
-	cutoff := time.Now().Add(-window)
-	if times, ok := rl.requests[key]; ok {
-		valid := times[:0:0]
-		for _, t := range times {
-			if t.After(cutoff) {
-				valid = append(valid, t)
-			}
-		}
-		rl.requests[key] = valid
-		return len(valid) >= maxAttempts
-	}
-	return false
-}
-
-func (rl *rateLimiter) record(key string, window time.Duration) {
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
+	store.mu.Lock()
+	defer store.mu.Unlock()
 
 	now := time.Now()
-	rl.requests[key] = append(rl.requests[key], now)
-
-	// Periodic global sweep evicts IPs with no recent attempts so the map does
-	// not grow unboundedly under IP rotation. Runs at most once per window.
-	if now.Sub(rl.lastSweep) > window {
-		rl.sweepLocked(now.Add(-window))
-		rl.lastSweep = now
+	cutoff := now.Add(-window)
+	valid := store.requests[key][:0:0]
+	for _, attemptedAt := range store.requests[key] {
+		if attemptedAt.After(cutoff) {
+			valid = append(valid, attemptedAt)
+		}
 	}
+	store.requests[key] = valid
+
+	if len(valid) >= limit {
+		retryAfter := valid[0].Add(window).Sub(now)
+		if retryAfter < time.Second {
+			retryAfter = time.Second
+		}
+		return authcontracts.RateLimitResult{Allowed: false, RetryAfter: retryAfter}, nil
+	}
+
+	store.requests[key] = append(valid, now)
+	if now.Sub(store.lastSweep) > window {
+		store.sweepLocked(cutoff)
+		store.lastSweep = now
+	}
+
+	return authcontracts.RateLimitResult{Allowed: true}, nil
 }
 
-// sweepLocked prunes stale timestamps and deletes empty keys. Caller holds mu.
-func (rl *rateLimiter) sweepLocked(cutoff time.Time) {
-	for k, times := range rl.requests {
-		valid := times[:0:0]
-		for _, t := range times {
-			if t.After(cutoff) {
-				valid = append(valid, t)
+func (store *MemoryRateLimitStore) sweepLocked(cutoff time.Time) {
+	for key, attempts := range store.requests {
+		valid := attempts[:0:0]
+		for _, attemptedAt := range attempts {
+			if attemptedAt.After(cutoff) {
+				valid = append(valid, attemptedAt)
 			}
 		}
 		if len(valid) == 0 {
-			delete(rl.requests, k)
+			delete(store.requests, key)
 		} else {
-			rl.requests[k] = valid
+			store.requests[key] = valid
 		}
 	}
+}
+
+// AttemptLimiter namespaces and hashes bucket identifiers before passing them
+// to the configured store, avoiding emails, IPs, and user IDs in backend keys.
+type AttemptLimiter struct {
+	store     authcontracts.RateLimitStore
+	namespace string
+	window    time.Duration
+}
+
+// NewAttemptLimiter creates the limiter used by one Authkit guard.
+func NewAttemptLimiter(store authcontracts.RateLimitStore, namespace string, window time.Duration) *AttemptLimiter {
+	return &AttemptLimiter{store: store, namespace: namespace, window: window}
+}
+
+// Hit consumes an attempt for the given dimension and identifier.
+func (limiter *AttemptLimiter) Hit(ctx context.Context, dimension, identifier string, limit int) (authcontracts.RateLimitResult, error) {
+	hash := sha256.Sum256([]byte(identifier))
+	key := limiter.namespace + ":" + dimension + ":" + hex.EncodeToString(hash[:])
+	return limiter.store.Hit(ctx, key, limit, limiter.window)
+}
+
+// RateLimitByIP applies the guard's IP bucket before the endpoint handler.
+func RateLimitByIP(limiter *AttemptLimiter, attempts int) contractshttp.Middleware {
+	return &rateLimitByIPMiddleware{limiter: limiter, attempts: attempts}
+}
+
+type rateLimitByIPMiddleware struct {
+	limiter  *AttemptLimiter
+	attempts int
+}
+
+func (middleware *rateLimitByIPMiddleware) Handle(ctx contractshttp.Context) {
+	result, err := middleware.limiter.Hit(ctx.Context(), "ip", ctx.Request().Ip(), middleware.attempts)
+	if err != nil {
+		facades.Log().Errorf("authkit rate limiter: %v", err)
+		_ = ctx.Response().Json(http.StatusServiceUnavailable, contractshttp.Json{
+			"error": "rate_limiter_unavailable", "message": "Authentication is temporarily unavailable.",
+		}).Abort()
+		return
+	}
+	if !result.Allowed {
+		ctx.Response().Header("Retry-After", strconv.Itoa(int((result.RetryAfter+time.Second-1)/time.Second)))
+		_ = ctx.Response().Json(http.StatusTooManyRequests, contractshttp.Json{
+			"error": "rate_limited", "message": "Too many attempts. Please try again later.",
+		}).Abort()
+		return
+	}
+	ctx.Request().Next()
+}
+
+func (middleware *rateLimitByIPMiddleware) Signature() string {
+	return "goravel-authkit.rate-limit-by-ip"
 }

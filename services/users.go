@@ -23,11 +23,13 @@ const AdminRole = "admin"
 
 // Users orchestrates admin user-management use cases and owns their validation.
 type Users struct {
-	repo            repositories.UsersRepository
-	hasher          Hasher
-	minPwLen        int
-	roles           []string
-	managementRoles []string
+	repo                            repositories.UsersRepository
+	hasher                          Hasher
+	minPwLen                        int
+	roles                           []string
+	managementRoles                 []string
+	apiTokens                       *APITokens
+	revokeAPITokensOnPasswordChange bool
 }
 
 // NewUsers builds the user-management service. minPwLen <= 0 falls back to
@@ -36,11 +38,11 @@ type Users struct {
 // managementRoles is the set of privileged roles (those that can manage users);
 // it backs the "default new users to non-admin" choice and the "keep at least
 // one active admin" invariants on delete/disable/demote.
-func NewUsers(repo repositories.UsersRepository, hasher Hasher, minPwLen int, roles, managementRoles []string) *Users {
+func NewUsers(repo repositories.UsersRepository, hasher Hasher, minPwLen int, roles, managementRoles []string, apiTokens *APITokens, revokeAPITokensOnPasswordChange bool) *Users {
 	if minPwLen <= 0 {
 		minPwLen = DefaultMinPasswordLength
 	}
-	return &Users{repo: repo, hasher: hasher, minPwLen: minPwLen, roles: roles, managementRoles: managementRoles}
+	return &Users{repo: repo, hasher: hasher, minPwLen: minPwLen, roles: roles, managementRoles: managementRoles, apiTokens: apiTokens, revokeAPITokensOnPasswordChange: revokeAPITokensOnPasswordChange}
 }
 
 // isManagementRole reports whether role is one of the privileged (admin)
@@ -107,8 +109,8 @@ func (s *Users) Create(ctx context.Context, email, name, password, role string) 
 	email = normalizeEmail(email)
 	name = strings.TrimSpace(name)
 	role = strings.TrimSpace(role)
-	if email == "" {
-		return nil, errors.Join(ErrValidation, errors.New("email is required"))
+	if err := validateEmail(email); err != nil {
+		return nil, err
 	}
 	if err := validatePassword(password, s.minPwLen); err != nil {
 		return nil, err
@@ -167,8 +169,8 @@ func (s *Users) Update(ctx context.Context, id uuid.UUID, email, name, role stri
 	email = normalizeEmail(email)
 	name = strings.TrimSpace(name)
 	role = strings.TrimSpace(role)
-	if email == "" {
-		return nil, errors.Join(ErrValidation, errors.New("email is required"))
+	if err := validateEmail(email); err != nil {
+		return nil, err
 	}
 	if role != "" && !s.roleAllowed(role) {
 		return nil, errors.Join(ErrValidation, errors.New("invalid role"))
@@ -227,6 +229,11 @@ func (s *Users) Update(ctx context.Context, id uuid.UUID, email, name, role stri
 	if err := s.repo.Save(ctx, u); err != nil {
 		return nil, errors.Join(ErrInternal, err)
 	}
+	if disabled != nil && *disabled && s.apiTokens != nil {
+		if err := s.apiTokens.RevokeAll(ctx, u.ID); err != nil {
+			return nil, err
+		}
+	}
 	return u, nil
 }
 
@@ -260,6 +267,11 @@ func (s *Users) Delete(ctx context.Context, id uuid.UUID) error {
 	if err := s.repo.Delete(ctx, u); err != nil {
 		return errors.Join(ErrInternal, err)
 	}
+	if s.apiTokens != nil {
+		if err := s.apiTokens.RevokeAll(ctx, u.ID); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -283,6 +295,11 @@ func (s *Users) SetPassword(ctx context.Context, id uuid.UUID, newPassword strin
 	}
 	u.PasswordHash = &hashed
 	u.PasswordChangedAt = changedAt
+	if s.apiTokens != nil && s.revokeAPITokensOnPasswordChange {
+		if err := s.apiTokens.RevokeAll(ctx, u.ID); err != nil {
+			return nil, err
+		}
+	}
 	return u, nil
 }
 

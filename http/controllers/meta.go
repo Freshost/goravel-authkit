@@ -14,11 +14,12 @@ type MetaController struct {
 	roles             []string
 	minPasswordLength int
 	features          responses.MetaFeatures
+	apiTokens         *responses.APITokenMeta
 }
 
 // NewMetaController builds the meta controller from the resolved route options.
-func NewMetaController(roles []string, minPasswordLength int, features responses.MetaFeatures) *MetaController {
-	return &MetaController{roles: roles, minPasswordLength: minPasswordLength, features: features}
+func NewMetaController(roles []string, minPasswordLength int, features responses.MetaFeatures, apiTokens *responses.APITokenMeta) *MetaController {
+	return &MetaController{roles: roles, minPasswordLength: minPasswordLength, features: features, apiTokens: apiTokens}
 }
 
 // Show returns the assignable roles, password rules, and feature flags so the UI
@@ -33,5 +34,6 @@ func (c *MetaController) Show(ctx contractshttp.Context) contractshttp.Response 
 		Roles:             roles,
 		MinPasswordLength: c.minPasswordLength,
 		Features:          c.features,
+		APITokens:         c.apiTokens,
 	})
 }

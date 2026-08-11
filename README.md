@@ -45,8 +45,10 @@ one config block — the package wires the tables, migrations, Goravel session
 guards and HTTP routes for you. A single-guard app is a one-liner; a multi-domain
 app (separate clients and admins) is the same config with more than one guard.
 
-It is **session-cookie based** (httpOnly, no tokens, no localStorage), uses bcrypt
-(cost 12), and keeps everything server-side.
+Browser authentication is **session-cookie based** (httpOnly, no localStorage).
+Optional personal API tokens are opaque, expiring, scoped credentials for
+non-browser clients; only their SHA-256 validator hashes are stored. Authkit uses
+bcrypt (cost 12), and keeps everything server-side.
 
 ## Features
 
@@ -54,12 +56,14 @@ It is **session-cookie based** (httpOnly, no tokens, no localStorage), uses bcry
 | --- |
 | Built on [Goravel](https://www.goravel.dev) (Go) — static typing, code-based migrations, no annotations |
 | **Multi-guard** — any number of independent auth domains in one app, each with its own user table, Goravel session guard, route prefix, remember cookie, rate-limit bucket and feature set |
-| Session-based login / logout / current-user — httpOnly cookie, **bcrypt cost 12**, no tokens or localStorage |
-| Login **rate-limiting** per IP, per guard, with session-fixation protection |
+| Session-based browser login / logout / current-user — httpOnly cookie, **bcrypt cost 12**, no localStorage |
+| Atomic login **rate-limiting** per IP and account, per guard, with a pluggable shared store |
+| Fail-closed **CSRF origin verification** for every state-changing endpoint |
 | Change password with **other-session invalidation** (`password_changed_at`) |
 | **TOTP two-factor** — enroll / confirm / disable, encrypted secret, single-use recovery codes (toggleable, per guard) |
 | **Remember-me** persistent login — rotating selector/validator tokens, per-guard cookie |
 | **Active-session tracking** — device list + remote termination, keyed by a stable per-guard token |
+| **Personal API tokens** (opt-in) — per-guard tables, mandatory expiry, scopes, one-time plaintext display |
 | **Admin user management** CRUD behind a fail-closed role gate; keeps at least one active admin (toggleable) |
 | **User impersonation** ("login as user") — same-guard or cross-guard, role/guard-gated and fail-closed, audited (opt-in) |
 | Per-guard **audit log** table + writer |
@@ -145,13 +149,23 @@ keys optional — the package falls back to safe defaults).
 | `authkit.guard` | string | `admin` | Single-guard: the Goravel session guard name |
 | `authkit.route_prefix` | string | `/api/v1` | Single-guard: prefix for all routes |
 | `authkit.min_password_length` | int | `8` | Minimum new-password length |
-| `authkit.rate_limit.attempts` | int | `5` | Login attempts per window per IP |
+| `authkit.rate_limit.ip_attempts` | int | `20` | Authentication attempts per window per client IP |
+| `authkit.rate_limit.account_attempts` | int | `5` | Login/2FA attempts per window per account |
+| `authkit.rate_limit.password_attempts` | int | `5` | Change-password attempts per window per user |
 | `authkit.rate_limit.window` | int | `60` | Rate-limit window (seconds) |
+| `authkit.csrf.enabled` | bool | `true` | Verify Origin/Referer on state-changing Authkit routes |
+| `authkit.csrf.trusted_origins` | []string | `[]` | Exact additional browser origins allowed to call Authkit |
 | `authkit.features.user_management` | bool | `true` | Register `/users` CRUD |
 | `authkit.features.audit_log` | bool | `true` | Write audit entries |
 | `authkit.features.two_factor` | bool | `true` | Register TOTP endpoints + login gate |
 | `authkit.features.remember_me` | bool | `true` | Persistent "remember me" login |
 | `authkit.features.sessions` | bool | `true` | Active-session tracking + endpoints |
+| `authkit.features.api_tokens` | bool | `false` | Personal API-token management and bearer authentication |
+| `authkit.api_tokens.allowed_scopes` | []string | `[]` | Scopes users may assign; empty permits unscoped tokens only |
+| `authkit.api_tokens.default_lifetime_days` | int | `30` | Default expiry suggested to clients |
+| `authkit.api_tokens.max_lifetime_days` | int | `365` | Maximum token lifetime |
+| `authkit.api_tokens.max_per_user` | int | `20` | Maximum active tokens per user |
+| `authkit.api_tokens.revoke_on_password_change` | bool | `true` | Revoke all tokens after a password change/reset |
 | `authkit.two_factor.issuer` | string | `""` | Authenticator issuer (empty = app name) |
 | `authkit.two_factor.recovery_codes` | int | `8` | Recovery codes per confirmation |
 | `authkit.user_management_roles` | []string | `[]` | Roles allowed on `/users` (empty = any) |
@@ -192,7 +206,8 @@ config.Add("authkit", map[string]any{
 })
 ```
 
-Each guard's secondary tables (`<name>_audit_logs`, remember tokens, sessions),
+Each guard's secondary tables (`<name>_audit_logs`, remember tokens, sessions,
+`<name>_api_tokens`),
 session keys and remember cookie are namespaced, so two guards on one origin never
 collide. The package auto-registers a Goravel session guard and the migrations for
 every declared guard — **no `config/auth.go` needed** (opt out with
@@ -221,6 +236,8 @@ facades.Route().Prefix("/api/client/v1/portal").
     })
 
 // Or require a role: authkitroutes.ProtectRole("client", "admin")
+// Token only: authkitroutes.ProtectToken("client", "invoices:read")
+// Session or token: authkitroutes.ProtectAny("client", "invoices:read")
 ```
 
 ## Impersonation
@@ -326,6 +343,12 @@ Read before deploying:
   `ctx.Request().Ip()`, which honours `X-Forwarded-For`. Behind a proxy/CDN, set
   Goravel's `http.trusted_proxies` or the limit is bypassable (and audit IPs
   spoofable) by sending a forged header.
+- **CSRF protection is fail-closed.** Unsafe requests must carry an `Origin` or
+  `Referer` matching the request host/an exact trusted origin, or the browser's
+  `Sec-Fetch-Site: same-origin` signal. Non-browser clients must send `Origin`.
+- **Use a shared rate-limit store with multiple instances.** Register an atomic
+  Redis or equivalent implementation with `authkit.RegisterRateLimitStore` before
+  mounting routes. The built-in memory store is shared only within one process.
 - **No full RBAC yet.** The `/users` endpoints sit behind the session guard; gate
   them with `authkit.user_management_roles` (e.g. `[]string{"admin"}`) to add a
   `RequireRole` check. True RBAC (roles/permissions tables) is a later phase.
@@ -336,6 +359,9 @@ Read before deploying:
 - **Sessions** use httpOnly cookies with session-id regeneration on login
   (anti-fixation) and `password_changed_at` multi-session invalidation. Set
   `session.same_site` to `lax`/`strict` and `session.secure=true` in production.
+- **API tokens are credentials.** Never log or persist the returned plaintext.
+  Token management requires a live session, CSRF protection, the current password,
+  and TOTP when enabled. Password changes revoke tokens by default.
 
 ## Documentation
 

@@ -1,6 +1,7 @@
 # Security model
 
-`goravel-authkit` is session-cookie authentication. This document states the
+`goravel-authkit` uses session-cookie authentication for browsers and optional
+opaque personal API tokens for non-browser clients. This document states the
 guarantees, the operator responsibilities, and the known limitations.
 
 ## Per-guard isolation (multi-guard)
@@ -15,21 +16,44 @@ A guard is an **isolated** authentication domain. When an app runs several guard
   carries multiple guards without collision,
 - a **separate remember cookie** (`authkit_<guard>_remember` by default), so two
   guards on one origin don't overwrite each other's persistent login,
-- a **separate rate-limit bucket** — `RateLimitAuth` builds its own in-memory
-  limiter per guard, so a failed `client` login never counts against the `admin`
-  limit.
+- a **separate API-token table** (`<guard>_api_tokens` by default),
+- **namespaced rate-limit buckets** — each guard includes its name in every IP,
+  account, 2FA-user, and password-user bucket, so attempts never cross guards
+  even when they share one backend.
 
 The user record is loaded from the guard's own table through authkit's
 table-aware repository (keyed by the session's `auth_<guard>_id`); the Goravel
 guard is only a per-guard session-id store. **Table names come from config**
 (`authkit.guards.<name>.users_table`, etc.) — they are developer-controlled, not
 user input, and are applied via GORM `.Table()`, so they are not an injection
-vector. The session-cookie model below (httpOnly, no tokens/localStorage) is
-**unchanged** by multi-guard.
+vector. The browser session model remains httpOnly and never stores API tokens
+in localStorage.
 
 The auto-registered Goravel guard uses a `session` driver over a shared
 `authkit_orm` provider and **never clobbers** a guard the host has already
 defined (it only fills in an unset guard).
+
+## Personal API tokens
+
+API tokens are off by default. When enabled, Authkit issues opaque
+`gak_<selector>.<validator>` credentials with mandatory expiry:
+
+- Only the selector and SHA-256 validator hash are persisted; plaintext is shown
+  once at creation and cannot be recovered.
+- Creation/list/revocation endpoints accept session authentication only, retain
+  CSRF checks, and creation requires the current password plus TOTP when enabled.
+  All management is rejected during impersonation.
+- Allowed scopes are configured per guard. Required middleware scopes only
+  restrict a token; they never grant permissions beyond the live user's role and
+  the host application's normal resource authorization.
+- Every request loads the live owner. Deleted or disabled owners are denied.
+  Password changes/resets and disabling/deleting a user revoke all tokens by
+  default.
+- `ProtectToken` is stateless. `ProtectAny` prefers any supplied Authorization
+  header and never falls back to a session after an invalid token. Browser/session
+  requests still receive CSRF protection.
+- Schedule `auth:prune-api-tokens` daily to remove tokens expired or revoked more
+  than 30 days ago. Never put bearer tokens in URLs or logs; use TLS.
 
 ## What the package guarantees
 
@@ -47,13 +71,18 @@ defined (it only fills in an unset guard).
   it to the live DB value on every request. A password change bumps the DB value,
   so every *other* session is rejected (`401 session_expired`) on its next
   request. The session that changed the password is re-stamped and stays in.
-- **Login rate-limiting.** A per-IP sliding window (default 5/min) on
-  `/auth/login` (and the 2FA challenge), with periodic eviction so the in-memory
-  limiter cannot grow unboundedly. The limiter is **in-memory and per-process**:
-  behind multiple app instances each process keeps its own counters, so the
-  effective limit is `attempts × instances`. Each guard gets its **own** limiter
-  bucket, so guards never share a window. A distributed (shared-store) limiter is
-  out of scope for now.
+- **Atomic multi-dimensional rate-limiting.** Login and 2FA must pass both an IP
+  bucket (default 20/min) and a hash-keyed account/user bucket (default 5/min).
+  Change-password must pass IP and authenticated-user buckets. Bucket identifiers
+  are SHA-256 hashed before reaching the store. The default atomic sliding-window
+  store is process-local; hosts can register a distributed implementation through
+  `authkit.RegisterRateLimitStore`.
+- **CSRF origin verification.** Every state-changing Authkit endpoint, plus host
+  routes using `routes.Protect` / `ProtectRole`, fails
+  closed unless `Origin` or `Referer` matches the request host or an exact
+  `authkit.csrf.trusted_origins` entry. Requests without either header are
+  accepted only with `Sec-Fetch-Site: same-origin`. Non-browser clients must
+  identify their origin too.
 - **`/users` is admin-gated by default (fail-closed).** The user-management
   endpoints (read and write) are always mounted behind a `RequireRole` check;
   `authkit.user_management_roles` defaults to `["admin"]`. A non-admin gets 403.
@@ -77,8 +106,12 @@ defined (it only fills in an unset guard).
   recorded in the audit log**. This is mandatory whenever
   `authkit.features.audit_log` or login rate-limiting is enabled.
 - **Production cookie flags.** Set `session.secure=true` and a `session.same_site`
-  of `lax` (typical for SPAs) or `strict`. Cookie-based auth relies on SameSite
-  for CSRF defense — there is no token-based CSRF protection.
+  of `lax` (typical for SPAs) or `strict`. SameSite remains defense in depth in
+  addition to Authkit's origin verification.
+- **Shared limiter backend for multiple instances.** The memory store cannot
+  coordinate processes. Register a Redis or equivalent atomic store before
+  routes when the app runs more than one instance. Store errors fail closed with
+  `503 rate_limiter_unavailable`.
 - **TLS.** Serve over HTTPS so the session cookie is never sent in clear.
 
 ## Two-factor (TOTP)
@@ -167,9 +200,6 @@ session cookie name/path is an optional knob for single-origin setups.
   Reaching `/users` already requires admin, so an admin assigning any allowed
   `role` is intended. Full roles/permissions tables (multiple privileges,
   per-resource grants) are a later phase.
-- **Change-password is not separately rate-limited.** It sits behind the session
-  guard (an attacker needs a valid session) and bcrypt is deliberately slow, but
-  there is no per-user attempt cap yet.
 - **No account lockout, email verification, or password reset** in v1 — these
   are on the roadmap and need a configured mailer.
 
@@ -185,6 +215,7 @@ When `EnableAuditLog` is on, the package writes to the guard's audit table
 | `auth.login_failed` | Failed login (attempted email in metadata) |
 | `auth.logout` | Logout |
 | `auth.password_changed` | Self-service password change |
+| `auth.api_token_created` / `auth.api_token_revoked` / `auth.api_tokens_revoked` | Personal API-token lifecycle |
 | `user.create` / `user.update` / `user.delete` | User management |
 | `user.password_reset` | Admin set-password |
 | `auth.two_factor_enrolled` / `auth.two_factor_confirmed` | 2FA enrollment |

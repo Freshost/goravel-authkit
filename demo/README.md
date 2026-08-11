@@ -9,7 +9,8 @@ It runs **two independent guards** to demonstrate multi-guard:
 
 - **`admin`** at `/api/v1` — the default `users` table, all features on.
 - **`client`** at `/api/client/v1` — a separate `client_users` table, longer
-  password policy, two-factor off.
+  password policy, two-factor off. Personal API tokens are enabled for both
+  guards with `profile:read` / `profile:write` scopes.
 
 Both are declared in `config/authkit.go` and mounted with a single
 `RegisterAll` call. It consumes the package **locally** via a `replace` directive
@@ -45,7 +46,7 @@ seeded admin).
 `make test` runs the Go suite against a **real** database (no fakes):
 
 ```bash
-make test                       # AUTHKIT_RATE_LIMIT_ATTEMPTS=100000 go test ./...
+make test                       # raises all Authkit rate-limit dimensions for the suite
 ```
 
 It hits the configured Postgres by default; for a zero-setup run point it at
@@ -55,8 +56,8 @@ SQLite with an absolute path:
 DB_CONNECTION=sqlite DB_DATABASE=/tmp/authkit-demo.db make test
 ```
 
-The high `AUTHKIT_RATE_LIMIT_ATTEMPTS` keeps the many logins in the feature suite
-from tripping the per-IP login limiter.
+The Make target raises the IP, account, and password limits so repeated feature
+flows do not throttle one another.
 
 ## The whole authkit integration
 
@@ -75,7 +76,9 @@ the migrations for every guard declared in `config/authkit.go`.
 `/api/client/v1/portal/whoami` endpoint behind `authkitroutes.Protect("client")`,
 reading the current user with `authkitroutes.AuthUserID(ctx)` — so only a logged-in
 client (not an admin) can reach it. Use `ProtectRole("client", "admin")` to also
-require a role.
+require a role. The `/api/client/v1/token/whoami` and
+`/api/client/v1/either/whoami` examples demonstrate token-only and hybrid
+session-or-token host routes, including scope checks and `AuthMethod`.
 
 Routes are registered explicitly in the routing callback (not in the provider),
 which keeps dynamic guard wiring visible and prevents duplicate registration. See

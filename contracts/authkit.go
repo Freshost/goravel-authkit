@@ -6,11 +6,26 @@ package contracts
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/freshost/goravel-authkit/models"
 )
+
+type IssueAPITokenInput struct {
+	UserID        uuid.UUID
+	Name          string
+	ExpiresAt     time.Time
+	Scopes        []string
+	Password      string
+	TwoFactorCode string
+}
+
+type IssuedAPIToken struct {
+	Token     *models.APIToken
+	Plaintext string
+}
 
 // Authkit is the programmatic API of the goravel-authkit package.
 type Authkit interface {
@@ -43,4 +58,9 @@ type Authkit interface {
 	VerifyTwoFactor(ctx context.Context, id uuid.UUID, code string) (bool, error)
 	// DisableTwoFactor clears the user's two-factor state.
 	DisableTwoFactor(ctx context.Context, id uuid.UUID) error
+
+	IssueAPIToken(ctx context.Context, input IssueAPITokenInput) (*IssuedAPIToken, error)
+	ListAPITokens(ctx context.Context, userID uuid.UUID) ([]models.APIToken, error)
+	RevokeAPIToken(ctx context.Context, userID, tokenID uuid.UUID) error
+	RevokeAllAPITokens(ctx context.Context, userID uuid.UUID) error
 }

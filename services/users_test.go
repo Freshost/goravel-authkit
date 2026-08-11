@@ -14,7 +14,7 @@ import (
 var adminRoles = []string{"admin"}
 
 func newUsersSvc(repo *fakeRepo, roles []string) *Users {
-	return NewUsers(repo, fakeHasher{}, 8, roles, adminRoles)
+	return NewUsers(repo, fakeHasher{}, 8, roles, adminRoles, nil, true)
 }
 
 func TestUsersCreate_DefaultsToNonAdminRole(t *testing.T) {
@@ -71,6 +71,15 @@ func TestUsersCreate_DuplicateAndPasswordRules(t *testing.T) {
 	assert.ErrorIs(t, err, ErrValidation, "too long")
 }
 
+func TestUsersCreate_RejectsInvalidEmail(t *testing.T) {
+	svc := newUsersSvc(newFakeRepo(), nil)
+
+	for _, email := range []string{"not-an-email", "Name <user@example.com>", "user@example.com\r\nBcc: attacker@example.com"} {
+		_, err := svc.Create(context.Background(), email, "", "secret123", "")
+		assert.ErrorIs(t, err, ErrValidation, email)
+	}
+}
+
 func TestUsersDelete_LastAdminGuarded(t *testing.T) {
 	repo := newFakeRepo()
 	u := seedUser(repo, "only@example.com", "secret123") // role admin
@@ -115,6 +124,15 @@ func TestUsersUpdate_EmailCollision(t *testing.T) {
 
 	_, err := svc.Update(context.Background(), b.ID, "taken@example.com", "B", "admin", nil, uuid.Nil)
 	assert.ErrorIs(t, err, ErrAlreadyExists)
+}
+
+func TestUsersUpdate_RejectsInvalidEmail(t *testing.T) {
+	repo := newFakeRepo()
+	u := seedUser(repo, "admin@example.com", "secret123")
+	svc := newUsersSvc(repo, nil)
+
+	_, err := svc.Update(context.Background(), u.ID, "invalid", "Admin", "admin", nil, uuid.Nil)
+	assert.ErrorIs(t, err, ErrValidation)
 }
 
 func TestUsersUpdate_DisableAndEnable(t *testing.T) {

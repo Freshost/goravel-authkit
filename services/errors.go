@@ -44,6 +44,12 @@ var (
 	// ErrInvalidRememberToken is returned when a "remember me" cookie is malformed,
 	// unknown, expired, or fails validation.
 	ErrInvalidRememberToken = errors.New("invalid remember token")
+	// ErrInvalidAPIToken intentionally covers malformed, unknown, expired, and
+	// revoked bearer tokens so public responses reveal no credential state.
+	ErrInvalidAPIToken = errors.New("invalid api token")
+	// ErrTokenLimit is returned when a user already owns the configured maximum
+	// number of active personal access tokens.
+	ErrTokenLimit = errors.New("api token limit reached")
 )
 
 // DefaultMinPasswordLength is the fallback minimum new-password length when the

@@ -57,4 +57,26 @@ func Web() {
 				})
 			})
 		})
+
+	facades.Route().Prefix("/api/client/v1/token").Middleware(authkitroutes.ProtectToken("client", "profile:read")...).
+		Group(func(r route.Router) {
+			r.Get("/whoami", authIdentity)
+		})
+	facades.Route().Prefix("/api/client/v1/token-write").Middleware(authkitroutes.ProtectToken("client", "profile:write")...).
+		Group(func(r route.Router) {
+			r.Get("/whoami", authIdentity)
+		})
+	facades.Route().Prefix("/api/client/v1/either").Middleware(authkitroutes.ProtectAny("client", "profile:read")...).
+		Group(func(r route.Router) {
+			r.Get("/whoami", authIdentity)
+		})
+}
+
+func authIdentity(ctx http.Context) http.Response {
+	return ctx.Response().Success().Json(http.Json{
+		"userId":     authkitroutes.AuthUserID(ctx).String(),
+		"authMethod": authkitroutes.AuthMethod(ctx),
+		"tokenId":    authkitroutes.APITokenID(ctx).String(),
+		"canRead":    authkitroutes.TokenCan(ctx, "profile:read"),
+	})
 }

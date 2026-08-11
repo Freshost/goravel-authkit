@@ -15,10 +15,19 @@ func init() {
 		"guard": "admin",
 		// Minimum accepted new-password length.
 		"min_password_length": 8,
-		// Login rate limit: attempts per window (seconds) per client IP.
+		// Authentication rate limits. Buckets are combined: a request must pass
+		// both its client-IP bucket and its account/user bucket.
 		"rate_limit": map[string]any{
-			"attempts": 5,
-			"window":   60,
+			"ip_attempts":       20,
+			"account_attempts":  5,
+			"password_attempts": 5,
+			"window":            60,
+		},
+		// Fail-closed Origin/Referer verification for every state-changing route.
+		// Add exact SPA origins here only when the frontend is cross-origin.
+		"csrf": map[string]any{
+			"enabled":         true,
+			"trusted_origins": []string{},
 		},
 		// Feature toggles.
 		"features": map[string]any{
@@ -33,6 +42,21 @@ func init() {
 			"remember_me": true,
 			// Active-session tracking: list/terminate sessions + login history.
 			"sessions": true,
+			// Personal API tokens are opt-in. When enabled, users can manage
+			// expiring, scoped bearer tokens from their account settings.
+			"api_tokens": false,
+		},
+		"api_tokens": map[string]any{
+			"allowed_scopes":            []string{},
+			"default_lifetime_days":     30,
+			"max_lifetime_days":         365,
+			"max_per_user":              20,
+			"revoke_on_password_change": true,
+		},
+		// Table overrides for legacy single-guard mode. In multi-guard mode use
+		// api_tokens_table inside each guard; it defaults to <guard>_api_tokens.
+		"tables": map[string]any{
+			"api_tokens": "api_tokens",
 		},
 		// TOTP two-factor settings.
 		"two_factor": map[string]any{

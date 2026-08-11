@@ -1,49 +1,109 @@
 package middleware
 
 import (
+	"context"
+	"errors"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	authcontracts "github.com/freshost/goravel-authkit/contracts"
 )
 
-func TestRateLimiter_LimitsAfterMaxAttempts(t *testing.T) {
-	rl := &rateLimiter{requests: make(map[string][]time.Time)}
-	window := time.Minute
+func TestMemoryRateLimitStoreLimitsAtomically(t *testing.T) {
+	store := NewMemoryRateLimitStore()
 
-	// First 3 attempts are allowed; the limiter records each.
-	for i := 0; i < 3; i++ {
-		assert.False(t, rl.isLimited("1.2.3.4", 3, window), "attempt %d should not be limited", i)
-		rl.record("1.2.3.4", window)
+	for range 3 {
+		result, err := store.Hit(context.Background(), "login", 3, time.Minute)
+		require.NoError(t, err)
+		assert.True(t, result.Allowed)
 	}
-	// The 4th check sees 3 recorded within the window → limited.
-	assert.True(t, rl.isLimited("1.2.3.4", 3, window))
-
-	// A different IP is independent.
-	assert.False(t, rl.isLimited("5.6.7.8", 3, window))
+	result, err := store.Hit(context.Background(), "login", 3, time.Minute)
+	require.NoError(t, err)
+	assert.False(t, result.Allowed)
+	assert.Positive(t, result.RetryAfter)
 }
 
-func TestRateLimiter_SweepEvictsStaleIPs(t *testing.T) {
-	rl := &rateLimiter{requests: make(map[string][]time.Time)}
-	// Seed many IPs with timestamps already outside the window.
-	for i := 0; i < 100; i++ {
-		rl.requests[string(rune(i))] = []time.Time{time.Now().Add(-2 * time.Minute)}
+func TestMemoryRateLimitStoreIsConcurrentSafe(t *testing.T) {
+	store := NewMemoryRateLimitStore()
+	const limit = 10
+	var allowed int
+	var mu sync.Mutex
+	var wait sync.WaitGroup
+
+	for range 100 {
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			result, err := store.Hit(context.Background(), "shared", limit, time.Minute)
+			require.NoError(t, err)
+			if result.Allowed {
+				mu.Lock()
+				allowed++
+				mu.Unlock()
+			}
+		}()
 	}
-	// Force lastSweep into the past so the next record triggers a sweep.
-	rl.lastSweep = time.Now().Add(-2 * time.Minute)
-
-	rl.record("fresh-ip", time.Minute)
-
-	// All stale IPs are evicted; only the fresh one remains.
-	assert.Len(t, rl.requests, 1)
-	_, ok := rl.requests["fresh-ip"]
-	assert.True(t, ok)
+	wait.Wait()
+	assert.Equal(t, limit, allowed)
 }
 
-func TestRateLimiter_WindowExpiry(t *testing.T) {
-	rl := &rateLimiter{requests: make(map[string][]time.Time)}
-	// Seed an old timestamp outside the window.
-	rl.requests["1.2.3.4"] = []time.Time{time.Now().Add(-2 * time.Minute)}
-	// With a 1-minute window the stale entry is pruned → not limited.
-	assert.False(t, rl.isLimited("1.2.3.4", 1, time.Minute))
+func TestMemoryRateLimitStoreExpiresWindow(t *testing.T) {
+	store := NewMemoryRateLimitStore()
+	store.requests["key"] = []time.Time{time.Now().Add(-2 * time.Minute)}
+
+	result, err := store.Hit(context.Background(), "key", 1, time.Minute)
+	require.NoError(t, err)
+	assert.True(t, result.Allowed)
+}
+
+func TestAttemptLimiterHashesAndNamespacesIdentifiers(t *testing.T) {
+	store := &capturingRateLimitStore{}
+	limiter := NewAttemptLimiter(store, "authkit:admin", time.Minute)
+
+	_, err := limiter.Hit(context.Background(), "login-account", "person@example.com", 5)
+	require.NoError(t, err)
+	assert.Contains(t, store.key, "authkit:admin:login-account:")
+	assert.NotContains(t, store.key, "person@example.com")
+}
+
+func TestAttemptLimiterKeepsDimensionsAndGuardsIndependent(t *testing.T) {
+	store := NewMemoryRateLimitStore()
+	admin := NewAttemptLimiter(store, "authkit:admin", time.Minute)
+	client := NewAttemptLimiter(store, "authkit:client", time.Minute)
+
+	first, err := admin.Hit(context.Background(), "login-account", "person@example.com", 1)
+	require.NoError(t, err)
+	assert.True(t, first.Allowed)
+	second, err := admin.Hit(context.Background(), "login-account", "person@example.com", 1)
+	require.NoError(t, err)
+	assert.False(t, second.Allowed)
+
+	otherDimension, err := admin.Hit(context.Background(), "ip", "person@example.com", 1)
+	require.NoError(t, err)
+	assert.True(t, otherDimension.Allowed)
+	otherGuard, err := client.Hit(context.Background(), "login-account", "person@example.com", 1)
+	require.NoError(t, err)
+	assert.True(t, otherGuard.Allowed)
+}
+
+func TestAttemptLimiterPropagatesStoreFailure(t *testing.T) {
+	store := &capturingRateLimitStore{err: errors.New("redis unavailable")}
+	limiter := NewAttemptLimiter(store, "authkit:admin", time.Minute)
+
+	_, err := limiter.Hit(context.Background(), "ip", "127.0.0.1", 5)
+	assert.EqualError(t, err, "redis unavailable")
+}
+
+type capturingRateLimitStore struct {
+	key string
+	err error
+}
+
+func (store *capturingRateLimitStore) Hit(_ context.Context, key string, _ int, _ time.Duration) (authcontracts.RateLimitResult, error) {
+	store.key = key
+	return authcontracts.RateLimitResult{Allowed: true}, store.err
 }

@@ -13,9 +13,15 @@ func init() {
 		"min_password_length": 8,
 		"rate_limit": map[string]any{
 			// Env-overridable so the test suite (many logins in one process/minute)
-			// isn't tripped by the per-IP limiter.
-			"attempts": config.Env("AUTHKIT_RATE_LIMIT_ATTEMPTS", 5),
-			"window":   60,
+			// isn't tripped by either limiter dimension.
+			"ip_attempts":       config.Env("AUTHKIT_RATE_LIMIT_IP_ATTEMPTS", 20),
+			"account_attempts":  config.Env("AUTHKIT_RATE_LIMIT_ACCOUNT_ATTEMPTS", 5),
+			"password_attempts": config.Env("AUTHKIT_RATE_LIMIT_PASSWORD_ATTEMPTS", 5),
+			"window":            60,
+		},
+		"csrf": map[string]any{
+			"enabled":         true,
+			"trusted_origins": []string{},
 		},
 		"features": map[string]any{
 			"user_management": true,
@@ -23,6 +29,14 @@ func init() {
 			"two_factor":      true,
 			"remember_me":     true,
 			"sessions":        true,
+			"api_tokens":      true,
+		},
+		"api_tokens": map[string]any{
+			"allowed_scopes":            []string{"profile:read", "profile:write"},
+			"default_lifetime_days":     30,
+			"max_lifetime_days":         365,
+			"max_per_user":              20,
+			"revoke_on_password_change": true,
 		},
 		"two_factor": map[string]any{
 			"issuer":         "Authkit Demo",
@@ -56,6 +70,7 @@ func init() {
 				"audit_table":           "audit_logs",
 				"remember_tokens_table": "auth_remember_tokens",
 				"sessions_table":        "auth_sessions",
+				"api_tokens_table":      "api_tokens",
 				"remember_cookie_name":  "authkit_remember",
 				// Admins may impersonate users in the client portal and in their own
 				// guard, but never another admin (protected_roles).

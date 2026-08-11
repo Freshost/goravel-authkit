@@ -30,8 +30,9 @@ keeps working unchanged. The mechanics that make a guard self-contained are:
   `RememberIntentKey` produce `authkit_<guard>_*`. One shared session cookie thus
   carries multiple guards without collision (mirroring Goravel's own
   `auth_<guard>_id`).
-- **Per-instance rate limiter.** `RateLimitAuth` builds its own limiter per call
-  (was a package global), so two guards never share one IP-keyed bucket.
+- **Atomic rate-limit store.** Every guard namespaces IP, account, 2FA-user, and
+  password-user buckets while the backend is shared. The default memory backend
+  is process-local; hosts can register a distributed implementation.
 - **Per-guard remember cookie.** `Options.RememberCookieName`
   (default `authkit_<guard>_remember`) so two guards on one origin don't overwrite
   each other's persistent login.
@@ -41,7 +42,8 @@ keeps working unchanged. The mechanics that make a guard self-contained are:
 ```
 HTTP request
   └─ middleware/        Authenticated (guard session-id + password_changed_at),
-  │                     RememberLogin, RateLimitAuth, RequireRole, TrackSession
+  │                     VerifyRequestOrigin, RateLimitByIP, RememberLogin,
+  │                     RequireRole, TrackSession
   └─ http/controllers/  AuthController, UsersController, … — bind, map sentinel errors → {error,message}
         └─ services/    Auth, Users, Audit, TwoFactor, Remember, Sessions — validation + business rules + sentinel errors
               └─ repositories/  Users, Audit, … — table-aware GORM data access (interface seam for tests)
@@ -90,7 +92,8 @@ whole integration.
     `migrations.ForTables(MigrationConfig{...})` against that guard's tables. Opt
     out with `authkit.register_migrations = false` to register `ForTables`
     yourself.
-  - Registers the `auth:create-user` and `auth:prune-remember-tokens` commands
+  - Registers the `auth:create-user`, `auth:prune-remember-tokens`, and
+    `auth:prune-api-tokens` commands
     (`app.Commands(...)`), binds the `facades.Authkit()` service, and exposes the
     config for `vendor:publish` (`app.Publishes(...)`).
   - It declares its framework dependencies via `Relationship()` (Config, Orm,

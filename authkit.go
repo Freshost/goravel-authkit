@@ -2,6 +2,7 @@ package authkit
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/goravel/framework/contracts/foundation"
@@ -36,15 +37,23 @@ type Config struct {
 	Roles []string
 	// UserManagementRoles gates the management invariants (default → AdminRole).
 	UserManagementRoles []string
+	// APITokensTable is the per-guard personal access token table.
+	APITokensTable                string
+	APITokenAllowedScopes         []string
+	APITokenMaxLifetime           time.Duration
+	APITokenMaxPerUser            int
+	KeepAPITokensOnPasswordChange bool
 }
 
 // Authkit is the concrete implementation behind facades.Authkit() and the value
 // returned by New. It wraps the auth + user-management + two-factor services so
 // app code can drive them programmatically against a specific user table.
 type Authkit struct {
-	auth      *services.Auth
-	users     *services.Users
-	twoFactor *services.TwoFactor
+	auth                            *services.Auth
+	users                           *services.Users
+	twoFactor                       *services.TwoFactor
+	apiTokens                       *services.APITokens
+	revokeAPITokensOnPasswordChange bool
 }
 
 var _ contracts.Authkit = (*Authkit)(nil)
@@ -69,10 +78,14 @@ func New(cfg Config) *Authkit {
 	}
 	repo := repositories.NewUsersWithTable(cfg.UsersTable)
 	hasher := services.NewFacadeHasher()
+	twoFactor := services.NewTwoFactor(repo, services.NewFacadeCrypter(), cfg.TwoFactorIssuer, recoveryCount)
+	apiTokens := services.NewAPITokens(repositories.NewAPITokensWithTable(cfg.APITokensTable), repo, hasher, twoFactor, cfg.APITokenAllowedScopes, cfg.APITokenMaxLifetime, cfg.APITokenMaxPerUser)
 	return &Authkit{
-		auth:      services.NewAuth(repo, hasher, minPwLen),
-		users:     services.NewUsers(repo, hasher, minPwLen, cfg.Roles, managementRoles),
-		twoFactor: services.NewTwoFactor(repo, services.NewFacadeCrypter(), cfg.TwoFactorIssuer, recoveryCount),
+		auth:                            services.NewAuth(repo, hasher, minPwLen),
+		users:                           services.NewUsers(repo, hasher, minPwLen, cfg.Roles, managementRoles, apiTokens, !cfg.KeepAPITokensOnPasswordChange),
+		twoFactor:                       twoFactor,
+		apiTokens:                       apiTokens,
+		revokeAPITokensOnPasswordChange: !cfg.KeepAPITokensOnPasswordChange,
 	}
 }
 
@@ -83,13 +96,18 @@ func NewAuthkit(app foundation.Application) *Authkit {
 	var cfg Config
 	if c := app.MakeConfig(); c != nil {
 		cfg = Config{
-			Guard:               c.GetString("authkit.guard"),
-			UsersTable:          c.GetString("authkit.tables.users"),
-			MinPasswordLength:   c.GetInt("authkit.min_password_length"),
-			TwoFactorIssuer:     c.GetString("authkit.two_factor.issuer"),
-			RecoveryCodeCount:   c.GetInt("authkit.two_factor.recovery_codes"),
-			Roles:               toStringSlice(c.Get("authkit.roles")),
-			UserManagementRoles: toStringSlice(c.Get("authkit.user_management_roles")),
+			Guard:                         c.GetString("authkit.guard"),
+			UsersTable:                    c.GetString("authkit.tables.users"),
+			MinPasswordLength:             c.GetInt("authkit.min_password_length"),
+			TwoFactorIssuer:               c.GetString("authkit.two_factor.issuer"),
+			RecoveryCodeCount:             c.GetInt("authkit.two_factor.recovery_codes"),
+			Roles:                         toStringSlice(c.Get("authkit.roles")),
+			UserManagementRoles:           toStringSlice(c.Get("authkit.user_management_roles")),
+			APITokensTable:                c.GetString("authkit.tables.api_tokens"),
+			APITokenAllowedScopes:         toStringSlice(c.Get("authkit.api_tokens.allowed_scopes")),
+			APITokenMaxLifetime:           time.Duration(c.GetInt("authkit.api_tokens.max_lifetime_days")) * 24 * time.Hour,
+			APITokenMaxPerUser:            c.GetInt("authkit.api_tokens.max_per_user"),
+			KeepAPITokensOnPasswordChange: !c.GetBool("authkit.api_tokens.revoke_on_password_change", true),
 		}
 	}
 	return New(cfg)
@@ -117,6 +135,9 @@ func (a *Authkit) SetPassword(ctx context.Context, id uuid.UUID, newPassword str
 
 func (a *Authkit) ChangePassword(ctx context.Context, id uuid.UUID, currentPassword, newPassword string) error {
 	_, err := a.auth.ChangePassword(ctx, id, currentPassword, newPassword)
+	if err == nil && a.revokeAPITokensOnPasswordChange {
+		err = a.apiTokens.RevokeAll(ctx, id)
+	}
 	return err
 }
 
@@ -146,6 +167,29 @@ func (a *Authkit) VerifyTwoFactor(ctx context.Context, id uuid.UUID, code string
 
 func (a *Authkit) DisableTwoFactor(ctx context.Context, id uuid.UUID) error {
 	return a.twoFactor.Disable(ctx, id)
+}
+
+func (a *Authkit) IssueAPIToken(ctx context.Context, input contracts.IssueAPITokenInput) (*contracts.IssuedAPIToken, error) {
+	issued, err := a.apiTokens.Issue(ctx, services.IssueAPITokenCommand{
+		UserID: input.UserID, Name: input.Name, ExpiresAt: input.ExpiresAt, Scopes: input.Scopes,
+		Password: input.Password, TwoFactorCode: input.TwoFactorCode,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &contracts.IssuedAPIToken{Token: issued.Token, Plaintext: issued.Plaintext}, nil
+}
+
+func (a *Authkit) ListAPITokens(ctx context.Context, userID uuid.UUID) ([]models.APIToken, error) {
+	return a.apiTokens.List(ctx, userID)
+}
+
+func (a *Authkit) RevokeAPIToken(ctx context.Context, userID, tokenID uuid.UUID) error {
+	return a.apiTokens.Revoke(ctx, userID, tokenID)
+}
+
+func (a *Authkit) RevokeAllAPITokens(ctx context.Context, userID uuid.UUID) error {
+	return a.apiTokens.RevokeAll(ctx, userID)
 }
 
 // toStringSlice coerces a config value (set as []string or []any in the Go

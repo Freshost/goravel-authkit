@@ -8,6 +8,29 @@ While the package is pre-1.0, minor versions may contain breaking changes.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-11
+
+### Added
+
+- Optional per-guard personal API tokens with mandatory expiration, configured
+  scopes, one-time plaintext display, SHA-256 hashes at rest, session-only
+  management endpoints, token-only/hybrid host middleware, pruning, audit events,
+  and companion account UI.
+
+### Security
+
+- Email syntax is now validated in the service layer for user creation, user
+  updates, profile updates, and direct authentication callers.
+- State-changing Authkit routes now reject requests without a same-origin or
+  explicitly trusted `Origin`/`Referer` by default.
+- Authentication rate limits now combine atomic IP and account/user buckets.
+  A host can register a distributed backend with `RegisterRateLimitStore`.
+
+### Changed
+
+- Replaced `rate_limit.attempts` with `ip_attempts`, `account_attempts`, and
+  `password_attempts`; removed the old `RateLimitAuth` middleware contract.
+
 ## [0.3.0] - 2026-08-09
 
 ### Changed

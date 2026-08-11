@@ -10,6 +10,7 @@ import (
 	"github.com/goravel/framework/facades"
 
 	"github.com/freshost/goravel-authkit/helpers"
+	"github.com/freshost/goravel-authkit/http/middleware"
 	"github.com/freshost/goravel-authkit/http/responses"
 	"github.com/freshost/goravel-authkit/services"
 )
@@ -25,14 +26,16 @@ type TwoFactorController struct {
 	sessions           *services.Sessions // nil when session tracking is disabled
 	guard              string
 	rememberCookieName string
+	rateLimiter        *middleware.AttemptLimiter
+	accountAttempts    int
 }
 
 // NewTwoFactorController builds the two-factor controller. Pass a nil remember to
 // disable persistent "remember me" logins, and a nil sessions to disable
 // active-session tracking. rememberCookieName is the per-instance remember cookie
 // name (empty → the package default).
-func NewTwoFactorController(users *services.Users, auth *services.Auth, twoFactor *services.TwoFactor, audit *services.Audit, remember *services.Remember, sessions *services.Sessions, guard, rememberCookieName string) *TwoFactorController {
-	return &TwoFactorController{users: users, auth: auth, twoFactor: twoFactor, audit: audit, remember: remember, sessions: sessions, guard: guard, rememberCookieName: rememberCookieName}
+func NewTwoFactorController(users *services.Users, auth *services.Auth, twoFactor *services.TwoFactor, audit *services.Audit, remember *services.Remember, sessions *services.Sessions, guard, rememberCookieName string, rateLimiter *middleware.AttemptLimiter, accountAttempts int) *TwoFactorController {
+	return &TwoFactorController{users: users, auth: auth, twoFactor: twoFactor, audit: audit, remember: remember, sessions: sessions, guard: guard, rememberCookieName: rememberCookieName, rateLimiter: rateLimiter, accountAttempts: accountAttempts}
 }
 
 // Challenge completes a login that returned {two_factor:true} by verifying a TOTP
@@ -48,6 +51,9 @@ func (c *TwoFactorController) Challenge(ctx contractshttp.Context) contractshttp
 	id, err := uuid.Parse(raw)
 	if err != nil || id == uuid.Nil {
 		return c.unauthorized(ctx, "no pending two-factor challenge")
+	}
+	if response := enforceRateLimit(ctx, c.rateLimiter, "two-factor-user", id.String(), c.accountAttempts); response != nil {
+		return response
 	}
 
 	var req responses.TwoFactorChallengeRequest

@@ -38,6 +38,41 @@ contract. Auth endpoints other than login require the session cookie (guarded by
 | DELETE | `/auth/sessions` | `terminateOtherSessions` | cookie | `200` MessageResponse | `401` |
 | DELETE | `/auth/sessions/{id}` | `terminateSession` | cookie | `200` MessageResponse | `400` `404` |
 
+## Personal API tokens (when `features.api_tokens`)
+
+Management is session-only and CSRF-protected. Creation additionally requires
+the current password and a live TOTP code when the user has 2FA enabled. It is
+blocked during impersonation. Plaintext is returned only by the create response.
+
+| Method | Path | Auth | Success | Errors |
+| --- | --- | --- | --- | --- |
+| GET | `/auth/api-tokens` | cookie | `200` `[]APITokenResponse` | `401` |
+| POST | `/auth/api-tokens` | cookie + password (+ TOTP) | `201` IssuedAPITokenResponse | `400` `401` `409` `429` |
+| DELETE | `/auth/api-tokens/{id}` | cookie | `200` MessageResponse | `400` `404` |
+| DELETE | `/auth/api-tokens` | cookie | `200` MessageResponse | `401` |
+
+```jsonc
+// expiresAt is mandatory RFC3339
+{
+  "name": "Deployment CLI",
+  "expiresAt": "2026-09-10T23:59:59Z",
+  "scopes": ["deployments:read", "deployments:write"],
+  "password": "current-password",
+  "twoFactorCode": "123456"
+}
+
+// 201 — token is shown once; list responses never contain it
+{
+  "id": "...", "name": "Deployment CLI", "scopes": ["deployments:read"],
+  "expiresAt": "...", "lastUsedAt": null, "createdAt": "...",
+  "token": "gak_<selector>.<validator>"
+}
+```
+
+Host routes opt into bearer authentication with `routes.ProtectToken`, or accept
+either a session or token with `routes.ProtectAny`. Send tokens as
+`Authorization: Bearer <token>`.
+
 > When the user has 2FA enabled, `login` returns `200 {"two_factor": true}`
 > **without** establishing the session — the client must then call
 > `two-factor-challenge`.
@@ -152,7 +187,8 @@ The reject-while-impersonating guard returns `403 impersonation_forbidden` on
 {
   "roles": ["admin", "user"],
   "minPasswordLength": 8,
-  "features": { "userManagement": true, "twoFactor": true, "auditLog": true, "sessions": true, "impersonation": false }
+  "features": { "userManagement": true, "twoFactor": true, "auditLog": true, "sessions": true, "impersonation": false, "apiTokens": true },
+  "apiTokens": { "allowedScopes": ["deployments:read"], "defaultLifetimeDays": 30, "maxLifetimeDays": 365, "maxPerUser": 20 }
 }
 
 // SessionResponse — one active session (secret session id never exposed)
@@ -202,13 +238,19 @@ The reject-while-impersonating guard returns `403 impersonation_forbidden` on
 | 401 | `invalid_credentials` | Login failed (unknown email **or** wrong password — never distinguished) |
 | 401 | `unauthorized` | Missing/invalid session |
 | 401 | `session_expired` | Password changed elsewhere → other sessions invalidated |
+| 401 | `invalid_token` | Missing, malformed, expired, revoked, or otherwise invalid bearer token |
 | 403 | `forbidden` | `RequireRole` gate failed, or the impersonation gate denied the actor |
+| 403 | `insufficient_scope` | Valid bearer token lacks a required route scope |
 | 403 | `impersonation_forbidden` | Action blocked while impersonating (password change, user management, nested impersonation) |
+| 403 | `csrf_failed` | Unsafe request has no same-origin or explicitly trusted Origin/Referer |
 | 409 | `already_impersonating` | An impersonation is already active on this guard (no nesting) |
 | 404 | `not_found` | User does not exist (or the impersonation target is unknown) |
 | 409 | `already_exists` | Email already taken |
 | 409 | `last_admin` | Deleting the last user |
-| 429 | `rate_limited` | Too many login attempts |
+| 409 | `token_limit` | User reached the configured active-token maximum |
+| 429 | `rate_limited` | An IP, account, 2FA-user, or password-user bucket is exhausted |
+| 503 | `rate_limiter_unavailable` | The configured rate-limit store failed; authentication fails closed |
+| 503 | `authentication_unavailable` | Token/user lookup failed; bearer authentication fails closed |
 
 ## Behavioural notes
 
@@ -299,7 +341,10 @@ authkitroutes.Register(facades.Route(), opts)
 | `Prefix` | Route prefix (e.g. `/api/v1`); routes mount under `{Prefix}/auth`. |
 | `Guard` | Goravel auth guard name backing the session (e.g. `admin`). |
 | `MinPasswordLength` | Minimum accepted new-password length. |
-| `RateLimitAttempts` / `RateLimitWindow` | Per-IP login/challenge limit. |
+| `RateLimitIPAttempts` / `RateLimitAccountAttempts` | Combined IP and account limits for login/challenge. |
+| `RateLimitPasswordAttempts` / `RateLimitWindow` | Per-user password limit and shared window. |
+| `RateLimitStore` | Optional atomic backend; otherwise the process-local memory store is used. |
+| `EnableCSRF` / `TrustedOrigins` | Fail-closed request-origin verification and exact cross-origin allowlist. |
 | `EnableUserManagement` | Register the `/users` CRUD endpoints. |
 | `EnableAuditLog` | Wire the audit service into the controllers. |
 | `UserManagementRoles` | Roles allowed at `/users` (fail-closed default `["admin"]`). |
@@ -307,7 +352,8 @@ authkitroutes.Register(facades.Route(), opts)
 | `EnableTwoFactor` / `TwoFactorIssuer` / `RecoveryCodeCount` | TOTP two-factor. |
 | `EnableRememberMe` / `RememberLifetime` | Persistent remember-me login. |
 | `EnableSessions` / `SessionActiveWindow` | Active-session tracking + endpoints. |
-| `UsersTable` / `AuditTable` / `RememberTokensTable` / `SessionsTable` | Bind the repositories to specific tables (empty → package defaults `users` / `audit_logs` / `auth_remember_tokens` / `auth_sessions`). |
+| `EnableAPITokens` / token policy fields | Enable management and configure allowed scopes, expiry, maximum active tokens, and password-change revocation. |
+| `UsersTable` / `AuditTable` / `RememberTokensTable` / `SessionsTable` / `APITokensTable` | Bind the repositories to per-guard tables. |
 | `RememberCookieName` | This guard's remember cookie (empty → `authkit_remember`). Two guards on one origin must differ. |
 | `EnableImpersonation` | Mount the impersonation endpoints + the reject-while-impersonating guards (off by default). |
 | `ImpersonationRoles` | The actor must hold one of these roles to impersonate (empty = any authenticated user in this guard). |
@@ -343,6 +389,24 @@ authkit.RegisterImpersonationPolicy(myPolicy{})
 - **`authkit.Principal`** identifies one party in the decision:
   `{ Guard string; UserID uuid.UUID; Email string; Role string }`.
 
+### Rate-limit store
+
+Multi-instance hosts register one shared atomic backend before route mounting:
+
+```go
+type sharedLimiter struct { /* Redis client */ }
+
+func (store *sharedLimiter) Hit(ctx context.Context, key string, limit int, window time.Duration) (authkit.RateLimitResult, error) {
+    // Atomically consume one attempt and apply/retain the bucket expiry.
+}
+
+authkit.RegisterRateLimitStore(&sharedLimiter{})
+```
+
+`Hit` must be atomic across processes. Authkit supplies already namespaced and
+SHA-256-hashed keys, so the backend never receives raw email, IP, or user ID.
+Backend errors fail closed with `503 rate_limiter_unavailable`.
+
 ### Guarding the host's own routes
 
 ```go
@@ -355,8 +419,9 @@ facades.Route().Prefix("/api/v1").
     })
 ```
 
-- **`Protect(guard string) []http.Middleware`** returns `StartSession` +
-  `Authenticated(guard, repo)` (the repo is bound to that guard's user table).
+- **`Protect(guard string) []http.Middleware`** returns `StartSession` + CSRF
+  origin verification (when enabled) + `Authenticated(guard, repo)` (the repo is
+  bound to that guard's user table).
 - **`ProtectRole(guard string, roles ...string) []http.Middleware`** is `Protect`
   plus a `RequireRole` gate (no roles → behaves like `Protect`).
 - **`AuthUserID(ctx http.Context) uuid.UUID`** reads the current user id inside a

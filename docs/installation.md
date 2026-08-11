@@ -59,7 +59,8 @@ guard when none are declared), with no edits to `bootstrap/migrations.go` or
 - **Migrations** — registers `migrations.ForTables(...)` for that guard's tables
   via the schema facade, so `./artisan migrate` runs them. Opt out with
   `authkit.register_migrations = false`.
-- **Commands** — registers `auth:create-user` and `auth:prune-remember-tokens`.
+- **Commands** — registers `auth:create-user`, `auth:prune-remember-tokens`, and
+  `auth:prune-api-tokens`.
 - **Publish** — exposes `config/authkit.go` for `./artisan vendor:publish --tag=authkit`.
 
 ### Wire routes (one-time)
@@ -108,13 +109,22 @@ After that you have `POST /api/v1/auth/login`, `/auth/me`, `/auth/logout`,
 `/users` CRUD — under each guard's prefix. See the
 [API reference](api-reference.md).
 
+Every state-changing request must provide a verifiable browser origin signal:
+a same-origin/trusted `Origin` or `Referer`, or `Sec-Fetch-Site: same-origin`.
+For a separately hosted SPA, add its exact scheme and host to
+`authkit.csrf.trusted_origins`; command-line and server clients must send an
+`Origin` explicitly.
+
 ## Production checklist
 
 - Serve over **HTTPS**; set `session.secure=true` and a `session.same_site`.
+- Keep `authkit.csrf.enabled=true`; configure only exact trusted SPA origins.
 - **Set `http.trusted_proxies` whenever login rate-limiting or audit logging is
   enabled** (both are on by default). Without it, `X-Forwarded-For` is
   attacker-controlled: the rate limit can be bypassed and audit IPs forged. If
   you terminate TLS at a proxy/CDN this is mandatory — see [security](security.md).
+- With more than one app instance, register an atomic shared limiter store using
+  `authkit.RegisterRateLimitStore` before mounting routes.
 - Keep `/users` admin-gated: `authkit.user_management_roles` defaults to
   `["admin"]` (fail-closed). Only widen it if you intend non-admins to manage
   users. The bootstrap `auth:create-user` creates an `admin`.

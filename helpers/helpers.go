@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"net/http"
+	"slices"
 
 	"github.com/google/uuid"
 	contractshttp "github.com/goravel/framework/contracts/http"
@@ -17,6 +18,15 @@ import (
 // middleware stores the current user id (string). Domain controllers read it
 // via AuthUserID to scope queries by the current user.
 const CtxAuthUserID = "auth_user_id"
+
+const (
+	CtxAuthMethod     = "auth_method"
+	CtxAPITokenID     = "auth_api_token_id"
+	CtxAPITokenScopes = "auth_api_token_scopes"
+
+	AuthMethodSession  = "session"
+	AuthMethodAPIToken = "api_token"
+)
 
 // ParseUUIDParam parses a UUID route parameter. On failure it returns a pointer
 // to a 400 response the controller returns directly:
@@ -87,6 +97,36 @@ func AuthUserID(ctx contractshttp.Context) uuid.UUID {
 		return uuid.Nil
 	}
 	return id
+}
+
+// AuthMethod reports how the current request was authenticated. An empty value
+// means no Authkit middleware established an identity.
+func AuthMethod(ctx contractshttp.Context) string {
+	method, _ := ctx.Value(CtxAuthMethod).(string)
+	return method
+}
+
+// APITokenID returns the personal access token used for this request, or
+// uuid.Nil for session-authenticated and unauthenticated requests.
+func APITokenID(ctx contractshttp.Context) uuid.UUID {
+	raw, _ := ctx.Value(CtxAPITokenID).(string)
+	id, err := uuid.Parse(raw)
+	if err != nil {
+		return uuid.Nil
+	}
+	return id
+}
+
+// APITokenScopes returns a copy of the scopes attached to the current token.
+func APITokenScopes(ctx contractshttp.Context) []string {
+	scopes, _ := ctx.Value(CtxAPITokenScopes).([]string)
+	return slices.Clone(scopes)
+}
+
+// TokenCan reports whether a bearer-authenticated request has the given scope.
+// Session authentication is deliberately not scope-limited and returns false.
+func TokenCan(ctx contractshttp.Context, scope string) bool {
+	return AuthMethod(ctx) == AuthMethodAPIToken && slices.Contains(APITokenScopes(ctx), scope)
 }
 
 // RegenerateAndPersistSession regenerates the session id (session-fixation

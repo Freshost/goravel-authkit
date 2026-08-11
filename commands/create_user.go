@@ -61,7 +61,7 @@ func (r *CreateUser) Handle(ctx console.Context) error {
 	minPwLen := facades.Config().GetInt("authkit.min_password_length", services.DefaultMinPasswordLength)
 	// Bootstrap CLI: roles=nil accepts any role (trusted operator). managementRoles
 	// defaults to ["admin"] so the last-admin guards behave correctly.
-	svc := services.NewUsers(repositories.NewUsers(), services.NewFacadeHasher(), minPwLen, nil, []string{services.AdminRole})
+	svc := services.NewUsers(repositories.NewUsers(), services.NewFacadeHasher(), minPwLen, nil, []string{services.AdminRole}, nil, true)
 
 	user, err := svc.Create(context.Background(), email, name, password, role)
 	if err != nil {

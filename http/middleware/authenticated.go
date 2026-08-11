@@ -1,5 +1,5 @@
 // Package middleware holds the goravel-authkit HTTP middleware: the session guard
-// (Authenticated) and the login rate-limiter (RateLimitAuth).
+// (Authenticated), request-origin verification, and authentication rate limits.
 package middleware
 
 import (
@@ -77,6 +77,7 @@ func (middleware *authenticatedMiddleware) Handle(ctx contractshttp.Context) {
 	}
 
 	ctx.WithValue(helpers.CtxAuthUserID, user.ID.String())
+	ctx.WithValue(helpers.CtxAuthMethod, helpers.AuthMethodSession)
 	ctx.Request().Next()
 }
 

@@ -53,6 +53,13 @@ func TestAuthenticate_EmptyCredentials(t *testing.T) {
 	assert.ErrorIs(t, err, ErrInvalidCredentials)
 }
 
+func TestAuthenticate_InvalidEmailIsInvalidCredentials(t *testing.T) {
+	svc := NewAuth(newFakeRepo(), fakeHasher{}, 8)
+
+	_, err := svc.Authenticate(context.Background(), "not-an-email", "secret123")
+	assert.ErrorIs(t, err, ErrInvalidCredentials)
+}
+
 func TestChangePassword_Success(t *testing.T) {
 	repo := newFakeRepo()
 	u := seedUser(repo, "admin@example.com", "secret123")
@@ -144,6 +151,15 @@ func TestUpdateProfile_MissingEmail(t *testing.T) {
 	svc := NewAuth(repo, fakeHasher{}, 8)
 
 	_, _, err := svc.UpdateProfile(context.Background(), u.ID, "  ", "Admin")
+	assert.ErrorIs(t, err, ErrValidation)
+}
+
+func TestUpdateProfile_InvalidEmail(t *testing.T) {
+	repo := newFakeRepo()
+	u := seedUser(repo, "admin@example.com", "secret123")
+	svc := NewAuth(repo, fakeHasher{}, 8)
+
+	_, _, err := svc.UpdateProfile(context.Background(), u.ID, "not-an-email", "Admin")
 	assert.ErrorIs(t, err, ErrValidation)
 }
 

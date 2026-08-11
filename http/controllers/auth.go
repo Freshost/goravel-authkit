@@ -7,6 +7,7 @@ package controllers
 import (
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/google/uuid"
 	contractshttp "github.com/goravel/framework/contracts/http"
@@ -27,13 +28,18 @@ import (
 
 // AuthController handles the auth endpoints.
 type AuthController struct {
-	auth               *services.Auth
-	audit              *services.Audit     // nil when audit logging is disabled
-	twoFactor          *services.TwoFactor // nil when 2FA is disabled
-	remember           *services.Remember  // nil when remember-me is disabled
-	sessions           *services.Sessions  // nil when session tracking is disabled
-	guard              string
-	rememberCookieName string
+	auth                            *services.Auth
+	audit                           *services.Audit     // nil when audit logging is disabled
+	twoFactor                       *services.TwoFactor // nil when 2FA is disabled
+	remember                        *services.Remember  // nil when remember-me is disabled
+	sessions                        *services.Sessions  // nil when session tracking is disabled
+	apiTokens                       *services.APITokens // nil when API tokens are disabled
+	revokeAPITokensOnPasswordChange bool
+	guard                           string
+	rememberCookieName              string
+	rateLimiter                     *middleware.AttemptLimiter
+	accountAttempts                 int
+	passwordAttempts                int
 }
 
 // NewAuthController builds the auth controller. Pass a nil audit to disable audit
@@ -41,8 +47,8 @@ type AuthController struct {
 // disable persistent "remember me" logins, and a nil sessions to disable
 // active-session tracking. rememberCookieName is the per-instance remember cookie
 // name (empty → the package default).
-func NewAuthController(auth *services.Auth, audit *services.Audit, twoFactor *services.TwoFactor, remember *services.Remember, sessions *services.Sessions, guard, rememberCookieName string) *AuthController {
-	return &AuthController{auth: auth, audit: audit, twoFactor: twoFactor, remember: remember, sessions: sessions, guard: guard, rememberCookieName: rememberCookieName}
+func NewAuthController(auth *services.Auth, audit *services.Audit, twoFactor *services.TwoFactor, remember *services.Remember, sessions *services.Sessions, apiTokens *services.APITokens, revokeAPITokensOnPasswordChange bool, guard, rememberCookieName string, rateLimiter *middleware.AttemptLimiter, accountAttempts, passwordAttempts int) *AuthController {
+	return &AuthController{auth: auth, audit: audit, twoFactor: twoFactor, remember: remember, sessions: sessions, apiTokens: apiTokens, revokeAPITokensOnPasswordChange: revokeAPITokensOnPasswordChange, guard: guard, rememberCookieName: rememberCookieName, rateLimiter: rateLimiter, accountAttempts: accountAttempts, passwordAttempts: passwordAttempts}
 }
 
 // Login verifies credentials and establishes an httpOnly session cookie, handling
@@ -54,6 +60,9 @@ func (c *AuthController) Login(ctx contractshttp.Context) contractshttp.Response
 	var req responses.LoginRequest
 	if err := ctx.Request().Bind(&req); err != nil {
 		return c.badRequest(ctx)
+	}
+	if response := enforceRateLimit(ctx, c.rateLimiter, "login-account", strings.ToLower(strings.TrimSpace(req.Email)), c.accountAttempts); response != nil {
+		return response
 	}
 
 	user, err := c.auth.Authenticate(ctx.Context(), req.Email, req.Password)
@@ -165,7 +174,6 @@ func (c *AuthController) Logout(ctx contractshttp.Context) contractshttp.Respons
 			facades.Log().Errorf("auth: forget session: %v", err)
 		}
 	}
-
 	// Drop the persistent remember token (this device) so it can't re-login.
 	if c.remember != nil {
 		if cookie := helpers.ReadRememberCookie(ctx, c.rememberCookieName); cookie != "" {
@@ -257,6 +265,9 @@ func (c *AuthController) ChangePassword(ctx contractshttp.Context) contractshttp
 			Error: "unauthorized", Message: "Authentication required",
 		})
 	}
+	if response := enforceRateLimit(ctx, c.rateLimiter, "password-user", userID.String(), c.passwordAttempts); response != nil {
+		return response
+	}
 
 	changedAt, err := c.auth.ChangePassword(ctx.Context(), userID, req.CurrentPassword, req.NewPassword)
 	if err != nil {
@@ -283,6 +294,11 @@ func (c *AuthController) ChangePassword(ctx contractshttp.Context) contractshttp
 		currentToken := helpers.SessionTrackingToken(ctx, c.guard)
 		if err := c.sessions.TerminateOthers(ctx.Context(), userID, currentToken); err != nil {
 			facades.Log().Errorf("auth: terminate other sessions: %v", err)
+		}
+	}
+	if c.apiTokens != nil && c.revokeAPITokensOnPasswordChange {
+		if err := c.apiTokens.RevokeAll(ctx.Context(), userID); err != nil {
+			facades.Log().Errorf("auth: revoke api tokens: %v", err)
 		}
 	}
 

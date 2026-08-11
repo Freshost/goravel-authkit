@@ -13,6 +13,7 @@ import (
 	"github.com/freshost/goravel-authkit/helpers"
 	"github.com/freshost/goravel-authkit/http/middleware"
 	"github.com/freshost/goravel-authkit/repositories"
+	"github.com/freshost/goravel-authkit/services"
 )
 
 // GuardsKey is the config path under which an app declares its authkit guards.
@@ -101,6 +102,7 @@ func OptionsForGuard(name string) Options {
 	o.AuditTable = cfg.GetString(base+"audit_table", name+"_audit_logs")
 	o.RememberTokensTable = cfg.GetString(base+"remember_tokens_table", name+"_remember_tokens")
 	o.SessionsTable = cfg.GetString(base+"sessions_table", name+"_auth_sessions")
+	o.APITokensTable = cfg.GetString(base+"api_tokens_table", name+"_api_tokens")
 	o.RememberCookieName = cfg.GetString(base+"remember_cookie_name", "authkit_"+name+"_remember")
 
 	if v := cfg.Get(base + "roles"); v != nil {
@@ -112,8 +114,14 @@ func OptionsForGuard(name string) Options {
 	if v := cfg.GetInt(base + "min_password_length"); v > 0 {
 		o.MinPasswordLength = v
 	}
-	if v := cfg.GetInt(base + "rate_limit.attempts"); v > 0 {
-		o.RateLimitAttempts = v
+	if v := cfg.GetInt(base + "rate_limit.ip_attempts"); v > 0 {
+		o.RateLimitIPAttempts = v
+	}
+	if v := cfg.GetInt(base + "rate_limit.account_attempts"); v > 0 {
+		o.RateLimitAccountAttempts = v
+	}
+	if v := cfg.GetInt(base + "rate_limit.password_attempts"); v > 0 {
+		o.RateLimitPasswordAttempts = v
 	}
 	if v := cfg.GetInt(base + "rate_limit.window"); v > 0 {
 		o.RateLimitWindow = time.Duration(v) * time.Second
@@ -146,6 +154,26 @@ func OptionsForGuard(name string) Options {
 	o.EnableTwoFactor = cfg.GetBool(base+"features.two_factor", o.EnableTwoFactor)
 	o.EnableRememberMe = cfg.GetBool(base+"features.remember_me", o.EnableRememberMe)
 	o.EnableSessions = cfg.GetBool(base+"features.sessions", o.EnableSessions)
+	o.EnableAPITokens = cfg.GetBool(base+"features.api_tokens", o.EnableAPITokens)
+	if v := cfg.Get(base + "api_tokens.allowed_scopes"); v != nil {
+		o.APITokenAllowedScopes = toStringSlice(v)
+	}
+	if v := cfg.GetInt(base + "api_tokens.default_lifetime_days"); v > 0 {
+		o.APITokenDefaultLifetime = time.Duration(v) * 24 * time.Hour
+	}
+	if v := cfg.GetInt(base + "api_tokens.max_lifetime_days"); v > 0 {
+		o.APITokenMaxLifetime = time.Duration(v) * 24 * time.Hour
+	}
+	if v := cfg.GetInt(base + "api_tokens.max_per_user"); v > 0 {
+		o.APITokenMaxPerUser = v
+	}
+	if cfg.Get(base+"api_tokens.revoke_on_password_change") != nil {
+		o.KeepAPITokensOnPasswordChange = !cfg.GetBool(base+"api_tokens.revoke_on_password_change", true)
+	}
+	o.EnableCSRF = cfg.GetBool(base+"csrf.enabled", o.EnableCSRF)
+	if v := cfg.Get(base + "csrf.trusted_origins"); v != nil {
+		o.TrustedOrigins = toStringSlice(v)
+	}
 
 	return o
 }
@@ -182,22 +210,55 @@ func optionsByGuard(name string) Options {
 //
 // It is the authkit equivalent of Laravel's `auth:client` route middleware.
 func Protect(guard string) []contractshttp.Middleware {
-	repo := repositories.NewUsersWithTable(optionsByGuard(guard).UsersTable)
-	return []contractshttp.Middleware{
-		sessionmiddleware.StartSession(),
-		middleware.Authenticated(guard, repo),
+	opts := optionsByGuard(guard)
+	repo := repositories.NewUsersWithTable(opts.UsersTable)
+	chain := []contractshttp.Middleware{sessionmiddleware.StartSession()}
+	if opts.EnableCSRF {
+		chain = append(chain, middleware.VerifyRequestOrigin(opts.TrustedOrigins))
 	}
+	return append(chain, middleware.Authenticated(guard, repo))
 }
 
 // ProtectRole is Protect plus a role gate: the authenticated user's role must be
 // one of roles. With no roles it behaves like Protect (any authenticated user).
 func ProtectRole(guard string, roles ...string) []contractshttp.Middleware {
-	repo := repositories.NewUsersWithTable(optionsByGuard(guard).UsersTable)
-	return []contractshttp.Middleware{
-		sessionmiddleware.StartSession(),
-		middleware.Authenticated(guard, repo),
-		middleware.RequireRole(guard, repo, roles...),
+	opts := optionsByGuard(guard)
+	repo := repositories.NewUsersWithTable(opts.UsersTable)
+	chain := []contractshttp.Middleware{sessionmiddleware.StartSession()}
+	if opts.EnableCSRF {
+		chain = append(chain, middleware.VerifyRequestOrigin(opts.TrustedOrigins))
 	}
+	return append(chain, middleware.Authenticated(guard, repo), middleware.RequireRole(guard, repo, roles...))
+}
+
+// ProtectToken guards a host route using only an API token from the named guard.
+// Required scopes apply to tokens in addition to the host's normal authorization.
+func ProtectToken(guard string, requiredScopes ...string) []contractshttp.Middleware {
+	opts := optionsByGuard(guard)
+	users := repositories.NewUsersWithTable(opts.UsersTable)
+	var tokens *services.APITokens
+	if opts.EnableAPITokens {
+		tokens = services.NewAPITokens(repositories.NewAPITokensWithTable(opts.APITokensTable), users, nil, nil, opts.APITokenAllowedScopes, opts.APITokenMaxLifetime, opts.APITokenMaxPerUser)
+	}
+	return []contractshttp.Middleware{middleware.BearerAuthenticated(guard, tokens, users, requiredScopes...)}
+}
+
+// ProtectAny accepts either an API token or the normal session. Bearer requests
+// stay stateless and bypass browser CSRF checks; browser requests retain both.
+func ProtectAny(guard string, requiredScopes ...string) []contractshttp.Middleware {
+	opts := optionsByGuard(guard)
+	users := repositories.NewUsersWithTable(opts.UsersTable)
+	var tokens *services.APITokens
+	if opts.EnableAPITokens {
+		tokens = services.NewAPITokens(repositories.NewAPITokensWithTable(opts.APITokensTable), users, nil, nil, opts.APITokenAllowedScopes, opts.APITokenMaxLifetime, opts.APITokenMaxPerUser)
+	}
+	chain := []contractshttp.Middleware{
+		middleware.UnlessBearer(sessionmiddleware.StartSession(), guard+".session"),
+	}
+	if opts.EnableCSRF {
+		chain = append(chain, middleware.UnlessBearer(middleware.VerifyRequestOrigin(opts.TrustedOrigins), guard+".csrf"))
+	}
+	return append(chain, middleware.AuthenticateAny(guard, tokens, users, requiredScopes...))
 }
 
 // AuthUserID returns the id of the user authenticated by Protect/ProtectRole on
@@ -206,3 +267,13 @@ func ProtectRole(guard string, roles ...string) []contractshttp.Middleware {
 func AuthUserID(ctx contractshttp.Context) uuid.UUID {
 	return helpers.AuthUserID(ctx)
 }
+
+// AuthMethod is "session" or "api_token" for an authenticated request.
+func AuthMethod(ctx contractshttp.Context) string { return helpers.AuthMethod(ctx) }
+
+// APITokenID identifies the token used for this request, if any.
+func APITokenID(ctx contractshttp.Context) uuid.UUID { return helpers.APITokenID(ctx) }
+
+// TokenCan reports whether the bearer token has scope. It returns false for
+// session-authenticated requests, which are governed by normal authorization.
+func TokenCan(ctx contractshttp.Context, scope string) bool { return helpers.TokenCan(ctx, scope) }

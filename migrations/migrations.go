@@ -13,6 +13,7 @@ type MigrationConfig struct {
 	AuditTable          string
 	RememberTokensTable string
 	SessionsTable       string
+	APITokensTable      string
 }
 
 func (c MigrationConfig) withDefaults() MigrationConfig {
@@ -27,6 +28,9 @@ func (c MigrationConfig) withDefaults() MigrationConfig {
 	}
 	if c.SessionsTable == "" {
 		c.SessionsTable = repositories.DefaultSessionsTable
+	}
+	if c.APITokensTable == "" {
+		c.APITokensTable = repositories.DefaultAPITokensTable
 	}
 	return c
 }
@@ -59,5 +63,6 @@ func ForTables(cfg MigrationConfig) []schema.Migration {
 		&AddDisabledAtToUsers{table: cfg.UsersTable, signature: sig(cfg.UsersTable, "disabled_at")},
 		&CreateAuthSessions{table: cfg.SessionsTable, signature: sig(cfg.SessionsTable, "create")},
 		&DropUsersRoleDefault{table: cfg.UsersTable, signature: sig(cfg.UsersTable, "role_no_default")},
+		&CreateAPITokens{table: cfg.APITokensTable, signature: sig(cfg.APITokensTable, "create")},
 	}
 }

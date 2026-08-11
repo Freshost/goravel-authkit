@@ -12,6 +12,7 @@ import (
 	"github.com/goravel/framework/facades"
 	sessionmiddleware "github.com/goravel/framework/session/middleware"
 
+	authcontracts "github.com/freshost/goravel-authkit/contracts"
 	"github.com/freshost/goravel-authkit/http/controllers"
 	"github.com/freshost/goravel-authkit/http/middleware"
 	"github.com/freshost/goravel-authkit/http/responses"
@@ -28,9 +29,18 @@ type Options struct {
 	Guard string
 	// MinPasswordLength is the minimum accepted new-password length.
 	MinPasswordLength int
-	// RateLimitAttempts / RateLimitWindow bound the login endpoint per IP.
-	RateLimitAttempts int
-	RateLimitWindow   time.Duration
+	// RateLimitIPAttempts bounds attempts from one client address. Account and
+	// password limits use separate hash-keyed buckets in the same window.
+	RateLimitIPAttempts       int
+	RateLimitAccountAttempts  int
+	RateLimitPasswordAttempts int
+	RateLimitWindow           time.Duration
+	// RateLimitStore overrides the host-registered or default memory store.
+	RateLimitStore authcontracts.RateLimitStore
+	// EnableCSRF verifies Origin/Referer on every state-changing Authkit route.
+	// TrustedOrigins allows explicitly configured cross-origin browser clients.
+	EnableCSRF     bool
+	TrustedOrigins []string
 	// EnableUserManagement registers the /users CRUD endpoints.
 	EnableUserManagement bool
 	// EnableAuditLog wires the audit service into the controllers.
@@ -64,6 +74,18 @@ type Options struct {
 	// login-history endpoint, and the TrackSession middleware (terminated sessions
 	// are rejected on their next request).
 	EnableSessions bool
+	// EnableAPITokens mounts session-only token management endpoints and allows
+	// ProtectToken/ProtectAny to authenticate this guard's opaque bearer tokens.
+	// It is off by default.
+	EnableAPITokens bool
+	// APITokenAllowedScopes is the allow-list users may assign to tokens. An empty
+	// list permits only unscoped tokens.
+	APITokenAllowedScopes   []string
+	APITokenDefaultLifetime time.Duration
+	APITokenMaxLifetime     time.Duration
+	APITokenMaxPerUser      int
+	// KeepAPITokensOnPasswordChange opts out of secure default revocation.
+	KeepAPITokensOnPasswordChange bool
 	// SessionActiveWindow is how recently a session must have been active to be
 	// listed (defaults to the configured session lifetime).
 	SessionActiveWindow time.Duration
@@ -76,6 +98,7 @@ type Options struct {
 	AuditTable          string
 	RememberTokensTable string
 	SessionsTable       string
+	APITokensTable      string
 	// RememberCookieName is the name of this instance's persistent "remember me"
 	// cookie. Two instances on one origin must differ here so their cookies don't
 	// overwrite each other. Empty falls back to the package default ("authkit_remember").
@@ -100,20 +123,26 @@ type Options struct {
 // DefaultOptions returns the baked-in defaults (matches the published config).
 func DefaultOptions() Options {
 	return Options{
-		Prefix:               "/api/v1",
-		Guard:                "admin",
-		MinPasswordLength:    services.DefaultMinPasswordLength,
-		RateLimitAttempts:    5,
-		RateLimitWindow:      time.Minute,
-		EnableUserManagement: true,
-		UserManagementRoles:  []string{services.AdminRole},
-		EnableAuditLog:       true,
-		EnableTwoFactor:      true,
-		RecoveryCodeCount:    services.DefaultRecoveryCodeCount,
-		EnableRememberMe:     true,
-		RememberLifetime:     services.DefaultRememberLifetime,
-		EnableSessions:       true,
-		SessionActiveWindow:  services.DefaultSessionActiveWindow,
+		Prefix:                    "/api/v1",
+		Guard:                     "admin",
+		MinPasswordLength:         services.DefaultMinPasswordLength,
+		RateLimitIPAttempts:       20,
+		RateLimitAccountAttempts:  5,
+		RateLimitPasswordAttempts: 5,
+		RateLimitWindow:           time.Minute,
+		EnableCSRF:                true,
+		EnableUserManagement:      true,
+		UserManagementRoles:       []string{services.AdminRole},
+		EnableAuditLog:            true,
+		EnableTwoFactor:           true,
+		RecoveryCodeCount:         services.DefaultRecoveryCodeCount,
+		EnableRememberMe:          true,
+		RememberLifetime:          services.DefaultRememberLifetime,
+		EnableSessions:            true,
+		SessionActiveWindow:       services.DefaultSessionActiveWindow,
+		APITokenDefaultLifetime:   services.DefaultAPITokenLifetime,
+		APITokenMaxLifetime:       services.DefaultMaxAPITokenLifetime,
+		APITokenMaxPerUser:        services.DefaultMaxAPITokensPerUser,
 	}
 }
 
@@ -134,8 +163,14 @@ func OptionsFromConfig() Options {
 	if v := cfg.GetInt("authkit.min_password_length"); v > 0 {
 		o.MinPasswordLength = v
 	}
-	if v := cfg.GetInt("authkit.rate_limit.attempts"); v > 0 {
-		o.RateLimitAttempts = v
+	if v := cfg.GetInt("authkit.rate_limit.ip_attempts"); v > 0 {
+		o.RateLimitIPAttempts = v
+	}
+	if v := cfg.GetInt("authkit.rate_limit.account_attempts"); v > 0 {
+		o.RateLimitAccountAttempts = v
+	}
+	if v := cfg.GetInt("authkit.rate_limit.password_attempts"); v > 0 {
+		o.RateLimitPasswordAttempts = v
 	}
 	if v := cfg.GetInt("authkit.rate_limit.window"); v > 0 {
 		o.RateLimitWindow = time.Duration(v) * time.Second
@@ -148,6 +183,20 @@ func OptionsFromConfig() Options {
 		o.RememberLifetime = time.Duration(v) * 24 * time.Hour
 	}
 	o.EnableSessions = cfg.GetBool("authkit.features.sessions", o.EnableSessions)
+	o.EnableAPITokens = cfg.GetBool("authkit.features.api_tokens", o.EnableAPITokens)
+	o.APITokenAllowedScopes = toStringSlice(cfg.Get("authkit.api_tokens.allowed_scopes"))
+	if v := cfg.GetInt("authkit.api_tokens.default_lifetime_days"); v > 0 {
+		o.APITokenDefaultLifetime = time.Duration(v) * 24 * time.Hour
+	}
+	if v := cfg.GetInt("authkit.api_tokens.max_lifetime_days"); v > 0 {
+		o.APITokenMaxLifetime = time.Duration(v) * 24 * time.Hour
+	}
+	if v := cfg.GetInt("authkit.api_tokens.max_per_user"); v > 0 {
+		o.APITokenMaxPerUser = v
+	}
+	o.KeepAPITokensOnPasswordChange = !cfg.GetBool("authkit.api_tokens.revoke_on_password_change", true)
+	o.EnableCSRF = cfg.GetBool("authkit.csrf.enabled", o.EnableCSRF)
+	o.TrustedOrigins = toStringSlice(cfg.Get("authkit.csrf.trusted_origins"))
 	// The active-session window mirrors the session lifetime so the list hides
 	// sessions whose store entry has already expired.
 	if v := cfg.GetInt("session.lifetime"); v > 0 {
@@ -169,6 +218,7 @@ func OptionsFromConfig() Options {
 	o.AuditTable = cfg.GetString("authkit.tables.audit")
 	o.RememberTokensTable = cfg.GetString("authkit.tables.remember_tokens")
 	o.SessionsTable = cfg.GetString("authkit.tables.sessions")
+	o.APITokensTable = cfg.GetString("authkit.tables.api_tokens")
 	o.RememberCookieName = cfg.GetString("authkit.remember.cookie_name")
 	o.EnableImpersonation = cfg.GetBool("authkit.impersonation.enabled", o.EnableImpersonation)
 	o.ImpersonationRoles = toStringSlice(cfg.Get("authkit.impersonation.roles"))
@@ -210,11 +260,26 @@ func Register(router route.Router, opts Options) {
 	if opts.MinPasswordLength <= 0 {
 		opts.MinPasswordLength = def.MinPasswordLength
 	}
-	if opts.RateLimitAttempts <= 0 {
-		opts.RateLimitAttempts = def.RateLimitAttempts
+	if opts.RateLimitIPAttempts <= 0 {
+		opts.RateLimitIPAttempts = def.RateLimitIPAttempts
+	}
+	if opts.RateLimitAccountAttempts <= 0 {
+		opts.RateLimitAccountAttempts = def.RateLimitAccountAttempts
+	}
+	if opts.RateLimitPasswordAttempts <= 0 {
+		opts.RateLimitPasswordAttempts = def.RateLimitPasswordAttempts
 	}
 	if opts.RateLimitWindow <= 0 {
 		opts.RateLimitWindow = def.RateLimitWindow
+	}
+	if opts.APITokenDefaultLifetime <= 0 {
+		opts.APITokenDefaultLifetime = def.APITokenDefaultLifetime
+	}
+	if opts.APITokenMaxLifetime <= 0 {
+		opts.APITokenMaxLifetime = def.APITokenMaxLifetime
+	}
+	if opts.APITokenMaxPerUser <= 0 {
+		opts.APITokenMaxPerUser = def.APITokenMaxPerUser
 	}
 	// Fail-closed: /users is always gated. An empty management-role list falls
 	// back to the admin role rather than leaving the endpoints open.
@@ -224,9 +289,16 @@ func Register(router route.Router, opts Options) {
 	}
 
 	usersRepo := repositories.NewUsersWithTable(opts.UsersTable)
+	rateLimitStore := opts.RateLimitStore
+	if rateLimitStore == nil {
+		rateLimitStore = authcontracts.RegisteredRateLimitStore()
+	}
+	if rateLimitStore == nil {
+		rateLimitStore = middleware.DefaultRateLimitStore()
+	}
+	attemptLimiter := middleware.NewAttemptLimiter(rateLimitStore, "authkit:"+opts.Guard, opts.RateLimitWindow)
 	hasher := services.NewFacadeHasher()
 	authSvc := services.NewAuth(usersRepo, hasher, opts.MinPasswordLength)
-	usersSvc := services.NewUsers(usersRepo, hasher, opts.MinPasswordLength, opts.Roles, managementRoles)
 
 	var auditSvc *services.Audit
 	if opts.EnableAuditLog {
@@ -238,6 +310,12 @@ func Register(router route.Router, opts Options) {
 		twoFactorSvc = services.NewTwoFactor(usersRepo, services.NewFacadeCrypter(), opts.TwoFactorIssuer, opts.RecoveryCodeCount)
 	}
 
+	var apiTokensSvc *services.APITokens
+	if opts.EnableAPITokens {
+		apiTokensSvc = services.NewAPITokens(repositories.NewAPITokensWithTable(opts.APITokensTable), usersRepo, hasher, twoFactorSvc, opts.APITokenAllowedScopes, opts.APITokenMaxLifetime, opts.APITokenMaxPerUser)
+	}
+	usersSvc := services.NewUsers(usersRepo, hasher, opts.MinPasswordLength, opts.Roles, managementRoles, apiTokensSvc, !opts.KeepAPITokensOnPasswordChange)
+
 	var rememberSvc *services.Remember
 	if opts.EnableRememberMe {
 		rememberSvc = services.NewRemember(repositories.NewRememberWithTable(opts.RememberTokensTable), opts.RememberLifetime)
@@ -248,17 +326,35 @@ func Register(router route.Router, opts Options) {
 		sessionsSvc = services.NewSessions(repositories.NewSessionsWithTable(opts.SessionsTable), opts.SessionActiveWindow)
 	}
 
-	authCtrl := controllers.NewAuthController(authSvc, auditSvc, twoFactorSvc, rememberSvc, sessionsSvc, opts.Guard, opts.RememberCookieName)
+	authCtrl := controllers.NewAuthController(authSvc, auditSvc, twoFactorSvc, rememberSvc, sessionsSvc, apiTokensSvc, !opts.KeepAPITokensOnPasswordChange, opts.Guard, opts.RememberCookieName, attemptLimiter, opts.RateLimitAccountAttempts, opts.RateLimitPasswordAttempts)
 	usersCtrl := controllers.NewUsersController(usersSvc, auditSvc)
-	twoFactorCtrl := controllers.NewTwoFactorController(usersSvc, authSvc, twoFactorSvc, auditSvc, rememberSvc, sessionsSvc, opts.Guard, opts.RememberCookieName)
+	twoFactorCtrl := controllers.NewTwoFactorController(usersSvc, authSvc, twoFactorSvc, auditSvc, rememberSvc, sessionsSvc, opts.Guard, opts.RememberCookieName, attemptLimiter, opts.RateLimitAccountAttempts)
 	sessionsCtrl := controllers.NewSessionsController(sessionsSvc, auditSvc, opts.Guard)
+	var apiTokenMeta *responses.APITokenMeta
+	if opts.EnableAPITokens {
+		allowedScopes := opts.APITokenAllowedScopes
+		if allowedScopes == nil {
+			allowedScopes = []string{}
+		}
+		apiTokenMeta = &responses.APITokenMeta{
+			AllowedScopes:       allowedScopes,
+			DefaultLifetimeDays: int(opts.APITokenDefaultLifetime / (24 * time.Hour)),
+			MaxLifetimeDays:     int(opts.APITokenMaxLifetime / (24 * time.Hour)),
+			MaxPerUser:          opts.APITokenMaxPerUser,
+		}
+	}
 	metaCtrl := controllers.NewMetaController(opts.Roles, opts.MinPasswordLength, responses.MetaFeatures{
 		UserManagement: opts.EnableUserManagement,
 		TwoFactor:      opts.EnableTwoFactor,
 		AuditLog:       opts.EnableAuditLog,
 		Sessions:       opts.EnableSessions,
 		Impersonation:  opts.EnableImpersonation,
-	})
+		APITokens:      opts.EnableAPITokens,
+	}, apiTokenMeta)
+	var apiTokensCtrl *controllers.APITokensController
+	if apiTokensSvc != nil {
+		apiTokensCtrl = controllers.NewAPITokensController(apiTokensSvc, auditSvc, attemptLimiter, opts.RateLimitPasswordAttempts)
+	}
 
 	// Impersonation: build the controller with a guard -> users-table map (so a
 	// target in ANY configured guard can be loaded) and this guard's authorization
@@ -285,15 +381,18 @@ func Register(router route.Router, opts Options) {
 	// all need it. Carrying it on the group avoids starting a session on the app's
 	// stateless endpoints. It is idempotent, so a leftover global StartSession is
 	// harmless.
-	authGroup := router.Prefix(opts.Prefix + "/auth").
-		Middleware(sessionmiddleware.StartSession())
+	authMiddleware := []contractshttp.Middleware{sessionmiddleware.StartSession()}
+	if opts.EnableCSRF {
+		authMiddleware = append(authMiddleware, middleware.VerifyRequestOrigin(opts.TrustedOrigins))
+	}
+	authGroup := router.Prefix(opts.Prefix + "/auth").Middleware(authMiddleware...)
 	authGroup.Group(func(r route.Router) {
 		// Public, non-sensitive config for the frontend (role options, features).
 		r.Get("/meta", metaCtrl.Show)
 
 		// Public but rate-limited: login + the 2FA challenge (gate on session/IP,
 		// not on the authenticated guard).
-		r.Middleware(middleware.RateLimitAuth(opts.RateLimitAttempts, opts.RateLimitWindow)).
+		r.Middleware(middleware.RateLimitByIP(attemptLimiter, opts.RateLimitIPAttempts)).
 			Group(func(pub route.Router) {
 				pub.Post("/login", authCtrl.Login)
 				if opts.EnableTwoFactor {
@@ -320,9 +419,9 @@ func Register(router route.Router, opts Options) {
 			g.Put("/me", authCtrl.UpdateProfile)
 			if opts.EnableImpersonation {
 				// An actor acting "as" a user must not change that user's password.
-				g.Middleware(middleware.RejectWhileImpersonating(opts.Guard)).Put("/password", authCtrl.ChangePassword)
+				g.Middleware(middleware.RejectWhileImpersonating(opts.Guard), middleware.RateLimitByIP(attemptLimiter, opts.RateLimitIPAttempts)).Put("/password", authCtrl.ChangePassword)
 			} else {
-				g.Put("/password", authCtrl.ChangePassword)
+				g.Middleware(middleware.RateLimitByIP(attemptLimiter, opts.RateLimitIPAttempts)).Put("/password", authCtrl.ChangePassword)
 			}
 
 			if auditSvc != nil {
@@ -340,6 +439,17 @@ func Register(router route.Router, opts Options) {
 				g.Delete("/two-factor", twoFactorCtrl.Disable)
 				g.Get("/two-factor/recovery-codes", twoFactorCtrl.RecoveryCodes)
 				g.Post("/two-factor/recovery-codes", twoFactorCtrl.RegenerateRecoveryCodes)
+			}
+
+			if apiTokensCtrl != nil {
+				tokenRoutes := g
+				if opts.EnableImpersonation {
+					tokenRoutes = g.Middleware(middleware.RejectWhileImpersonating(opts.Guard))
+				}
+				tokenRoutes.Get("/api-tokens", apiTokensCtrl.Index)
+				tokenRoutes.Middleware(middleware.RateLimitByIP(attemptLimiter, opts.RateLimitIPAttempts)).Post("/api-tokens", apiTokensCtrl.Store)
+				tokenRoutes.Delete("/api-tokens", apiTokensCtrl.DestroyAll)
+				tokenRoutes.Delete("/api-tokens/{id}", apiTokensCtrl.Destroy)
 			}
 
 			if opts.EnableImpersonation {
