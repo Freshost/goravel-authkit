@@ -64,5 +64,6 @@ func ForTables(cfg MigrationConfig) []schema.Migration {
 		&CreateAuthSessions{table: cfg.SessionsTable, signature: sig(cfg.SessionsTable, "create")},
 		&DropUsersRoleDefault{table: cfg.UsersTable, signature: sig(cfg.UsersTable, "role_no_default")},
 		&CreateAPITokens{table: cfg.APITokensTable, signature: sig(cfg.APITokensTable, "create")},
+		&AddAuditLoginIndex{table: cfg.AuditTable, signature: sig(cfg.AuditTable, "login_index")},
 	}
 }

@@ -1,6 +1,6 @@
 ---
 name: adopt-goravel-authkit
-description: Adopt the current github.com/freshost/goravel-authkit package into a Goravel 1.18 and Vite/React application, replacing bespoke authentication while preserving user data and security boundaries. Use for fresh installs, migrations from existing login and user-management code, single-guard or multi-guard setups, host-route protection, impersonation, the @freshost/authkit-ui frontend, and end-to-end adoption verification.
+description: Adopt the current github.com/freshost/goravel-authkit package into a Goravel 1.18 and Vite/React application, replacing bespoke authentication while preserving user data and security boundaries. Use for fresh installs, migrations from existing login and user-management code, single-guard or multi-guard setups, host-route protection, impersonation, administrator sign-in activity, the @freshost/authkit-ui frontend, and end-to-end adoption verification.
 ---
 
 # Adopt goravel-authkit
@@ -302,6 +302,15 @@ Do not expect generated OpenAPI clients to contain Authkit endpoints. Dynamic
 guard routes have no Swagger annotations; use the companion's typed client or
 the route shapes in `docs/api-reference.md`.
 
+When audit logging is enabled, administrators can use the server-paginated
+`GET {prefix}/auth/admin/logins` endpoint or the companion's
+`AdminLoginsPage`, dashboard-oriented `AdminLoginsCard`, or `useAdminLogins`
+exports. It lists successful password and remember-cookie sign-ins only for that
+guard. Access uses the fail-closed
+`user_management_roles` gate even when user CRUD is disabled, and the endpoint
+is unavailable during impersonation. Keep trusted proxies exact before treating
+the displayed IP as forensic evidence.
+
 ## Verify the completed adoption
 
 Run the consuming backend's formatter, tidy, tests, race tests, vet, migrations,
@@ -326,7 +335,9 @@ and feature suite against PostgreSQL. Verify at least:
     enabled without exposing their secrets.
 14. Impersonation remains off by default; when enabled, its gate, protected
     roles, audit, no-nesting rule, sensitive-action rejection, and stop flow work.
-15. PostgreSQL migrations and rollback succeed on the real target schema.
+15. The administrator sign-in overview is paginated, guard-scoped, blocked for
+    non-admins and impersonated sessions, and reports the trusted client IP.
+16. PostgreSQL migrations and rollback succeed on the real target schema.
 
 Inspect the final diff for lost host behavior, duplicate route registration,
 weakened defaults, secrets, generated artifacts, and stale references to removed

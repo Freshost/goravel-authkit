@@ -30,6 +30,18 @@ contract. Auth endpoints other than login require the session cookie (guarded by
 | PUT | `/auth/password` | `changePassword` | cookie | `200` MessageResponse | `400` `401` `500` |
 | GET | `/auth/logins` | `getLoginHistory` | cookie | `200` `[]LoginHistoryEntry` | `401` |
 
+## Administrator sign-in overview (when `features.audit_log`)
+
+Uses the same fail-closed roles as user management (`user_management_roles`,
+default `admin`) and is unavailable during impersonation. Results contain only
+successful password and remember-cookie sign-ins for the current guard.
+
+| Method | Path | `@ID` | Auth | Success | Errors |
+| --- | --- | --- | --- | --- | --- |
+| GET | `/auth/admin/logins?page=1&perPage=20` | `listAdminLogins` | cookie + admin role | `200` AdminLoginPageResponse | `400` `401` `403` `500` |
+
+`page` defaults to `1`; `perPage` defaults to `20` and is capped at `100`.
+
 ## Sessions (when `features.sessions`)
 
 | Method | Path | `@ID` | Auth | Success | Errors |
@@ -203,6 +215,15 @@ The reject-while-impersonating guard returns `403 impersonation_forbidden` on
 
 // LoginHistoryEntry — a recent successful sign-in (action = auth.login | auth.login_remember)
 { "action": "auth.login", "ip": "203.0.113.7", "createdAt": "2026-01-01T00:00:00Z" }
+
+// AdminLoginPageResponse — successful sign-ins across this guard
+{
+  "items": [{
+    "id": "…", "userId": "…", "userName": "Admin", "userEmail": "admin@example.com",
+    "action": "auth.login", "ip": "203.0.113.7", "createdAt": "2026-01-01T00:00:00Z"
+  }],
+  "page": 1, "perPage": 20, "total": 1, "totalPages": 1
+}
 
 // MessageResponse
 { "message": "Password changed" }

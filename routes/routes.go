@@ -301,8 +301,12 @@ func Register(router route.Router, opts Options) {
 	authSvc := services.NewAuth(usersRepo, hasher, opts.MinPasswordLength)
 
 	var auditSvc *services.Audit
+	var adminLoginsCtrl *controllers.AdminLoginsController
 	if opts.EnableAuditLog {
 		auditSvc = services.NewAudit(repositories.NewAuditWithTable(opts.AuditTable))
+		adminLoginsCtrl = controllers.NewAdminLoginsController(services.NewAdminLogins(
+			repositories.NewLoginEvents(opts.AuditTable, opts.UsersTable),
+		))
 	}
 
 	var twoFactorSvc *services.TwoFactor
@@ -426,6 +430,16 @@ func Register(router route.Router, opts Options) {
 
 			if auditSvc != nil {
 				g.Get("/logins", authCtrl.LoginHistory)
+
+				// The cross-user view is privileged even when user-management CRUD is
+				// disabled. Reuse the fail-closed management roles as the definition
+				// of an administrator and never expose it during impersonation.
+				adminLoginMw := make([]contractshttp.Middleware, 0, 2)
+				if opts.EnableImpersonation {
+					adminLoginMw = append(adminLoginMw, middleware.RejectWhileImpersonating(opts.Guard))
+				}
+				adminLoginMw = append(adminLoginMw, middleware.RequireRole(opts.Guard, usersRepo, managementRoles...))
+				g.Middleware(adminLoginMw...).Get("/admin/logins", adminLoginsCtrl.Index)
 			}
 			if sessionsSvc != nil {
 				g.Get("/sessions", sessionsCtrl.Index)

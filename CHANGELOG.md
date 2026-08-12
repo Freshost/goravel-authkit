@@ -8,6 +8,17 @@ While the package is pre-1.0, minor versions may contain breaking changes.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-13
+
+### Added
+
+- A server-paginated, per-guard administrator sign-in overview at
+  `GET {prefix}/auth/admin/logins`, including the user's current name and email,
+  authentication method, client IP, and timestamp. It is protected by the
+  fail-closed user-management role gate and unavailable during impersonation.
+- A per-guard `(action, created_at)` audit index migration for efficient sign-in
+  history pagination on large audit tables.
+
 ## [0.4.0] - 2026-08-11
 
 ### Added
@@ -167,7 +178,9 @@ set — in one Goravel app, while a single-domain app keeps working unchanged.
 - Initial release: session-based auth, user management, TOTP two-factor, audit log,
   remember-me, active-session tracking — single guard.
 
-[Unreleased]: https://github.com/Freshost/goravel-authkit/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/Freshost/goravel-authkit/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/Freshost/goravel-authkit/releases/tag/v0.5.0
+[0.4.0]: https://github.com/Freshost/goravel-authkit/releases/tag/v0.4.0
 [0.3.0]: https://github.com/Freshost/goravel-authkit/releases/tag/v0.3.0
 [0.2.0]: https://github.com/Freshost/goravel-authkit/releases/tag/v0.2.0
 [0.1.0]: https://github.com/Freshost/goravel-authkit/releases/tag/v0.1.0

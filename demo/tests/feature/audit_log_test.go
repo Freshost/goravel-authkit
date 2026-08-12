@@ -36,15 +36,47 @@ func (s *AuditLogTestSuite) SetupTest() {
 	s.email = "audit-" + uuid.NewString() + "@test.local"
 	s.password = "password123"
 	s.userID = uuid.New()
+	name := "Audit Administrator"
 	hash, err := facades.Hash().Make(s.password)
 	s.Require().NoError(err)
 	s.Require().NoError(facades.Orm().Query().Create(&authmodels.User{
 		ID:                s.userID,
+		Name:              &name,
 		Email:             s.email,
 		PasswordHash:      &hash,
-		Role:              "user",
+		Role:              "admin",
 		PasswordChangedAt: time.Now().UTC(),
 	}))
+}
+
+func (s *AuditLogTestSuite) createUser(email, password, name, role string) uuid.UUID {
+	id := uuid.New()
+	hash, err := facades.Hash().Make(password)
+	s.Require().NoError(err)
+	s.Require().NoError(facades.Orm().Query().Create(&authmodels.User{
+		ID: id, Name: &name, Email: email, PasswordHash: &hash, Role: role,
+		PasswordChangedAt: time.Now().UTC(),
+	}))
+	s.T().Cleanup(func() {
+		_, _ = facades.Orm().Query().Where("actor_id", id).Delete(&authmodels.AuditLog{})
+		_, _ = facades.Orm().Query().Where("id", id).Delete(&authmodels.User{})
+	})
+	return id
+}
+
+func (s *AuditLogTestSuite) loginAs(email, password string) *http.Cookie {
+	body := `{"email":"` + email + `","password":"` + password + `"}`
+	resp, err := s.Http(s.T()).WithHeader("Content-Type", "application/json").
+		Post("/api/v1/auth/login", bytes.NewBufferString(body))
+	s.Require().NoError(err)
+	resp.AssertStatus(http.StatusOK)
+	for _, c := range resp.Cookies() {
+		if c.Name == "authkit_demo_session" {
+			return c
+		}
+	}
+	s.FailNow("login did not return the Authkit session cookie")
+	return nil
 }
 
 func (s *AuditLogTestSuite) TearDownTest() {
@@ -54,20 +86,63 @@ func (s *AuditLogTestSuite) TearDownTest() {
 }
 
 func (s *AuditLogTestSuite) login() *http.Cookie {
-	t := s.T()
-	body := `{"email":"` + s.email + `","password":"` + s.password + `"}`
-	resp, err := s.Http(t).WithHeader("Content-Type", "application/json").
-		Post("/api/v1/auth/login", bytes.NewBufferString(body))
+	return s.loginAs(s.email, s.password)
+}
+
+func (s *AuditLogTestSuite) TestAdminCanListAllSuccessfulLogins() {
+	adminCookie := s.login()
+	memberEmail := "member-" + uuid.NewString() + "@test.local"
+	memberName := "Audit Member"
+	memberID := s.createUser(memberEmail, "password123", memberName, "user")
+	s.Require().NotNil(s.loginAs(memberEmail, "password123"))
+
+	resp, err := s.Http(s.T()).WithCookie(adminCookie).
+		Get("/api/v1/auth/admin/logins?page=1&perPage=20")
 	s.Require().NoError(err)
 	resp.AssertStatus(http.StatusOK)
-	var cookie *http.Cookie
-	for _, c := range resp.Cookies() {
-		if c.Name == "authkit_demo_session" {
-			cookie = c
+
+	var page struct {
+		Items []struct {
+			UserID    *string `json:"userId"`
+			UserName  string  `json:"userName"`
+			UserEmail string  `json:"userEmail"`
+			Action    string  `json:"action"`
+			IP        string  `json:"ip"`
+			CreatedAt string  `json:"createdAt"`
+		} `json:"items"`
+		Page       int   `json:"page"`
+		PerPage    int   `json:"perPage"`
+		Total      int64 `json:"total"`
+		TotalPages int   `json:"totalPages"`
+	}
+	s.Require().NoError(resp.Bind(&page))
+	s.Equal(1, page.Page)
+	s.Equal(20, page.PerPage)
+	s.GreaterOrEqual(page.Total, int64(2))
+	s.GreaterOrEqual(page.TotalPages, 1)
+
+	found := false
+	for _, item := range page.Items {
+		if item.UserID != nil && *item.UserID == memberID.String() {
+			found = true
+			s.Equal(memberName, item.UserName)
+			s.Equal(memberEmail, item.UserEmail)
+			s.Equal("auth.login", item.Action)
+			s.NotEmpty(item.IP)
+			s.NotEmpty(item.CreatedAt)
 		}
 	}
-	s.Require().NotNil(cookie)
-	return cookie
+	s.True(found, "administrator login overview should contain the member sign-in")
+}
+
+func (s *AuditLogTestSuite) TestNonAdminCannotListAllLogins() {
+	memberEmail := "member-" + uuid.NewString() + "@test.local"
+	s.createUser(memberEmail, "password123", "Audit Member", "user")
+	memberCookie := s.loginAs(memberEmail, "password123")
+
+	resp, err := s.Http(s.T()).WithCookie(memberCookie).Get("/api/v1/auth/admin/logins")
+	s.Require().NoError(err)
+	resp.AssertStatus(http.StatusForbidden)
 }
 
 // A successful login writes an "auth.login" audit row for the authenticating

@@ -227,8 +227,11 @@ guard to override):
 
 - **`features.user_management = false`** — drops the `/users*` routes entirely
   (use for single-admin apps; `auth:create-user` still bootstraps the admin).
-- **`features.audit_log = false`** — runs without writing audit entries. The
-  migration still creates the audit-log table.
+- **`features.audit_log = false`** — runs without writing audit entries and does
+  not mount the self-service or administrator sign-in-history endpoints. The
+  migration still creates the audit-log table. The administrator overview uses
+  `user_management_roles` as its fail-closed access gate even when user CRUD is
+  disabled.
 - **`features.two_factor = false`** — drops the `/auth/two-factor*` routes and
   the two-step login gate. The migration still adds the columns.
 - **`features.remember_me = false`** — drops the persistent "remember me" cookie

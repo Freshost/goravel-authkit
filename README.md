@@ -67,6 +67,7 @@ bcrypt (cost 12), and keeps everything server-side.
 | **Admin user management** CRUD behind a fail-closed role gate; keeps at least one active admin (toggleable) |
 | **User impersonation** ("login as user") — same-guard or cross-guard, role/guard-gated and fail-closed, audited (opt-in) |
 | Per-guard **audit log** table + writer |
+| Paginated **administrator sign-in overview** — user, method, IP and timestamp |
 | Account disable/lock (`disabled_at`) refuses login and live sessions |
 | **Auto-wiring** — registers a Goravel session guard and the migrations for each declared guard (no `config/auth.go`); opt-out flags |
 | **Protect your own routes** with any guard — `Protect` / `ProtectRole` / `AuthUserID` (the `auth:guard` equivalent) |
@@ -323,6 +324,7 @@ Each guard mounts the same endpoint set under its own `prefix` (e.g.
 | `POST /auth/two-factor` … | TOTP enroll / confirm / disable / recovery-codes (toggleable) |
 | `GET/DELETE /auth/sessions` | List / terminate active sessions |
 | `GET  /auth/logins` | Recent sign-in history |
+| `GET  /auth/admin/logins` | Paginated sign-ins across all users (admin role-gated) |
 | `GET/POST/PUT/DELETE /auth/users` | Admin user management (toggleable, role-gated) |
 | `POST /auth/users/{id}/password` | Admin set-password |
 | `POST /auth/impersonate` … `/stop` | Login as a user / stop (toggleable, role/guard-gated, audited) |

@@ -276,6 +276,48 @@ func NewLoginHistoryResponse(entries []models.AuditLog) []LoginHistoryEntry {
 	return out
 }
 
+// AdminLoginEventResponse is one successful sign-in in the administrator view.
+type AdminLoginEventResponse struct {
+	ID        string  `json:"id"`
+	UserID    *string `json:"userId"`
+	UserName  string  `json:"userName"`
+	UserEmail string  `json:"userEmail"`
+	// Action is "auth.login" (password) or "auth.login_remember" (remember cookie).
+	Action    string `json:"action"`
+	IP        string `json:"ip"`
+	CreatedAt string `json:"createdAt"`
+}
+
+// AdminLoginPageResponse is the bounded, server-paginated sign-in overview.
+type AdminLoginPageResponse struct {
+	Items      []AdminLoginEventResponse `json:"items"`
+	Page       int                       `json:"page"`
+	PerPage    int                       `json:"perPage"`
+	Total      int64                     `json:"total"`
+	TotalPages int                       `json:"totalPages"`
+}
+
+// NewAdminLoginPageResponse maps the service page to the public wire contract.
+func NewAdminLoginPageResponse(page *services.AdminLoginPage) AdminLoginPageResponse {
+	items := make([]AdminLoginEventResponse, 0, len(page.Items))
+	for _, item := range page.Items {
+		var userID *string
+		if item.UserID != nil {
+			value := item.UserID.String()
+			userID = &value
+		}
+		items = append(items, AdminLoginEventResponse{
+			ID: item.ID.String(), UserID: userID, UserName: item.UserName,
+			UserEmail: item.UserEmail, Action: item.Action, IP: item.IP,
+			CreatedAt: formatTime(item.CreatedAt),
+		})
+	}
+	return AdminLoginPageResponse{
+		Items: items, Page: page.Page, PerPage: page.PerPage,
+		Total: page.Total, TotalPages: page.TotalPages,
+	}
+}
+
 func formatTime(t time.Time) string {
 	if t.IsZero() {
 		return ""

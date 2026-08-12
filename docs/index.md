@@ -36,6 +36,7 @@ React/PatternFly frontend counterpart lives in `@freshost/authkit-ui`.
 | `GET  /api/v1/auth/me` | Current authenticated user |
 | `PUT  /api/v1/auth/password` | Change password (invalidates other sessions) |
 | `POST /api/v1/auth/two-factor…` | TOTP enroll / confirm / disable / recovery + login challenge |
+| `GET  /api/v1/auth/admin/logins` | Paginated successful sign-ins across users (admin role-gated) |
 | `GET/POST/PUT/DELETE /api/v1/users` | Admin user management (toggleable) |
 | `POST /api/v1/users/{id}/password` | Admin set-password |
 
