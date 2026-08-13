@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url>
+         <loc>https://freshost.github.io/goravel-authkit/</loc>
+         <lastmod>2026-08-13</lastmod>
+    </url>
+    <url>
+         <loc>https://freshost.github.io/goravel-authkit/api-reference/</loc>
+         <lastmod>2026-08-13</lastmod>
+    </url>
+    <url>
+         <loc>https://freshost.github.io/goravel-authkit/architecture/</loc>
+         <lastmod>2026-08-13</lastmod>
+    </url>
+    <url>
+         <loc>https://freshost.github.io/goravel-authkit/configuration/</loc>
+         <lastmod>2026-08-13</lastmod>
+    </url>
+    <url>
+         <loc>https://freshost.github.io/goravel-authkit/installation/</loc>
+         <lastmod>2026-08-13</lastmod>
+    </url>
+    <url>
+         <loc>https://freshost.github.io/goravel-authkit/security/</loc>
+         <lastmod>2026-08-13</lastmod>
+    </url>
+</urlset>

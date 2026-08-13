@@ -1,0 +1,1341 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Batteries-included session authentication + user management for Goravel">
+      
+      
+      
+        <link rel="canonical" href="https://freshost.github.io/goravel-authkit/configuration/">
+      
+      
+        <link rel="prev" href="../installation/">
+      
+      
+        <link rel="next" href="../api-reference/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Configuration - goravel-authkit</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="green" data-md-color-accent="green">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#configuration" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="goravel-authkit" class="md-header__button md-logo" aria-label="goravel-authkit" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            goravel-authkit
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Configuration
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="green" data-md-color-accent="green"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="green" data-md-color-accent="green"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/Freshost/goravel-authkit" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Freshost/goravel-authkit
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="goravel-authkit" class="md-nav__button md-logo" aria-label="goravel-authkit" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    goravel-authkit
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/Freshost/goravel-authkit" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Freshost/goravel-authkit
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#guards" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Guards
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configauthkitgo-single-guard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        config/authkit.go (single guard)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configauthkitgo-two-guards" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        config/authkit.go (two guards)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="config/authkit.go (two guards)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#per-guard-keys" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-guard keys
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#opting-out-of-auto-wiring" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Opting out of auto-wiring
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#guarding-your-own-routes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Guarding your own routes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#feature-toggles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Feature toggles
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#gating-user-management-by-role" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gating user management by role
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#impersonation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Impersonation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Impersonation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#worked-example-the-demo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worked example (the demo)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#optional-host-hook" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optional host hook
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#guards" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Guards
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configauthkitgo-single-guard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        config/authkit.go (single guard)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configauthkitgo-two-guards" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        config/authkit.go (two guards)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="config/authkit.go (two guards)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#per-guard-keys" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-guard keys
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#opting-out-of-auto-wiring" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Opting out of auto-wiring
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#guarding-your-own-routes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Guarding your own routes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#feature-toggles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Feature toggles
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#gating-user-management-by-role" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gating user management by role
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#impersonation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Impersonation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Impersonation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#worked-example-the-demo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worked example (the demo)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#optional-host-hook" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optional host hook
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/Freshost/goravel-authkit/edit/main/docs/configuration.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h1>
+<p>All behaviour is tuned through one file: <code>config/authkit.go</code>, which
+<code>package:install</code> writes into your app. The ServiceProvider reads it at boot —
+auto-registering a Goravel session guard and the migrations per guard — and
+<code>authkitroutes.RegisterAll(facades.Route())</code> in your routing callback mounts the
+routes. Every key is optional; the package falls back to the same defaults if a
+key (or the whole file) is missing. <strong>The only two things you configure are this
+file and that one-line route mount</strong> — there is no <code>config/auth.go</code> to write.</p>
+<h2 id="guards">Guards<a class="headerlink" href="#guards" title="Permanent link">&para;</a></h2>
+<p>A <strong>guard</strong> is one self-contained auth domain: its route prefix, user table,
+session guard, audit/remember/session/API-token tables, remember cookie and feature set.
+An app runs N guards in one process — a single-guard app is simply N = 1.</p>
+<ul>
+<li><strong>Single-guard</strong> (the default) — omit <code>authkit.guards</code> and use the top-level
+  <code>authkit.guard</code> / <code>authkit.route_prefix</code>. Tables default to <code>users</code>,
+  <code>audit_logs</code>, <code>auth_remember_tokens</code>, <code>auth_sessions</code>, <code>api_tokens</code>. This behaves exactly as
+  before v0.2.0.</li>
+<li><strong>Multi-guard</strong> — declare a map under <code>authkit.guards</code>; each key is a guard
+  name. The top-level <code>authkit.*</code> keys (<code>min_password_length</code>, <code>features</code>,
+  <code>roles</code>, <code>rate_limit</code>, <code>csrf</code>, <code>two_factor</code>, <code>remember</code>) become the <strong>defaults for all
+  guards</strong>, and each guard may override them.</li>
+</ul>
+<h2 id="configauthkitgo-single-guard"><code>config/authkit.go</code> (single guard)<a class="headerlink" href="#configauthkitgo-single-guard" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">package</span><span class="w"> </span><span class="nx">config</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="kn">import</span><span class="w"> </span><span class="s">&quot;github.com/goravel/framework/facades&quot;</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="kd">func</span><span class="w"> </span><span class="nx">init</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">    </span><span class="nx">facades</span><span class="p">.</span><span class="nx">Config</span><span class="p">().</span><span class="nx">Add</span><span class="p">(</span><span class="s">&quot;authkit&quot;</span><span class="p">,</span><span class="w"> </span><span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">any</span><span class="p">{</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">        </span><span class="s">&quot;route_prefix&quot;</span><span class="p">:</span><span class="w">        </span><span class="s">&quot;/api/v1&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">        </span><span class="s">&quot;guard&quot;</span><span class="p">:</span><span class="w">               </span><span class="s">&quot;admin&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">        </span><span class="s">&quot;min_password_length&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">8</span><span class="p">,</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">        </span><span class="s">&quot;rate_limit&quot;</span><span class="p">:</span><span class="w"> </span><span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">any</span><span class="p">{</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">            </span><span class="s">&quot;ip_attempts&quot;</span><span class="p">:</span><span class="w">       </span><span class="mi">20</span><span class="p">,</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">            </span><span class="s">&quot;account_attempts&quot;</span><span class="p">:</span><span class="w">  </span><span class="mi">5</span><span class="p">,</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">            </span><span class="s">&quot;password_attempts&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">5</span><span class="p">,</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="w">            </span><span class="s">&quot;window&quot;</span><span class="p">:</span><span class="w">            </span><span class="mi">60</span><span class="p">,</span><span class="w"> </span><span class="c1">// seconds</span>
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">        </span><span class="p">},</span>
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="w">        </span><span class="s">&quot;csrf&quot;</span><span class="p">:</span><span class="w"> </span><span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">any</span><span class="p">{</span>
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="w">            </span><span class="s">&quot;enabled&quot;</span><span class="p">:</span><span class="w">         </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="w">            </span><span class="s">&quot;trusted_origins&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span><span class="p">{},</span>
+<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="w">        </span><span class="p">},</span>
+<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="w">        </span><span class="s">&quot;features&quot;</span><span class="p">:</span><span class="w"> </span><span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">any</span><span class="p">{</span>
+<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="w">            </span><span class="s">&quot;user_management&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="w">            </span><span class="s">&quot;audit_log&quot;</span><span class="p">:</span><span class="w">       </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="w">            </span><span class="s">&quot;two_factor&quot;</span><span class="p">:</span><span class="w">      </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="w">            </span><span class="s">&quot;remember_me&quot;</span><span class="p">:</span><span class="w">     </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="w">            </span><span class="s">&quot;sessions&quot;</span><span class="p">:</span><span class="w">        </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="w">            </span><span class="s">&quot;api_tokens&quot;</span><span class="p">:</span><span class="w">      </span><span class="kc">false</span><span class="p">,</span>
+<a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a><span class="w">        </span><span class="p">},</span>
+<a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a><span class="w">        </span><span class="s">&quot;api_tokens&quot;</span><span class="p">:</span><span class="w"> </span><span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">any</span><span class="p">{</span>
+<a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a><span class="w">            </span><span class="s">&quot;allowed_scopes&quot;</span><span class="p">:</span><span class="w">            </span><span class="p">[]</span><span class="kt">string</span><span class="p">{},</span>
+<a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a><span class="w">            </span><span class="s">&quot;default_lifetime_days&quot;</span><span class="p">:</span><span class="w">     </span><span class="mi">30</span><span class="p">,</span>
+<a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a><span class="w">            </span><span class="s">&quot;max_lifetime_days&quot;</span><span class="p">:</span><span class="w">         </span><span class="mi">365</span><span class="p">,</span>
+<a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a><span class="w">            </span><span class="s">&quot;max_per_user&quot;</span><span class="p">:</span><span class="w">              </span><span class="mi">20</span><span class="p">,</span>
+<a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a><span class="w">            </span><span class="s">&quot;revoke_on_password_change&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a><span class="w">        </span><span class="p">},</span>
+<a id="__codelineno-0-35" name="__codelineno-0-35" href="#__codelineno-0-35"></a><span class="w">        </span><span class="s">&quot;two_factor&quot;</span><span class="p">:</span><span class="w"> </span><span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">any</span><span class="p">{</span>
+<a id="__codelineno-0-36" name="__codelineno-0-36" href="#__codelineno-0-36"></a><span class="w">            </span><span class="s">&quot;issuer&quot;</span><span class="p">:</span><span class="w">         </span><span class="s">&quot;&quot;</span><span class="p">,</span><span class="w"> </span><span class="c1">// defaults to the app name</span>
+<a id="__codelineno-0-37" name="__codelineno-0-37" href="#__codelineno-0-37"></a><span class="w">            </span><span class="s">&quot;recovery_codes&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">8</span><span class="p">,</span>
+<a id="__codelineno-0-38" name="__codelineno-0-38" href="#__codelineno-0-38"></a><span class="w">        </span><span class="p">},</span>
+<a id="__codelineno-0-39" name="__codelineno-0-39" href="#__codelineno-0-39"></a><span class="w">        </span><span class="s">&quot;remember&quot;</span><span class="p">:</span><span class="w"> </span><span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">any</span><span class="p">{</span>
+<a id="__codelineno-0-40" name="__codelineno-0-40" href="#__codelineno-0-40"></a><span class="w">            </span><span class="s">&quot;lifetime_days&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">30</span><span class="p">,</span>
+<a id="__codelineno-0-41" name="__codelineno-0-41" href="#__codelineno-0-41"></a><span class="w">        </span><span class="p">},</span>
+<a id="__codelineno-0-42" name="__codelineno-0-42" href="#__codelineno-0-42"></a><span class="w">        </span><span class="s">&quot;user_management_roles&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span><span class="p">{</span><span class="s">&quot;admin&quot;</span><span class="p">},</span><span class="w"> </span><span class="c1">// fail-closed: /users is admin-only</span>
+<a id="__codelineno-0-43" name="__codelineno-0-43" href="#__codelineno-0-43"></a><span class="w">        </span><span class="s">&quot;roles&quot;</span><span class="p">:</span><span class="w">                 </span><span class="p">[]</span><span class="kt">string</span><span class="p">{</span><span class="s">&quot;admin&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;user&quot;</span><span class="p">},</span><span class="w"> </span><span class="c1">// assignable role values</span>
+<a id="__codelineno-0-44" name="__codelineno-0-44" href="#__codelineno-0-44"></a><span class="w">    </span><span class="p">})</span>
+<a id="__codelineno-0-45" name="__codelineno-0-45" href="#__codelineno-0-45"></a><span class="p">}</span>
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Type</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>authkit.route_prefix</code></td>
+<td>string</td>
+<td><code>/api/v1</code></td>
+<td>Prefix for all package routes (single-guard)</td>
+</tr>
+<tr>
+<td><code>authkit.guard</code></td>
+<td>string</td>
+<td><code>admin</code></td>
+<td>Goravel session guard name (auto-registered by the provider)</td>
+</tr>
+<tr>
+<td><code>authkit.min_password_length</code></td>
+<td>int</td>
+<td><code>8</code></td>
+<td>Minimum new-password length</td>
+</tr>
+<tr>
+<td><code>authkit.rate_limit.ip_attempts</code></td>
+<td>int</td>
+<td><code>20</code></td>
+<td>Authentication attempts per window per client IP</td>
+</tr>
+<tr>
+<td><code>authkit.rate_limit.account_attempts</code></td>
+<td>int</td>
+<td><code>5</code></td>
+<td>Login/2FA attempts per window per normalized account</td>
+</tr>
+<tr>
+<td><code>authkit.rate_limit.password_attempts</code></td>
+<td>int</td>
+<td><code>5</code></td>
+<td>Change-password attempts per window per authenticated user</td>
+</tr>
+<tr>
+<td><code>authkit.rate_limit.window</code></td>
+<td>int</td>
+<td><code>60</code></td>
+<td>Rate-limit window, seconds</td>
+</tr>
+<tr>
+<td><code>authkit.csrf.enabled</code></td>
+<td>bool</td>
+<td><code>true</code></td>
+<td>Fail-closed Origin/Referer verification on unsafe Authkit requests</td>
+</tr>
+<tr>
+<td><code>authkit.csrf.trusted_origins</code></td>
+<td>[]string</td>
+<td><code>[]</code></td>
+<td>Exact additional origins accepted by the CSRF middleware</td>
+</tr>
+<tr>
+<td><code>authkit.features.user_management</code></td>
+<td>bool</td>
+<td><code>true</code></td>
+<td>Register the <code>/users</code> CRUD endpoints</td>
+</tr>
+<tr>
+<td><code>authkit.features.audit_log</code></td>
+<td>bool</td>
+<td><code>true</code></td>
+<td>Write entries to the audit-log table</td>
+</tr>
+<tr>
+<td><code>authkit.features.two_factor</code></td>
+<td>bool</td>
+<td><code>true</code></td>
+<td>Register the TOTP two-factor endpoints + login gate</td>
+</tr>
+<tr>
+<td><code>authkit.features.remember_me</code></td>
+<td>bool</td>
+<td><code>true</code></td>
+<td>Enable the persistent "remember me" login cookie</td>
+</tr>
+<tr>
+<td><code>authkit.features.sessions</code></td>
+<td>bool</td>
+<td><code>true</code></td>
+<td>Enable active-session tracking + the <code>/sessions</code> endpoints</td>
+</tr>
+<tr>
+<td><code>authkit.features.api_tokens</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>Enable personal API-token management and bearer authentication</td>
+</tr>
+<tr>
+<td><code>authkit.api_tokens.allowed_scopes</code></td>
+<td>[]string</td>
+<td><code>[]</code></td>
+<td>Exact scopes users may assign; empty permits unscoped tokens only</td>
+</tr>
+<tr>
+<td><code>authkit.api_tokens.default_lifetime_days</code></td>
+<td>int</td>
+<td><code>30</code></td>
+<td>Default expiry shown by clients</td>
+</tr>
+<tr>
+<td><code>authkit.api_tokens.max_lifetime_days</code></td>
+<td>int</td>
+<td><code>365</code></td>
+<td>Maximum accepted lifetime</td>
+</tr>
+<tr>
+<td><code>authkit.api_tokens.max_per_user</code></td>
+<td>int</td>
+<td><code>20</code></td>
+<td>Maximum active tokens per user</td>
+</tr>
+<tr>
+<td><code>authkit.api_tokens.revoke_on_password_change</code></td>
+<td>bool</td>
+<td><code>true</code></td>
+<td>Revoke all personal tokens on password change/reset</td>
+</tr>
+<tr>
+<td><code>authkit.two_factor.issuer</code></td>
+<td>string</td>
+<td><code>""</code></td>
+<td>Issuer shown in the authenticator app (empty = app name)</td>
+</tr>
+<tr>
+<td><code>authkit.two_factor.recovery_codes</code></td>
+<td>int</td>
+<td><code>8</code></td>
+<td>Recovery codes generated on confirmation</td>
+</tr>
+<tr>
+<td><code>authkit.remember.lifetime_days</code></td>
+<td>int</td>
+<td><code>30</code></td>
+<td>How long a remember cookie stays valid (sliding on use)</td>
+</tr>
+<tr>
+<td><code>authkit.user_management_roles</code></td>
+<td>[]string</td>
+<td><code>["admin"]</code></td>
+<td>Roles allowed to use <code>/users</code>. Fail-closed: <code>/users</code> is always gated; an empty list falls back to <code>["admin"]</code>, never to "any authenticated user"</td>
+</tr>
+<tr>
+<td><code>authkit.roles</code></td>
+<td>[]string</td>
+<td><code>["admin","user"]</code></td>
+<td>Assignable role values (create/update reject anything outside it; empty = any). New users default to the first non-admin role, else <code>user</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="configauthkitgo-two-guards"><code>config/authkit.go</code> (two guards)<a class="headerlink" href="#configauthkitgo-two-guards" title="Permanent link">&para;</a></h2>
+<p>Declare auth domains under <code>authkit.guards</code>. The top-level keys above apply to
+every guard as defaults; each guard sets its own <code>prefix</code> and (usually)
+<code>users_table</code>, and may override any default. Here an <code>admin</code> console and a
+<code>client</code> portal run side by side:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nx">facades</span><span class="p">.</span><span class="nx">Config</span><span class="p">().</span><span class="nx">Add</span><span class="p">(</span><span class="s">&quot;authkit&quot;</span><span class="p">,</span><span class="w"> </span><span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">any</span><span class="p">{</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">    </span><span class="c1">// Top-level keys are the DEFAULTS inherited by every guard.</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span><span class="s">&quot;min_password_length&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">8</span><span class="p">,</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">    </span><span class="s">&quot;rate_limit&quot;</span><span class="p">:</span><span class="w"> </span><span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">any</span><span class="p">{</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">        </span><span class="s">&quot;ip_attempts&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">20</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;account_attempts&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">5</span><span class="p">,</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">        </span><span class="s">&quot;password_attempts&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">5</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;window&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">60</span><span class="p">,</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">    </span><span class="p">},</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">    </span><span class="s">&quot;csrf&quot;</span><span class="p">:</span><span class="w"> </span><span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">any</span><span class="p">{</span><span class="s">&quot;enabled&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;trusted_origins&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span><span class="p">{}},</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">    </span><span class="s">&quot;features&quot;</span><span class="p">:</span><span class="w"> </span><span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">any</span><span class="p">{</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">        </span><span class="s">&quot;user_management&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">        </span><span class="s">&quot;audit_log&quot;</span><span class="p">:</span><span class="w">       </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">        </span><span class="s">&quot;two_factor&quot;</span><span class="p">:</span><span class="w">      </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">        </span><span class="s">&quot;remember_me&quot;</span><span class="p">:</span><span class="w">     </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="w">        </span><span class="s">&quot;sessions&quot;</span><span class="p">:</span><span class="w">        </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="w">    </span><span class="p">},</span>
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="w">    </span><span class="s">&quot;roles&quot;</span><span class="p">:</span><span class="w">                 </span><span class="p">[]</span><span class="kt">string</span><span class="p">{</span><span class="s">&quot;admin&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;user&quot;</span><span class="p">},</span>
+<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="w">    </span><span class="s">&quot;user_management_roles&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span><span class="p">{</span><span class="s">&quot;admin&quot;</span><span class="p">},</span>
+<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>
+<a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="w">    </span><span class="s">&quot;guards&quot;</span><span class="p">:</span><span class="w"> </span><span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">any</span><span class="p">{</span>
+<a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="w">        </span><span class="s">&quot;admin&quot;</span><span class="p">:</span><span class="w"> </span><span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">any</span><span class="p">{</span>
+<a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a><span class="w">            </span><span class="s">&quot;prefix&quot;</span><span class="p">:</span><span class="w">      </span><span class="s">&quot;/api/v1&quot;</span><span class="p">,</span>
+<a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a><span class="w">            </span><span class="s">&quot;users_table&quot;</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;users&quot;</span><span class="p">,</span><span class="w"> </span><span class="c1">// keep the default table names</span>
+<a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a><span class="w">        </span><span class="p">},</span>
+<a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a><span class="w">        </span><span class="s">&quot;client&quot;</span><span class="p">:</span><span class="w"> </span><span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">any</span><span class="p">{</span>
+<a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a><span class="w">            </span><span class="s">&quot;prefix&quot;</span><span class="p">:</span><span class="w">      </span><span class="s">&quot;/api/client/v1&quot;</span><span class="p">,</span>
+<a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a><span class="w">            </span><span class="s">&quot;users_table&quot;</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;client_users&quot;</span><span class="p">,</span>
+<a id="__codelineno-1-27" name="__codelineno-1-27" href="#__codelineno-1-27"></a><span class="w">            </span><span class="c1">// Per-guard overrides (see below): the client portal wants longer</span>
+<a id="__codelineno-1-28" name="__codelineno-1-28" href="#__codelineno-1-28"></a><span class="w">            </span><span class="c1">// passwords and no two-factor.</span>
+<a id="__codelineno-1-29" name="__codelineno-1-29" href="#__codelineno-1-29"></a><span class="w">            </span><span class="s">&quot;min_password_length&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">12</span><span class="p">,</span>
+<a id="__codelineno-1-30" name="__codelineno-1-30" href="#__codelineno-1-30"></a><span class="w">            </span><span class="s">&quot;features&quot;</span><span class="p">:</span><span class="w"> </span><span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">any</span><span class="p">{</span>
+<a id="__codelineno-1-31" name="__codelineno-1-31" href="#__codelineno-1-31"></a><span class="w">                </span><span class="s">&quot;two_factor&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+<a id="__codelineno-1-32" name="__codelineno-1-32" href="#__codelineno-1-32"></a><span class="w">            </span><span class="p">},</span>
+<a id="__codelineno-1-33" name="__codelineno-1-33" href="#__codelineno-1-33"></a><span class="w">        </span><span class="p">},</span>
+<a id="__codelineno-1-34" name="__codelineno-1-34" href="#__codelineno-1-34"></a><span class="w">    </span><span class="p">},</span>
+<a id="__codelineno-1-35" name="__codelineno-1-35" href="#__codelineno-1-35"></a><span class="p">})</span>
+</code></pre></div>
+<p><code>authkitroutes.RegisterAll(facades.Route())</code> mounts both — the same one-liner
+whether you declare one guard or ten.</p>
+<h3 id="per-guard-keys">Per-guard keys<a class="headerlink" href="#per-guard-keys" title="Permanent link">&para;</a></h3>
+<p>Each entry under <code>authkit.guards.&lt;name&gt;</code> accepts:</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>prefix</code></td>
+<td>—</td>
+<td>Route prefix for this guard (e.g. <code>/api/client/v1</code>)</td>
+</tr>
+<tr>
+<td><code>users_table</code></td>
+<td><code>&lt;name&gt;_users</code></td>
+<td>This guard's user table</td>
+</tr>
+<tr>
+<td><code>audit_table</code></td>
+<td><code>&lt;name&gt;_audit_logs</code></td>
+<td>This guard's audit-log table</td>
+</tr>
+<tr>
+<td><code>remember_tokens_table</code></td>
+<td><code>&lt;name&gt;_remember_tokens</code></td>
+<td>This guard's remember-token table</td>
+</tr>
+<tr>
+<td><code>sessions_table</code></td>
+<td><code>&lt;name&gt;_auth_sessions</code></td>
+<td>This guard's active-session table</td>
+</tr>
+<tr>
+<td><code>api_tokens_table</code></td>
+<td><code>&lt;name&gt;_api_tokens</code></td>
+<td>This guard's personal API-token table</td>
+</tr>
+<tr>
+<td><code>remember_cookie_name</code></td>
+<td><code>authkit_&lt;name&gt;_remember</code></td>
+<td>This guard's persistent-login cookie (must differ per guard on one origin)</td>
+</tr>
+</tbody>
+</table>
+<p>A guard inherits every top-level default and may <strong>override</strong> any of them:
+<code>min_password_length</code>, <code>roles</code>, <code>user_management_roles</code>,
+<code>features.{user_management,audit_log,two_factor,remember_me,sessions,api_tokens}</code>,
+<code>rate_limit.{ip_attempts,account_attempts,password_attempts,window}</code>,
+<code>csrf.{enabled,trusted_origins}</code>, <code>two_factor.{issuer,recovery_codes}</code>, and
+<code>remember.lifetime_days</code>.</p>
+<blockquote>
+<p>The provider auto-registers a Goravel session guard and the migrations for each
+declared guard, so adding a guard is purely a config change — no
+<code>config/auth.go</code>, no <code>bootstrap/migrations.go</code> edit.</p>
+</blockquote>
+<p>Registration does not execute schema changes. After adding a guard or enabling
+API-token tables, run <code>./artisan migrate</code>. Removing a guard from config never
+drops its tables; retain or remove that data through an explicit host-owned
+migration.</p>
+<h3 id="opting-out-of-auto-wiring">Opting out of auto-wiring<a class="headerlink" href="#opting-out-of-auto-wiring" title="Permanent link">&para;</a></h3>
+<p>If you'd rather own the wiring yourself:</p>
+<ul>
+<li><code>authkit.register_guards = false</code> — the provider stops registering session
+  guards; you define them in <code>config/auth.go</code>.</li>
+<li><code>authkit.register_migrations = false</code> — the provider stops registering
+  migrations; register <code>migrations.ForTables(...)</code> yourself.</li>
+</ul>
+<h2 id="guarding-your-own-routes">Guarding your own routes<a class="headerlink" href="#guarding-your-own-routes" title="Permanent link">&para;</a></h2>
+<p>To put a host route behind one of authkit's guards — the analogue of Laravel's
+<code>auth:guard</code> — apply the middleware chain from <code>Protect</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">import</span><span class="w"> </span><span class="nx">authkitroutes</span><span class="w"> </span><span class="s">&quot;github.com/freshost/goravel-authkit/routes&quot;</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="nx">facades</span><span class="p">.</span><span class="nx">Route</span><span class="p">().</span><span class="nx">Prefix</span><span class="p">(</span><span class="s">&quot;/api/client/v1&quot;</span><span class="p">).</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">    </span><span class="nx">Middleware</span><span class="p">(</span><span class="nx">authkitroutes</span><span class="p">.</span><span class="nx">Protect</span><span class="p">(</span><span class="s">&quot;client&quot;</span><span class="p">)</span><span class="o">...</span><span class="p">).</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">    </span><span class="nx">Group</span><span class="p">(</span><span class="kd">func</span><span class="p">(</span><span class="nx">r</span><span class="w"> </span><span class="nx">route</span><span class="p">.</span><span class="nx">Router</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">        </span><span class="nx">r</span><span class="p">.</span><span class="nx">Get</span><span class="p">(</span><span class="s">&quot;/invoices&quot;</span><span class="p">,</span><span class="w"> </span><span class="kd">func</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">contractshttp</span><span class="p">.</span><span class="nx">Context</span><span class="p">)</span><span class="w"> </span><span class="nx">contractshttp</span><span class="p">.</span><span class="nx">Response</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">            </span><span class="nx">userID</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">authkitroutes</span><span class="p">.</span><span class="nx">AuthUserID</span><span class="p">(</span><span class="nx">ctx</span><span class="p">)</span><span class="w"> </span><span class="c1">// the logged-in &quot;client&quot; user&#39;s uuid</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">            </span><span class="c1">// ... scope your query to userID</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">        </span><span class="p">})</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">    </span><span class="p">})</span>
+</code></pre></div>
+<ul>
+<li><code>Protect("client")</code> — starts the session and authenticates the request against
+  the <code>client</code> guard's user table.</li>
+<li><code>ProtectRole("client", "admin")</code> — the same, plus a role gate (the user's role
+  must be one of the listed roles).</li>
+<li><code>AuthUserID(ctx)</code> — inside a protected handler, returns the authenticated
+  user's <code>uuid.UUID</code> (or <code>uuid.Nil</code> if none).</li>
+<li><code>ProtectToken("client", "invoices:read")</code> — bearer token only; every listed
+  scope is required.</li>
+<li><code>ProtectAny("client", "invoices:read")</code> — session or bearer token. A supplied
+  invalid bearer token never falls back to a valid session. Session requests
+  keep CSRF protection; bearer requests remain stateless.</li>
+<li><code>AuthMethod</code>, <code>APITokenID</code>, and <code>TokenCan</code> expose the request credential type
+  and token context to host authorization code.</li>
+</ul>
+<h2 id="feature-toggles">Feature toggles<a class="headerlink" href="#feature-toggles" title="Permanent link">&para;</a></h2>
+<p>Each toggle applies per guard (set it at the root for all guards, or inside a
+guard to override):</p>
+<ul>
+<li><strong><code>features.user_management = false</code></strong> — drops the <code>/users*</code> routes entirely
+  (use for single-admin apps; <code>auth:create-user</code> still bootstraps the admin).</li>
+<li><strong><code>features.audit_log = false</code></strong> — runs without writing audit entries and does
+  not mount the self-service or administrator sign-in-history endpoints. The
+  migration still creates the audit-log table. The administrator overview uses
+  <code>user_management_roles</code> as its fail-closed access gate even when user CRUD is
+  disabled.</li>
+<li><strong><code>features.two_factor = false</code></strong> — drops the <code>/auth/two-factor*</code> routes and
+  the two-step login gate. The migration still adds the columns.</li>
+<li><strong><code>features.remember_me = false</code></strong> — drops the persistent "remember me" cookie
+  and its silent re-login; login then yields a session-only cookie.</li>
+<li><strong><code>features.sessions = false</code></strong> — drops active-session tracking and the
+  <code>/auth/sessions*</code> endpoints (terminated-session rejection is then off).</li>
+<li><strong><code>features.api_tokens = false</code></strong> — drops token management and makes
+  <code>ProtectToken</code> reject bearer credentials. This is the default.</li>
+</ul>
+<h2 id="gating-user-management-by-role">Gating user management by role<a class="headerlink" href="#gating-user-management-by-role" title="Permanent link">&para;</a></h2>
+<p>The <code>/users</code> endpoints are <strong>admin-gated by default (fail-closed)</strong>:
+<code>authkit.user_management_roles</code> defaults to <code>["admin"]</code>, and the gate is always
+mounted — a user whose <code>role</code> is not in the list gets <code>403 forbidden</code>. An empty
+list does <strong>not</strong> open the endpoints; it falls back to <code>["admin"]</code>. The
+single-admin bootstrap still works because <code>auth:create-user</code> mints an <code>admin</code>.</p>
+<p>To allow another role to manage users, add it to the list:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="s">&quot;user_management_roles&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span><span class="p">{</span><span class="s">&quot;admin&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;manager&quot;</span><span class="p">},</span>
+</code></pre></div>
+<p>New users are never silently made admins: a create with no explicit <code>role</code> gets
+the first configured non-management role (else <code>user</code>). See
+<a href="../security/">security</a> for the full picture.</p>
+<h2 id="impersonation">Impersonation<a class="headerlink" href="#impersonation" title="Permanent link">&para;</a></h2>
+<p>Impersonation ("login as user") lets an authorized actor switch into another
+user's session — within its own guard or across guards — and back. It is
+<strong>opt-in and fail-closed</strong>: off by default, and a guard with no gate config
+cannot impersonate (it can still be a <em>target</em> of another guard).</p>
+<p>Two things turn it on:</p>
+<ul>
+<li><strong><code>authkit.impersonation.enabled</code></strong> — a single global switch that mounts the
+  endpoints (<code>POST {prefix}/auth/impersonate</code>, <code>POST {prefix}/auth/impersonate/stop</code>).</li>
+<li>A <strong>per-guard gate</strong> under <code>authkit.guards.&lt;name&gt;.impersonation</code> (or, in a
+  single-guard app, at the top level <code>authkit.impersonation.*</code>) that decides who
+  may impersonate into which guards:</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Type</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>roles</code></td>
+<td>[]string</td>
+<td>The actor must hold one of these roles. Empty = any authenticated user in this guard may impersonate</td>
+</tr>
+<tr>
+<td><code>target_guards</code></td>
+<td>[]string</td>
+<td>Guards this guard's actors may impersonate into — <code>"*"</code> = any, specific guard names, or this guard's own name for same-guard. <strong>Empty = this guard cannot impersonate</strong> (fail-closed)</td>
+</tr>
+<tr>
+<td><code>protected_roles</code></td>
+<td>[]string</td>
+<td>Target users holding one of these roles can never be impersonated</td>
+</tr>
+</tbody>
+</table>
+<p>Cross-guard adds the target guard's session alongside the actor's (one shared
+cookie), so the actor stays signed in to its own guard and "stop" just drops the
+target session; same-guard replaces the user, and "stop" restores the actor.</p>
+<h3 id="worked-example-the-demo">Worked example (the demo)<a class="headerlink" href="#worked-example-the-demo" title="Permanent link">&para;</a></h3>
+<p>The demo enables impersonation globally and lets <code>admin</code> actors impersonate users
+in the <code>client</code> portal and in their own guard, but never another admin:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nx">facades</span><span class="p">.</span><span class="nx">Config</span><span class="p">().</span><span class="nx">Add</span><span class="p">(</span><span class="s">&quot;authkit&quot;</span><span class="p">,</span><span class="w"> </span><span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">any</span><span class="p">{</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">    </span><span class="c1">// Global switch.</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">    </span><span class="s">&quot;impersonation&quot;</span><span class="p">:</span><span class="w"> </span><span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">any</span><span class="p">{</span><span class="s">&quot;enabled&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">},</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">    </span><span class="s">&quot;guards&quot;</span><span class="p">:</span><span class="w"> </span><span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">any</span><span class="p">{</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">        </span><span class="s">&quot;admin&quot;</span><span class="p">:</span><span class="w"> </span><span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">any</span><span class="p">{</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">            </span><span class="s">&quot;prefix&quot;</span><span class="p">:</span><span class="w">      </span><span class="s">&quot;/api/v1&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">            </span><span class="s">&quot;users_table&quot;</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;users&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="w">            </span><span class="c1">// Per-guard gate: who may impersonate, into which guards, and who is off-limits.</span>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="w">            </span><span class="s">&quot;impersonation&quot;</span><span class="p">:</span><span class="w"> </span><span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">any</span><span class="p">{</span>
+<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="w">                </span><span class="s">&quot;roles&quot;</span><span class="p">:</span><span class="w">           </span><span class="p">[]</span><span class="kt">string</span><span class="p">{</span><span class="s">&quot;admin&quot;</span><span class="p">},</span><span class="w">           </span><span class="c1">// actor must be an admin</span>
+<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="w">                </span><span class="s">&quot;target_guards&quot;</span><span class="p">:</span><span class="w">   </span><span class="p">[]</span><span class="kt">string</span><span class="p">{</span><span class="s">&quot;client&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;admin&quot;</span><span class="p">},</span><span class="w"> </span><span class="c1">// client portal + same-guard</span>
+<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="w">                </span><span class="s">&quot;protected_roles&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span><span class="p">{</span><span class="s">&quot;admin&quot;</span><span class="p">},</span><span class="w">           </span><span class="c1">// never impersonate another admin</span>
+<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="w">            </span><span class="p">},</span>
+<a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="w">        </span><span class="p">},</span>
+<a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="w">        </span><span class="s">&quot;client&quot;</span><span class="p">:</span><span class="w"> </span><span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">any</span><span class="p">{</span>
+<a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="w">            </span><span class="s">&quot;prefix&quot;</span><span class="p">:</span><span class="w">      </span><span class="s">&quot;/api/client/v1&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a><span class="w">            </span><span class="s">&quot;users_table&quot;</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;client_users&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a><span class="w">            </span><span class="c1">// No &quot;impersonation&quot; block: the client guard cannot impersonate, but</span>
+<a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a><span class="w">            </span><span class="c1">// (being a target_guard above) its users can be impersonated by admin.</span>
+<a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a><span class="w">        </span><span class="p">},</span>
+<a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a><span class="w">    </span><span class="p">},</span>
+<a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a><span class="p">})</span>
+</code></pre></div>
+<p>In a single-guard app the same keys live at the top level:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="s">&quot;impersonation&quot;</span><span class="p">:</span><span class="w"> </span><span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">any</span><span class="p">{</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">    </span><span class="s">&quot;enabled&quot;</span><span class="p">:</span><span class="w">         </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">    </span><span class="s">&quot;roles&quot;</span><span class="p">:</span><span class="w">           </span><span class="p">[]</span><span class="kt">string</span><span class="p">{</span><span class="s">&quot;admin&quot;</span><span class="p">},</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">    </span><span class="s">&quot;target_guards&quot;</span><span class="p">:</span><span class="w">   </span><span class="p">[]</span><span class="kt">string</span><span class="p">{</span><span class="s">&quot;admin&quot;</span><span class="p">},</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">    </span><span class="s">&quot;protected_roles&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span><span class="p">{</span><span class="s">&quot;admin&quot;</span><span class="p">},</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="p">},</span>
+</code></pre></div>
+<h3 id="optional-host-hook">Optional host hook<a class="headerlink" href="#optional-host-hook" title="Permanent link">&para;</a></h3>
+<p>The config gate handles roles / target guards / protected roles declaratively.
+For finer rules a config table can't express (tenant scoping, relationship
+checks), register a host hook with <code>authkit.RegisterImpersonationPolicy(p)</code> where
+<code>p</code> implements <code>authkit.Impersonator</code>. It runs <strong>only after</strong> the config gate has
+passed, so it can only ever <em>tighten</em> the decision; when no hook is registered the
+config gate alone decides. See <a href="../api-reference/">API reference</a> and
+<a href="../security/">security</a> for the hook signature and security properties.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      MIT &copy; Freshost
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.top", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.action.edit"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

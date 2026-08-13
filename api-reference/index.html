@@ -1,0 +1,1905 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Batteries-included session authentication + user management for Goravel">
+      
+      
+      
+        <link rel="canonical" href="https://freshost.github.io/goravel-authkit/api-reference/">
+      
+      
+        <link rel="prev" href="../configuration/">
+      
+      
+        <link rel="next" href="../security/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>API reference - goravel-authkit</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="green" data-md-color-accent="green">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#api-reference" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="goravel-authkit" class="md-header__button md-logo" aria-label="goravel-authkit" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            goravel-authkit
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              API reference
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="green" data-md-color-accent="green"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="green" data-md-color-accent="green"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/Freshost/goravel-authkit" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Freshost/goravel-authkit
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="goravel-authkit" class="md-nav__button md-logo" aria-label="goravel-authkit" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    goravel-authkit
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/Freshost/goravel-authkit" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Freshost/goravel-authkit
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#auth" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Auth
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#administrator-sign-in-overview-when-featuresaudit_log" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Administrator sign-in overview (when features.audit_log)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sessions-when-featuressessions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sessions (when features.sessions)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#personal-api-tokens-when-featuresapi_tokens" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Personal API tokens (when features.api_tokens)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#two-factor-when-enabletwofactor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Two-factor (when EnableTwoFactor)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#users-when-enableusermanagement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Users (when EnableUserManagement)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#impersonation-when-enableimpersonation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Impersonation (when EnableImpersonation)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#request-bodies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Request bodies
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#response-shapes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Response shapes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#error-codes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Error codes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#behavioural-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Behavioural notes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#go-api-mounting-host-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Go API (mounting &amp; host integration)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Go API (mounting &amp; host integration)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#mounting-routes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mounting routes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#options-fields" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Options fields
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#impersonation-policy-hook" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Impersonation policy hook
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rate-limit-store" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rate-limit store
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#guarding-the-hosts-own-routes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Guarding the host's own routes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#programmatic-instance-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Programmatic instance API
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#migrations-repositories" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Migrations &amp; repositories
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#auth" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Auth
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#administrator-sign-in-overview-when-featuresaudit_log" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Administrator sign-in overview (when features.audit_log)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sessions-when-featuressessions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sessions (when features.sessions)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#personal-api-tokens-when-featuresapi_tokens" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Personal API tokens (when features.api_tokens)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#two-factor-when-enabletwofactor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Two-factor (when EnableTwoFactor)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#users-when-enableusermanagement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Users (when EnableUserManagement)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#impersonation-when-enableimpersonation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Impersonation (when EnableImpersonation)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#request-bodies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Request bodies
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#response-shapes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Response shapes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#error-codes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Error codes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#behavioural-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Behavioural notes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#go-api-mounting-host-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Go API (mounting &amp; host integration)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Go API (mounting &amp; host integration)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#mounting-routes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mounting routes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#options-fields" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Options fields
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#impersonation-policy-hook" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Impersonation policy hook
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rate-limit-store" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rate-limit store
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#guarding-the-hosts-own-routes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Guarding the host's own routes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#programmatic-instance-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Programmatic instance API
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#migrations-repositories" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Migrations &amp; repositories
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/Freshost/goravel-authkit/edit/main/docs/api-reference.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="api-reference">API Reference<a class="headerlink" href="#api-reference" title="Permanent link">&para;</a></h1>
+<p>Every package route lives under <strong><code>{prefix}/auth</code></strong> — a single owned namespace so
+the package never collides with the host app's own routes (its <code>/meta</code>, <code>/users</code>,
+…). The paths below are relative to that base. In a single-guard app the prefix is
+<code>Options.Prefix</code> (default <code>/api/v1</code>). In a <strong>multi-guard</strong> app the <em>same</em> endpoint
+set is mounted once <strong>per guard</strong>, each under its own guard's prefix
+(e.g. <code>/api/v1/auth/login</code> for the <code>client</code> guard and <code>/api/admin/v1/auth/login</code>
+for the <code>admin</code> guard). The endpoints themselves are unchanged from v0.1.</p>
+<p>The <code>@ID</code> column is the operation id used by the React <code>@freshost/authkit-ui</code>
+client. As of v0.2.0 the controllers carry <strong>no</strong> Swagger/OpenAPI annotations
+(per-guard mounting can't be expressed statically), so these ids no longer flow
+into a host's <code>swag</code>-generated SDK — they are documentation of the stable wire
+contract. Auth endpoints other than login require the session cookie (guarded by
+<code>Authenticated</code>, which loads the user from the guard's own table).</p>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th><code>@ID</code></th>
+<th>Auth</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GET</td>
+<td><code>/auth/meta</code></td>
+<td><code>getAuthkitConfig</code></td>
+<td>public — role options + feature flags for the UI</td>
+</tr>
+</tbody>
+</table>
+<h2 id="auth">Auth<a class="headerlink" href="#auth" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th><code>@ID</code></th>
+<th>Auth</th>
+<th>Success</th>
+<th>Errors</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>POST</td>
+<td><code>/auth/login</code></td>
+<td><code>login</code></td>
+<td>public (rate-limited)</td>
+<td><code>200</code> UserResponse</td>
+<td><code>400</code> <code>401</code> <code>429</code> <code>500</code></td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/auth/logout</code></td>
+<td><code>logout</code></td>
+<td>cookie</td>
+<td><code>200</code> MessageResponse</td>
+<td><code>401</code></td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/auth/me</code></td>
+<td><code>getMe</code></td>
+<td>cookie</td>
+<td><code>200</code> UserResponse</td>
+<td><code>401</code></td>
+</tr>
+<tr>
+<td>PUT</td>
+<td><code>/auth/me</code></td>
+<td><code>updateProfile</code></td>
+<td>cookie</td>
+<td><code>200</code> UserResponse</td>
+<td><code>400</code> <code>401</code> <code>409</code> <code>500</code></td>
+</tr>
+<tr>
+<td>PUT</td>
+<td><code>/auth/password</code></td>
+<td><code>changePassword</code></td>
+<td>cookie</td>
+<td><code>200</code> MessageResponse</td>
+<td><code>400</code> <code>401</code> <code>500</code></td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/auth/logins</code></td>
+<td><code>getLoginHistory</code></td>
+<td>cookie</td>
+<td><code>200</code> <code>[]LoginHistoryEntry</code></td>
+<td><code>401</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="administrator-sign-in-overview-when-featuresaudit_log">Administrator sign-in overview (when <code>features.audit_log</code>)<a class="headerlink" href="#administrator-sign-in-overview-when-featuresaudit_log" title="Permanent link">&para;</a></h2>
+<p>Uses the same fail-closed roles as user management (<code>user_management_roles</code>,
+default <code>admin</code>) and is unavailable during impersonation. Results contain only
+successful password and remember-cookie sign-ins for the current guard.</p>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th><code>@ID</code></th>
+<th>Auth</th>
+<th>Success</th>
+<th>Errors</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GET</td>
+<td><code>/auth/admin/logins?page=1&amp;perPage=20&amp;sort=desc</code></td>
+<td><code>listAdminLogins</code></td>
+<td>cookie + admin role</td>
+<td><code>200</code> AdminLoginPageResponse</td>
+<td><code>400</code> <code>401</code> <code>403</code> <code>500</code></td>
+</tr>
+</tbody>
+</table>
+<p><code>page</code> defaults to <code>1</code>; <code>perPage</code> defaults to <code>20</code> and is capped at <code>100</code>.
+Optional <code>user</code> and <code>ip</code> filters perform case-insensitive literal substring
+matches. <code>user</code> searches the live name and effective email. <code>method</code> accepts
+<code>password</code> or <code>remember</code>; <code>sort</code> accepts <code>asc</code> or <code>desc</code> and defaults to
+newest-first (<code>desc</code>).</p>
+<h2 id="sessions-when-featuressessions">Sessions (when <code>features.sessions</code>)<a class="headerlink" href="#sessions-when-featuressessions" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th><code>@ID</code></th>
+<th>Auth</th>
+<th>Success</th>
+<th>Errors</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GET</td>
+<td><code>/auth/sessions</code></td>
+<td><code>listSessions</code></td>
+<td>cookie</td>
+<td><code>200</code> <code>[]SessionResponse</code></td>
+<td><code>401</code></td>
+</tr>
+<tr>
+<td>DELETE</td>
+<td><code>/auth/sessions</code></td>
+<td><code>terminateOtherSessions</code></td>
+<td>cookie</td>
+<td><code>200</code> MessageResponse</td>
+<td><code>401</code></td>
+</tr>
+<tr>
+<td>DELETE</td>
+<td><code>/auth/sessions/{id}</code></td>
+<td><code>terminateSession</code></td>
+<td>cookie</td>
+<td><code>200</code> MessageResponse</td>
+<td><code>400</code> <code>404</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="personal-api-tokens-when-featuresapi_tokens">Personal API tokens (when <code>features.api_tokens</code>)<a class="headerlink" href="#personal-api-tokens-when-featuresapi_tokens" title="Permanent link">&para;</a></h2>
+<p>Management is session-only and CSRF-protected. Creation additionally requires
+the current password and a live TOTP code when the user has 2FA enabled. It is
+blocked during impersonation. Plaintext is returned only by the create response.</p>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th>Auth</th>
+<th>Success</th>
+<th>Errors</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GET</td>
+<td><code>/auth/api-tokens</code></td>
+<td>cookie</td>
+<td><code>200</code> <code>[]APITokenResponse</code></td>
+<td><code>401</code></td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/auth/api-tokens</code></td>
+<td>cookie + password (+ TOTP)</td>
+<td><code>201</code> IssuedAPITokenResponse</td>
+<td><code>400</code> <code>401</code> <code>409</code> <code>429</code></td>
+</tr>
+<tr>
+<td>DELETE</td>
+<td><code>/auth/api-tokens/{id}</code></td>
+<td>cookie</td>
+<td><code>200</code> MessageResponse</td>
+<td><code>400</code> <code>404</code></td>
+</tr>
+<tr>
+<td>DELETE</td>
+<td><code>/auth/api-tokens</code></td>
+<td>cookie</td>
+<td><code>200</code> MessageResponse</td>
+<td><code>401</code></td>
+</tr>
+</tbody>
+</table>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>// expiresAt is mandatory RFC3339
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>{
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>  &quot;name&quot;: &quot;Deployment CLI&quot;,
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>  &quot;expiresAt&quot;: &quot;2026-09-10T23:59:59Z&quot;,
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>  &quot;scopes&quot;: [&quot;deployments:read&quot;, &quot;deployments:write&quot;],
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>  &quot;password&quot;: &quot;current-password&quot;,
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>  &quot;twoFactorCode&quot;: &quot;123456&quot;
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>}
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>// 201 — token is shown once; list responses never contain it
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>{
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>  &quot;id&quot;: &quot;...&quot;, &quot;name&quot;: &quot;Deployment CLI&quot;, &quot;scopes&quot;: [&quot;deployments:read&quot;],
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>  &quot;expiresAt&quot;: &quot;...&quot;, &quot;lastUsedAt&quot;: null, &quot;createdAt&quot;: &quot;...&quot;,
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>  &quot;token&quot;: &quot;gak_&lt;selector&gt;.&lt;validator&gt;&quot;
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>}
+</code></pre></div>
+<p>Host routes opt into bearer authentication with <code>routes.ProtectToken</code>, or accept
+either a session or token with <code>routes.ProtectAny</code>. Send tokens as
+<code>Authorization: Bearer &lt;token&gt;</code>.</p>
+<blockquote>
+<p>When the user has 2FA enabled, <code>login</code> returns <code>200 {"two_factor": true}</code>
+<strong>without</strong> establishing the session — the client must then call
+<code>two-factor-challenge</code>.</p>
+</blockquote>
+<h2 id="two-factor-when-enabletwofactor">Two-factor (when <code>EnableTwoFactor</code>)<a class="headerlink" href="#two-factor-when-enabletwofactor" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th><code>@ID</code></th>
+<th>Auth</th>
+<th>Success</th>
+<th>Errors</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>POST</td>
+<td><code>/auth/two-factor-challenge</code></td>
+<td><code>twoFactorChallenge</code></td>
+<td>pending session (rate-limited)</td>
+<td><code>200</code> UserResponse</td>
+<td><code>400</code> <code>401</code> <code>429</code></td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/auth/two-factor</code></td>
+<td><code>enableTwoFactor</code></td>
+<td>cookie</td>
+<td><code>200</code> TwoFactorEnrollmentResponse</td>
+<td><code>401</code> <code>409</code></td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/auth/two-factor/confirm</code></td>
+<td><code>confirmTwoFactor</code></td>
+<td>cookie</td>
+<td><code>200</code> RecoveryCodesResponse</td>
+<td><code>400</code> <code>401</code></td>
+</tr>
+<tr>
+<td>DELETE</td>
+<td><code>/auth/two-factor</code></td>
+<td><code>disableTwoFactor</code></td>
+<td>cookie (+ password re-auth)</td>
+<td><code>200</code> MessageResponse</td>
+<td><code>400</code> <code>401</code></td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/auth/two-factor/recovery-codes</code></td>
+<td><code>getTwoFactorRecoveryCodes</code></td>
+<td>cookie</td>
+<td><code>200</code> RecoveryCodesStatusResponse (count only)</td>
+<td><code>401</code></td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/auth/two-factor/recovery-codes</code></td>
+<td><code>regenerateTwoFactorRecoveryCodes</code></td>
+<td>cookie</td>
+<td><code>200</code> RecoveryCodesResponse</td>
+<td><code>401</code></td>
+</tr>
+</tbody>
+</table>
+<p>Enrollment flow: <code>enableTwoFactor</code> (get secret + otpauth URL → render QR) →
+user scans → <code>confirmTwoFactor</code> with a code (activates, returns recovery codes).
+Login flow with 2FA: <code>login</code> → <code>{two_factor:true}</code> → <code>twoFactorChallenge</code> with a
+<code>code</code> <strong>or</strong> <code>recoveryCode</code>.</p>
+<h2 id="users-when-enableusermanagement">Users (when <code>EnableUserManagement</code>)<a class="headerlink" href="#users-when-enableusermanagement" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th><code>@ID</code></th>
+<th>Success</th>
+<th>Errors</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GET</td>
+<td><code>/auth/users</code></td>
+<td><code>listUsers</code></td>
+<td><code>200</code> <code>[]UserResponse</code></td>
+<td><code>401</code></td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/auth/users</code></td>
+<td><code>createUser</code></td>
+<td><code>201</code> UserResponse</td>
+<td><code>400</code> <code>409</code></td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/auth/users/{id}</code></td>
+<td><code>getUser</code></td>
+<td><code>200</code> UserResponse</td>
+<td><code>404</code></td>
+</tr>
+<tr>
+<td>PUT</td>
+<td><code>/auth/users/{id}</code></td>
+<td><code>updateUser</code></td>
+<td><code>200</code> UserResponse</td>
+<td><code>400</code> <code>404</code> <code>409</code></td>
+</tr>
+<tr>
+<td>DELETE</td>
+<td><code>/auth/users/{id}</code></td>
+<td><code>deleteUser</code></td>
+<td><code>200</code> MessageResponse</td>
+<td><code>400</code> <code>404</code> <code>409</code></td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/auth/users/{id}/password</code></td>
+<td><code>setUserPassword</code></td>
+<td><code>200</code> UserResponse</td>
+<td><code>400</code> <code>404</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="impersonation-when-enableimpersonation">Impersonation (when <code>EnableImpersonation</code>)<a class="headerlink" href="#impersonation-when-enableimpersonation" title="Permanent link">&para;</a></h2>
+<p>An authorized actor switches into another user's session — within its own guard or
+across guards — and back. Both endpoints sit behind the session guard. See
+<a href="../security/">security</a> and <a href="../configuration/#impersonation">configuration</a> for the
+authorization gate.</p>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th><code>@ID</code></th>
+<th>Auth</th>
+<th>Success</th>
+<th>Errors</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>POST</td>
+<td><code>/auth/impersonate</code></td>
+<td><code>impersonate</code></td>
+<td>cookie</td>
+<td><code>200</code> UserResponse (the target, with <code>impersonatedBy</code>)</td>
+<td><code>400</code> <code>403</code> <code>404</code> <code>409</code> <code>500</code></td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/auth/impersonate/stop</code></td>
+<td><code>stopImpersonating</code></td>
+<td>cookie</td>
+<td><code>200</code> MessageResponse</td>
+<td><code>400</code></td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong><code>impersonate</code></strong> establishes the target user's session. On success it returns the
+  <strong>target's</strong> <code>UserResponse</code> with the <code>impersonatedBy</code> field populated (the actor's
+  guard / id / email), so the UI can render a banner and an exit action. No remember
+  cookie is issued — impersonation is ephemeral. <code>impersonate</code> is blocked while a
+  switch is already active on this guard (<code>409 already_impersonating</code>) so it cannot
+  nest.</li>
+<li><strong><code>stop</code></strong> ends the switch on this guard. For a same-guard switch it restores the
+  original actor; for a cross-guard switch it drops only the target session (the
+  actor's own-guard session, a different key in the shared cookie, is untouched). It
+  stays reachable from the impersonated session.</li>
+</ul>
+<p>The reject-while-impersonating guard returns <code>403 impersonation_forbidden</code> on
+<code>PUT /auth/password</code>, the <code>/auth/users*</code> endpoints and a nested
+<code>POST /auth/impersonate</code> while a switch is active.</p>
+<h2 id="request-bodies">Request bodies<a class="headerlink" href="#request-bodies" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>// LoginRequest — `remember` is optional (default false)
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>{ &quot;email&quot;: &quot;admin@example.com&quot;, &quot;password&quot;: &quot;secret&quot;, &quot;remember&quot;: true }
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>// UpdateProfileRequest — the user&#39;s own name + email
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>{ &quot;email&quot;: &quot;admin@example.com&quot;, &quot;name&quot;: &quot;Admin&quot; }
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>// ChangePasswordRequest
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>{ &quot;currentPassword&quot;: &quot;secret&quot;, &quot;newPassword&quot;: &quot;new-secret&quot; }
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>// CreateUserRequest
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>{ &quot;email&quot;: &quot;jane@example.com&quot;, &quot;name&quot;: &quot;Jane Admin&quot;, &quot;password&quot;: &quot;secret&quot;, &quot;role&quot;: &quot;admin&quot; }
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>// UpdateUserRequest — `disabled` is optional (omit to leave unchanged)
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>{ &quot;email&quot;: &quot;jane@example.com&quot;, &quot;name&quot;: &quot;Jane Admin&quot;, &quot;role&quot;: &quot;admin&quot;, &quot;disabled&quot;: false }
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>// SetPasswordRequest
+<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>{ &quot;password&quot;: &quot;new-secret&quot; }
+<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>
+<a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>// TwoFactorChallengeRequest — supply exactly one
+<a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>{ &quot;code&quot;: &quot;123456&quot; }            // TOTP code
+<a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>{ &quot;recoveryCode&quot;: &quot;ABCDE-FGHJK&quot; } // or a recovery code
+<a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>
+<a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a>// TwoFactorConfirmRequest
+<a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a>{ &quot;code&quot;: &quot;123456&quot; }
+<a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a>
+<a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a>// TwoFactorDisableRequest — re-auth before disabling 2FA
+<a id="__codelineno-1-27" name="__codelineno-1-27" href="#__codelineno-1-27"></a>{ &quot;password&quot;: &quot;secret&quot; }
+<a id="__codelineno-1-28" name="__codelineno-1-28" href="#__codelineno-1-28"></a>
+<a id="__codelineno-1-29" name="__codelineno-1-29" href="#__codelineno-1-29"></a>// ImpersonateRequest — `guard` is the target&#39;s guard (empty/omitted = the actor&#39;s
+<a id="__codelineno-1-30" name="__codelineno-1-30" href="#__codelineno-1-30"></a>// own guard, i.e. same-guard); `userId` is the target user&#39;s uuid
+<a id="__codelineno-1-31" name="__codelineno-1-31" href="#__codelineno-1-31"></a>{ &quot;guard&quot;: &quot;client&quot;, &quot;userId&quot;: &quot;3f2504e0-4f89-41d3-9a0c-0305e82c3301&quot; }
+</code></pre></div>
+<h2 id="response-shapes">Response shapes<a class="headerlink" href="#response-shapes" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>// UserResponse — never includes the password hash
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>{
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>  &quot;id&quot;: &quot;3f2504e0-4f89-41d3-9a0c-0305e82c3301&quot;,
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>  &quot;email&quot;: &quot;admin@example.com&quot;,
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>  &quot;name&quot;: &quot;Admin&quot;,
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>  &quot;role&quot;: &quot;admin&quot;,
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>  &quot;twoFactorEnabled&quot;: false,
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>  &quot;disabled&quot;: false,
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>  &quot;createdAt&quot;: &quot;2026-01-01T00:00:00Z&quot;,
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>  // present ONLY while this user is being impersonated (a UI banner + exit cue)
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>  &quot;impersonatedBy&quot;: { &quot;guard&quot;: &quot;admin&quot;, &quot;id&quot;: &quot;…&quot;, &quot;email&quot;: &quot;admin@example.com&quot; }
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>}
+<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>
+<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>// MetaResponse — GET /auth/meta (public; the UI reads roles/features from here)
+<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>{
+<a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>  &quot;roles&quot;: [&quot;admin&quot;, &quot;user&quot;],
+<a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>  &quot;minPasswordLength&quot;: 8,
+<a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a>  &quot;features&quot;: { &quot;userManagement&quot;: true, &quot;twoFactor&quot;: true, &quot;auditLog&quot;: true, &quot;sessions&quot;: true, &quot;impersonation&quot;: false, &quot;apiTokens&quot;: true },
+<a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a>  &quot;apiTokens&quot;: { &quot;allowedScopes&quot;: [&quot;deployments:read&quot;], &quot;defaultLifetimeDays&quot;: 30, &quot;maxLifetimeDays&quot;: 365, &quot;maxPerUser&quot;: 20 }
+<a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a>}
+<a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a>
+<a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a>// SessionResponse — one active session (secret session id never exposed)
+<a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a>{
+<a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a>  &quot;id&quot;: &quot;3f2504e0-4f89-41d3-9a0c-0305e82c3301&quot;,
+<a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a>  &quot;ip&quot;: &quot;203.0.113.7&quot;,
+<a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a>  &quot;userAgent&quot;: &quot;Mozilla/5.0 ...&quot;,
+<a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a>  &quot;current&quot;: true,
+<a id="__codelineno-2-28" name="__codelineno-2-28" href="#__codelineno-2-28"></a>  &quot;createdAt&quot;: &quot;2026-01-01T00:00:00Z&quot;,
+<a id="__codelineno-2-29" name="__codelineno-2-29" href="#__codelineno-2-29"></a>  &quot;lastActiveAt&quot;: &quot;2026-01-01T01:00:00Z&quot;
+<a id="__codelineno-2-30" name="__codelineno-2-30" href="#__codelineno-2-30"></a>}
+<a id="__codelineno-2-31" name="__codelineno-2-31" href="#__codelineno-2-31"></a>
+<a id="__codelineno-2-32" name="__codelineno-2-32" href="#__codelineno-2-32"></a>// LoginHistoryEntry — a recent successful sign-in (action = auth.login | auth.login_remember)
+<a id="__codelineno-2-33" name="__codelineno-2-33" href="#__codelineno-2-33"></a>{ &quot;action&quot;: &quot;auth.login&quot;, &quot;ip&quot;: &quot;203.0.113.7&quot;, &quot;createdAt&quot;: &quot;2026-01-01T00:00:00Z&quot; }
+<a id="__codelineno-2-34" name="__codelineno-2-34" href="#__codelineno-2-34"></a>
+<a id="__codelineno-2-35" name="__codelineno-2-35" href="#__codelineno-2-35"></a>// AdminLoginPageResponse — successful sign-ins across this guard
+<a id="__codelineno-2-36" name="__codelineno-2-36" href="#__codelineno-2-36"></a>{
+<a id="__codelineno-2-37" name="__codelineno-2-37" href="#__codelineno-2-37"></a>  &quot;items&quot;: [{
+<a id="__codelineno-2-38" name="__codelineno-2-38" href="#__codelineno-2-38"></a>    &quot;id&quot;: &quot;…&quot;, &quot;userId&quot;: &quot;…&quot;, &quot;userName&quot;: &quot;Admin&quot;, &quot;userEmail&quot;: &quot;admin@example.com&quot;,
+<a id="__codelineno-2-39" name="__codelineno-2-39" href="#__codelineno-2-39"></a>    &quot;action&quot;: &quot;auth.login&quot;, &quot;ip&quot;: &quot;203.0.113.7&quot;, &quot;createdAt&quot;: &quot;2026-01-01T00:00:00Z&quot;
+<a id="__codelineno-2-40" name="__codelineno-2-40" href="#__codelineno-2-40"></a>  }],
+<a id="__codelineno-2-41" name="__codelineno-2-41" href="#__codelineno-2-41"></a>  &quot;page&quot;: 1, &quot;perPage&quot;: 20, &quot;total&quot;: 1, &quot;totalPages&quot;: 1
+<a id="__codelineno-2-42" name="__codelineno-2-42" href="#__codelineno-2-42"></a>}
+<a id="__codelineno-2-43" name="__codelineno-2-43" href="#__codelineno-2-43"></a>
+<a id="__codelineno-2-44" name="__codelineno-2-44" href="#__codelineno-2-44"></a>// MessageResponse
+<a id="__codelineno-2-45" name="__codelineno-2-45" href="#__codelineno-2-45"></a>{ &quot;message&quot;: &quot;Password changed&quot; }
+<a id="__codelineno-2-46" name="__codelineno-2-46" href="#__codelineno-2-46"></a>
+<a id="__codelineno-2-47" name="__codelineno-2-47" href="#__codelineno-2-47"></a>// TwoFactorRequiredResponse — login when 2FA is enabled
+<a id="__codelineno-2-48" name="__codelineno-2-48" href="#__codelineno-2-48"></a>{ &quot;two_factor&quot;: true }
+<a id="__codelineno-2-49" name="__codelineno-2-49" href="#__codelineno-2-49"></a>
+<a id="__codelineno-2-50" name="__codelineno-2-50" href="#__codelineno-2-50"></a>// TwoFactorEnrollmentResponse
+<a id="__codelineno-2-51" name="__codelineno-2-51" href="#__codelineno-2-51"></a>{ &quot;secret&quot;: &quot;JBSWY3DPEHPK3PXP&quot;, &quot;otpauthUrl&quot;: &quot;otpauth://totp/App:admin@example.com?secret=...&amp;issuer=App&quot; }
+<a id="__codelineno-2-52" name="__codelineno-2-52" href="#__codelineno-2-52"></a>
+<a id="__codelineno-2-53" name="__codelineno-2-53" href="#__codelineno-2-53"></a>// RecoveryCodesResponse — shown ONCE, on confirm/regenerate (codes are stored hashed)
+<a id="__codelineno-2-54" name="__codelineno-2-54" href="#__codelineno-2-54"></a>{ &quot;recoveryCodes&quot;: [&quot;ABCDE-FGHJK&quot;, &quot;...&quot;] }
+<a id="__codelineno-2-55" name="__codelineno-2-55" href="#__codelineno-2-55"></a>
+<a id="__codelineno-2-56" name="__codelineno-2-56" href="#__codelineno-2-56"></a>// RecoveryCodesStatusResponse — GET recovery-codes returns only the unused count
+<a id="__codelineno-2-57" name="__codelineno-2-57" href="#__codelineno-2-57"></a>{ &quot;remaining&quot;: 6 }
+<a id="__codelineno-2-58" name="__codelineno-2-58" href="#__codelineno-2-58"></a>
+<a id="__codelineno-2-59" name="__codelineno-2-59" href="#__codelineno-2-59"></a>// ErrorResponse — the standard error envelope
+<a id="__codelineno-2-60" name="__codelineno-2-60" href="#__codelineno-2-60"></a>{ &quot;error&quot;: &quot;invalid_credentials&quot;, &quot;message&quot;: &quot;Invalid email or password&quot; }
+</code></pre></div>
+<h2 id="error-codes">Error codes<a class="headerlink" href="#error-codes" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>HTTP</th>
+<th><code>error</code></th>
+<th>When</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>400</td>
+<td><code>validation_error</code></td>
+<td>Bad body / invalid input</td>
+</tr>
+<tr>
+<td>400</td>
+<td><code>wrong_password</code></td>
+<td>Change-password current password incorrect</td>
+</tr>
+<tr>
+<td>400</td>
+<td><code>invalid_id</code></td>
+<td>Malformed UUID path param</td>
+</tr>
+<tr>
+<td>400</td>
+<td><code>self_delete</code></td>
+<td>Deleting your own account</td>
+</tr>
+<tr>
+<td>400</td>
+<td><code>self_disable</code></td>
+<td>Disabling your own account</td>
+</tr>
+<tr>
+<td>400</td>
+<td><code>current_session</code></td>
+<td>Terminating the current session (use logout)</td>
+</tr>
+<tr>
+<td>401</td>
+<td><code>session_terminated</code></td>
+<td>The session was signed out elsewhere</td>
+</tr>
+<tr>
+<td>403</td>
+<td><code>account_disabled</code></td>
+<td>The account is locked (<code>disabled</code>) — login + sessions refused</td>
+</tr>
+<tr>
+<td>401</td>
+<td><code>invalid_credentials</code></td>
+<td>Login failed (unknown email <strong>or</strong> wrong password — never distinguished)</td>
+</tr>
+<tr>
+<td>401</td>
+<td><code>unauthorized</code></td>
+<td>Missing/invalid session</td>
+</tr>
+<tr>
+<td>401</td>
+<td><code>session_expired</code></td>
+<td>Password changed elsewhere → other sessions invalidated</td>
+</tr>
+<tr>
+<td>401</td>
+<td><code>invalid_token</code></td>
+<td>Missing, malformed, expired, revoked, or otherwise invalid bearer token</td>
+</tr>
+<tr>
+<td>403</td>
+<td><code>forbidden</code></td>
+<td><code>RequireRole</code> gate failed, or the impersonation gate denied the actor</td>
+</tr>
+<tr>
+<td>403</td>
+<td><code>insufficient_scope</code></td>
+<td>Valid bearer token lacks a required route scope</td>
+</tr>
+<tr>
+<td>403</td>
+<td><code>impersonation_forbidden</code></td>
+<td>Action blocked while impersonating (password change, user management, nested impersonation)</td>
+</tr>
+<tr>
+<td>403</td>
+<td><code>csrf_failed</code></td>
+<td>Unsafe request has no same-origin or explicitly trusted Origin/Referer</td>
+</tr>
+<tr>
+<td>409</td>
+<td><code>already_impersonating</code></td>
+<td>An impersonation is already active on this guard (no nesting)</td>
+</tr>
+<tr>
+<td>404</td>
+<td><code>not_found</code></td>
+<td>User does not exist (or the impersonation target is unknown)</td>
+</tr>
+<tr>
+<td>409</td>
+<td><code>already_exists</code></td>
+<td>Email already taken</td>
+</tr>
+<tr>
+<td>409</td>
+<td><code>last_admin</code></td>
+<td>Deleting the last user</td>
+</tr>
+<tr>
+<td>409</td>
+<td><code>token_limit</code></td>
+<td>User reached the configured active-token maximum</td>
+</tr>
+<tr>
+<td>429</td>
+<td><code>rate_limited</code></td>
+<td>An IP, account, 2FA-user, or password-user bucket is exhausted</td>
+</tr>
+<tr>
+<td>503</td>
+<td><code>rate_limiter_unavailable</code></td>
+<td>The configured rate-limit store failed; authentication fails closed</td>
+</tr>
+<tr>
+<td>503</td>
+<td><code>authentication_unavailable</code></td>
+<td>Token/user lookup failed; bearer authentication fails closed</td>
+</tr>
+</tbody>
+</table>
+<h2 id="behavioural-notes">Behavioural notes<a class="headerlink" href="#behavioural-notes" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Login</strong> establishes an httpOnly session cookie, regenerates the session id
+  (anti-fixation), and stamps <code>password_changed_at</code> into the session.</li>
+<li><strong>Change-password</strong> invalidates <strong>every other</strong> session for that user (their
+  stamp no longer matches the DB); the calling session is re-stamped and stays
+  in.</li>
+<li><strong>Delete</strong> refuses to remove the last user (<code>last_admin</code>) and refuses
+  self-delete (<code>self_delete</code>).</li>
+<li>Failed logins are recorded to <code>audit_logs</code> (<code>auth.login_failed</code>) when audit is
+  enabled.</li>
+<li><strong>Remember me</strong> (when <code>features.remember_me</code>, default on): <code>login</code> with
+  <code>"remember": true</code> issues a long-lived, http-only <code>authkit_remember</code> cookie
+  (selector-validator token in <code>auth_remember_tokens</code>, default 30-day sliding
+  expiry). When the short session has expired, a guarded-route middleware
+  silently re-establishes it from this cookie and <strong>rotates</strong> the validator on
+  every use. The just-superseded validator is honoured for a short grace window
+  (60s) so concurrent requests aren't mistaken for theft; a validator that is
+  stale beyond that (or simply wrong) for a known selector is treated as theft
+  and revokes the user's whole token family. With 2FA the cookie is issued only
+  after the challenge completes. Logout revokes this device's token; a password
+  change (and disabling the account) revokes <strong>all</strong> of the user's remember
+  tokens. Expired rows are pruned lazily on access and by the
+  <code>auth:prune-remember-tokens</code> command (schedule it daily).</li>
+<li><strong>Disabled accounts</strong>: setting <code>disabled</code> on a user (<code>PUT /auth/users/{id}</code>)
+  locks the account — login returns <code>403 account_disabled</code>, and any live session
+  or remember cookie is rejected on its next request. You cannot disable your own
+  account (<code>400 self_disable</code>).</li>
+<li><strong>Active sessions</strong> (when <code>features.sessions</code>): each login is tracked in
+  <code>auth_sessions</code> (session id, IP, user-agent, last-active). <code>GET /auth/logins</code>
+  returns the user's recent successful sign-ins; <code>GET /auth/sessions</code> lists their
+  active sessions (the current one flagged). Deleting a session row terminates
+  it — the <code>TrackSession</code> middleware rejects the next request from a session with
+  no row (<code>401 session_terminated</code>). You can't terminate the current session via
+  the API (<code>400 current_session</code>) — use logout. A password change drops all other
+  session rows; stale rows are pruned by <code>auth:prune-remember-tokens</code>.</li>
+<li><strong>Impersonation</strong> (when <code>EnableImpersonation</code>): <code>POST /auth/impersonate</code>
+  establishes the target's session and regenerates the session id; <strong>no remember
+  cookie</strong> is issued (the switch is ephemeral and not restorable from a persistent
+  cookie). The target must exist (<code>404 not_found</code>) and not be disabled
+  (<code>403 account_disabled</code>), and must not hold a <code>protected_role</code>
+  (<code>403 forbidden</code>). While a switch is active, <code>GET /auth/me</code> returns the
+  impersonated user with an <code>impersonatedBy</code> object ({ guard, id, email }), and the
+  password-change, user-management and nested-impersonate routes return
+  <code>403 impersonation_forbidden</code>. <code>GET /auth/meta</code> reports
+  <code>features.impersonation</code>. Both the start and stop are audited
+  (<code>auth.impersonation_started</code> / <code>auth.impersonation_stopped</code>).</li>
+</ul>
+<h2 id="go-api-mounting-host-integration">Go API (mounting &amp; host integration)<a class="headerlink" href="#go-api-mounting-host-integration" title="Permanent link">&para;</a></h2>
+<p>The HTTP surface above is wired by these exported Go entry points. Import
+<code>authkitroutes "github.com/freshost/goravel-authkit/routes"</code>.</p>
+<h3 id="mounting-routes">Mounting routes<a class="headerlink" href="#mounting-routes" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1">// Mount every declared guard (authkit.guards), or the single default guard when</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="c1">// none are declared. This is the one line an app adds to its routing callback.</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="nx">authkitroutes</span><span class="p">.</span><span class="nx">RegisterAll</span><span class="p">(</span><span class="nx">facades</span><span class="p">.</span><span class="nx">Route</span><span class="p">())</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="c1">// Mount one guard explicitly from a built Options.</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="nx">authkitroutes</span><span class="p">.</span><span class="nx">Register</span><span class="p">(</span><span class="nx">facades</span><span class="p">.</span><span class="nx">Route</span><span class="p">(),</span><span class="w"> </span><span class="nx">opts</span><span class="p">)</span>
+</code></pre></div>
+<ul>
+<li><strong><code>RegisterAll(router route.Router)</code></strong> iterates <code>GuardOptions()</code> and calls
+  <code>Register</code> for each. Single- and multi-guard apps use the same one-liner.</li>
+<li><strong><code>Register(router route.Router, opts Options)</code></strong> wires the services +
+  controllers and mounts the <code>{opts.Prefix}/auth/*</code> routes. Zero-valued <code>Options</code>
+  fields fall back to <code>DefaultOptions</code>, so <code>Register(router, Options{})</code> is safe.</li>
+<li><strong><code>OptionsFromConfig() Options</code></strong> builds <code>Options</code> from the top-level
+  <code>authkit.*</code> config (the single-guard base).</li>
+<li><strong><code>OptionsForGuard(name string) Options</code></strong> builds the <code>Options</code> for one declared
+  guard: starts from <code>OptionsFromConfig()</code>, applies the guard's overrides, and
+  derives table names and the remember cookie from the guard name when unset
+  (<code>&lt;name&gt;_users</code>, <code>&lt;name&gt;_audit_logs</code>, <code>&lt;name&gt;_remember_tokens</code>,
+  <code>&lt;name&gt;_auth_sessions</code>, <code>authkit_&lt;name&gt;_remember</code>).</li>
+<li><strong><code>GuardOptions() []Options</code></strong> is the resolved list both <code>RegisterAll</code> and the
+  ServiceProvider iterate — one entry per <code>authkit.guards</code> child, or a single
+  <code>OptionsFromConfig()</code> entry when none are declared.</li>
+</ul>
+<h3 id="options-fields"><code>Options</code> fields<a class="headerlink" href="#options-fields" title="Permanent link">&para;</a></h3>
+<p><code>Options</code> configures one guard's routes and controller behaviour:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Prefix</code></td>
+<td>Route prefix (e.g. <code>/api/v1</code>); routes mount under <code>{Prefix}/auth</code>.</td>
+</tr>
+<tr>
+<td><code>Guard</code></td>
+<td>Goravel auth guard name backing the session (e.g. <code>admin</code>).</td>
+</tr>
+<tr>
+<td><code>MinPasswordLength</code></td>
+<td>Minimum accepted new-password length.</td>
+</tr>
+<tr>
+<td><code>RateLimitIPAttempts</code> / <code>RateLimitAccountAttempts</code></td>
+<td>Combined IP and account limits for login/challenge.</td>
+</tr>
+<tr>
+<td><code>RateLimitPasswordAttempts</code> / <code>RateLimitWindow</code></td>
+<td>Per-user password limit and shared window.</td>
+</tr>
+<tr>
+<td><code>RateLimitStore</code></td>
+<td>Optional atomic backend; otherwise the process-local memory store is used.</td>
+</tr>
+<tr>
+<td><code>EnableCSRF</code> / <code>TrustedOrigins</code></td>
+<td>Fail-closed request-origin verification and exact cross-origin allowlist.</td>
+</tr>
+<tr>
+<td><code>EnableUserManagement</code></td>
+<td>Register the <code>/users</code> CRUD endpoints.</td>
+</tr>
+<tr>
+<td><code>EnableAuditLog</code></td>
+<td>Wire the audit service into the controllers.</td>
+</tr>
+<tr>
+<td><code>UserManagementRoles</code></td>
+<td>Roles allowed at <code>/users</code> (fail-closed default <code>["admin"]</code>).</td>
+</tr>
+<tr>
+<td><code>Roles</code></td>
+<td>Accepted role values on create/update (empty = any).</td>
+</tr>
+<tr>
+<td><code>EnableTwoFactor</code> / <code>TwoFactorIssuer</code> / <code>RecoveryCodeCount</code></td>
+<td>TOTP two-factor.</td>
+</tr>
+<tr>
+<td><code>EnableRememberMe</code> / <code>RememberLifetime</code></td>
+<td>Persistent remember-me login.</td>
+</tr>
+<tr>
+<td><code>EnableSessions</code> / <code>SessionActiveWindow</code></td>
+<td>Active-session tracking + endpoints.</td>
+</tr>
+<tr>
+<td><code>EnableAPITokens</code> / token policy fields</td>
+<td>Enable management and configure allowed scopes, expiry, maximum active tokens, and password-change revocation.</td>
+</tr>
+<tr>
+<td><code>UsersTable</code> / <code>AuditTable</code> / <code>RememberTokensTable</code> / <code>SessionsTable</code> / <code>APITokensTable</code></td>
+<td>Bind the repositories to per-guard tables.</td>
+</tr>
+<tr>
+<td><code>RememberCookieName</code></td>
+<td>This guard's remember cookie (empty → <code>authkit_remember</code>). Two guards on one origin must differ.</td>
+</tr>
+<tr>
+<td><code>EnableImpersonation</code></td>
+<td>Mount the impersonation endpoints + the reject-while-impersonating guards (off by default).</td>
+</tr>
+<tr>
+<td><code>ImpersonationRoles</code></td>
+<td>The actor must hold one of these roles to impersonate (empty = any authenticated user in this guard).</td>
+</tr>
+<tr>
+<td><code>ImpersonationTargetGuards</code></td>
+<td>Guards this guard's actors may impersonate into (<code>"*"</code> = any; include this guard's own name for same-guard; empty = cannot impersonate).</td>
+</tr>
+<tr>
+<td><code>ImpersonationProtectedRoles</code></td>
+<td>Target users holding one of these roles can never be impersonated.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="impersonation-policy-hook">Impersonation policy hook<a class="headerlink" href="#impersonation-policy-hook" title="Permanent link">&para;</a></h3>
+<p>The config gate (<code>ImpersonationRoles</code> / <code>ImpersonationTargetGuards</code> /
+<code>ImpersonationProtectedRoles</code>) decides authorization declaratively. For finer rules
+a config table can't express, register a host hook — it runs <strong>only after</strong> the
+config gate has passed, so it can only tighten the decision:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">import</span><span class="w"> </span><span class="s">&quot;github.com/freshost/goravel-authkit&quot;</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="kd">type</span><span class="w"> </span><span class="nx">myPolicy</span><span class="w"> </span><span class="kd">struct</span><span class="p">{}</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">myPolicy</span><span class="p">)</span><span class="w"> </span><span class="nx">CanImpersonate</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">actor</span><span class="w"> </span><span class="nx">authkit</span><span class="p">.</span><span class="nx">Principal</span><span class="p">,</span><span class="w"> </span><span class="nx">targetGuard</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">target</span><span class="w"> </span><span class="nx">authkit</span><span class="p">.</span><span class="nx">Principal</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="kt">bool</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">actor</span><span class="p">.</span><span class="nx">Guard</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="s">&quot;admin&quot;</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nx">target</span><span class="p">.</span><span class="nx">Role</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="s">&quot;owner&quot;</span><span class="p">,</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="c1">// example</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="p">}</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="c1">// Once at boot:</span>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="nx">authkit</span><span class="p">.</span><span class="nx">RegisterImpersonationPolicy</span><span class="p">(</span><span class="nx">myPolicy</span><span class="p">{})</span>
+</code></pre></div>
+<ul>
+<li><strong><code>authkit.RegisterImpersonationPolicy(p authkit.Impersonator)</code></strong> registers the
+  hook process-wide (call once at boot). When none is registered, the config gate
+  alone decides.</li>
+<li><strong><code>authkit.Impersonator</code></strong> is the one-method interface
+  <code>CanImpersonate(ctx, actor, targetGuard, target) (bool, error)</code> — return <code>false</code>
+  to deny.</li>
+<li><strong><code>authkit.Principal</code></strong> identifies one party in the decision:
+  <code>{ Guard string; UserID uuid.UUID; Email string; Role string }</code>.</li>
+</ul>
+<h3 id="rate-limit-store">Rate-limit store<a class="headerlink" href="#rate-limit-store" title="Permanent link">&para;</a></h3>
+<p>Multi-instance hosts register one shared atomic backend before route mounting:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kd">type</span><span class="w"> </span><span class="nx">sharedLimiter</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="cm">/* Redis client */</span><span class="w"> </span><span class="p">}</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">store</span><span class="w"> </span><span class="o">*</span><span class="nx">sharedLimiter</span><span class="p">)</span><span class="w"> </span><span class="nx">Hit</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">key</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">limit</span><span class="w"> </span><span class="kt">int</span><span class="p">,</span><span class="w"> </span><span class="nx">window</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Duration</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="nx">authkit</span><span class="p">.</span><span class="nx">RateLimitResult</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">    </span><span class="c1">// Atomically consume one attempt and apply/retain the bucket expiry.</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="p">}</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="nx">authkit</span><span class="p">.</span><span class="nx">RegisterRateLimitStore</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">sharedLimiter</span><span class="p">{})</span>
+</code></pre></div>
+<p><code>Hit</code> must be atomic across processes. Authkit supplies already namespaced and
+SHA-256-hashed keys, so the backend never receives raw email, IP, or user ID.
+Backend errors fail closed with <code>503 rate_limiter_unavailable</code>.</p>
+<h3 id="guarding-the-hosts-own-routes">Guarding the host's own routes<a class="headerlink" href="#guarding-the-hosts-own-routes" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1">// Authenticate the host&#39;s routes behind an authkit guard (the authkit</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="c1">// equivalent of Laravel&#39;s auth:&lt;guard&gt;).</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="nx">facades</span><span class="p">.</span><span class="nx">Route</span><span class="p">().</span><span class="nx">Prefix</span><span class="p">(</span><span class="s">&quot;/api/v1&quot;</span><span class="p">).</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">    </span><span class="nx">Middleware</span><span class="p">(</span><span class="nx">authkitroutes</span><span class="p">.</span><span class="nx">Protect</span><span class="p">(</span><span class="s">&quot;client&quot;</span><span class="p">)</span><span class="o">...</span><span class="p">).</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">    </span><span class="nx">Group</span><span class="p">(</span><span class="kd">func</span><span class="p">(</span><span class="nx">r</span><span class="w"> </span><span class="nx">route</span><span class="p">.</span><span class="nx">Router</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">        </span><span class="nx">r</span><span class="p">.</span><span class="nx">Get</span><span class="p">(</span><span class="s">&quot;/invoices&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">invoices</span><span class="p">.</span><span class="nx">Index</span><span class="p">)</span><span class="w"> </span><span class="c1">// requires a logged-in &quot;client&quot; user</span>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">    </span><span class="p">})</span>
+</code></pre></div>
+<ul>
+<li><strong><code>Protect(guard string) []http.Middleware</code></strong> returns <code>StartSession</code> + CSRF
+  origin verification (when enabled) + <code>Authenticated(guard, repo)</code> (the repo is
+  bound to that guard's user table).</li>
+<li><strong><code>ProtectRole(guard string, roles ...string) []http.Middleware</code></strong> is <code>Protect</code>
+  plus a <code>RequireRole</code> gate (no roles → behaves like <code>Protect</code>).</li>
+<li><strong><code>AuthUserID(ctx http.Context) uuid.UUID</code></strong> reads the current user id inside a
+  protected handler (or <code>uuid.Nil</code>).</li>
+</ul>
+<h3 id="programmatic-instance-api">Programmatic instance API<a class="headerlink" href="#programmatic-instance-api" title="Permanent link">&para;</a></h3>
+<p><code>authkit.New</code> drives auth / user-management / 2FA against a specific table
+(for CLI tools, seeders, custom flows) without going through HTTP:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nx">client</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">authkit</span><span class="p">.</span><span class="nx">New</span><span class="p">(</span><span class="nx">authkit</span><span class="p">.</span><span class="nx">Config</span><span class="p">{</span><span class="nx">Guard</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;client&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">UsersTable</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;accounts&quot;</span><span class="p">})</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="nx">admin</span><span class="w">  </span><span class="o">:=</span><span class="w"> </span><span class="nx">authkit</span><span class="p">.</span><span class="nx">New</span><span class="p">(</span><span class="nx">authkit</span><span class="p">.</span><span class="nx">Config</span><span class="p">{</span><span class="nx">Guard</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;admin&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">UsersTable</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;admin_users&quot;</span><span class="p">})</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="nx">u</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">admin</span><span class="p">.</span><span class="nx">CreateUser</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span><span class="w"> </span><span class="nx">email</span><span class="p">,</span><span class="w"> </span><span class="nx">name</span><span class="p">,</span><span class="w"> </span><span class="nx">password</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;admin&quot;</span><span class="p">)</span>
+</code></pre></div>
+<p><code>authkit.Config</code> fields (all optional; the zero value reproduces the
+single-instance defaults): <code>Guard</code>, <code>UsersTable</code>, <code>MinPasswordLength</code>,
+<code>TwoFactorIssuer</code>, <code>RecoveryCodeCount</code>, <code>Roles</code>, <code>UserManagementRoles</code>. The
+returned <code>*Authkit</code> exposes <code>Authenticate</code>, <code>CreateUser</code>, <code>GetUser</code>, <code>ListUsers</code>,
+<code>SetPassword</code>, <code>ChangePassword</code>, <code>DeleteUser</code>, <code>EnableTwoFactor</code>,
+<code>ConfirmTwoFactor</code>, <code>VerifyTwoFactor</code>, <code>DisableTwoFactor</code>. The default instance
+is also resolvable via <code>facades.Authkit()</code>.</p>
+<h3 id="migrations-repositories">Migrations &amp; repositories<a class="headerlink" href="#migrations-repositories" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong><code>migrations.ForTables(cfg migrations.MigrationConfig) []schema.Migration</code></strong>
+  returns the migration set for arbitrary table names, with table-derived
+  signatures (<code>authkit_&lt;table&gt;_&lt;step&gt;</code>) so a host can register one set per user
+  domain without collisions. <code>MigrationConfig</code> fields: <code>UsersTable</code>, <code>AuditTable</code>,
+  <code>RememberTokensTable</code>, <code>SessionsTable</code> (empty → package defaults).
+  <code>migrations.Migrations()</code> is <code>ForTables(MigrationConfig{})</code>. The ServiceProvider
+  self-registers these per guard unless <code>authkit.register_migrations = false</code>.</li>
+<li><strong><code>repositories.New*WithTable(table string)</code></strong> construct table-bound
+  repositories (<code>NewUsersWithTable</code>, <code>NewAuditWithTable</code>,
+  <code>NewRememberWithTable</code>, <code>NewSessionsWithTable</code>); an empty name falls back to the
+  package default table. The bare <code>New*()</code> constructors use the default tables.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      MIT &copy; Freshost
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.top", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.action.edit"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
