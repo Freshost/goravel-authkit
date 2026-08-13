@@ -8,6 +8,21 @@ While the package is pre-1.0, minor versions may contain breaking changes.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-08-13
+
+### Added
+
+- Server-side administrator sign-in filters for the user's current name or
+  email, recorded IP address, and password or remember-cookie method.
+- Ascending and descending timestamp sorting for the paginated administrator
+  sign-in overview.
+
+### Changed
+
+- `GET {prefix}/auth/admin/logins` now accepts the optional `user`, `ip`,
+  `method`, and `sort` query parameters. Invalid method and sort values return a
+  validation error.
+
 ## [0.5.0] - 2026-08-13
 
 ### Added
@@ -178,7 +193,8 @@ set — in one Goravel app, while a single-domain app keeps working unchanged.
 - Initial release: session-based auth, user management, TOTP two-factor, audit log,
   remember-me, active-session tracking — single guard.
 
-[Unreleased]: https://github.com/Freshost/goravel-authkit/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/Freshost/goravel-authkit/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/Freshost/goravel-authkit/releases/tag/v0.6.0
 [0.5.0]: https://github.com/Freshost/goravel-authkit/releases/tag/v0.5.0
 [0.4.0]: https://github.com/Freshost/goravel-authkit/releases/tag/v0.4.0
 [0.3.0]: https://github.com/Freshost/goravel-authkit/releases/tag/v0.3.0

@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -13,12 +14,18 @@ import (
 const (
 	defaultAdminLoginPageSize = 20
 	maxAdminLoginPageSize     = 100
+	loginActionPassword       = "auth.login"
+	loginActionRemember       = "auth.login_remember"
 )
 
 // AdminLoginQuery controls the bounded administrator sign-in listing.
 type AdminLoginQuery struct {
 	Page    int
 	PerPage int
+	User    string
+	IP      string
+	Method  string
+	Sort    string
 }
 
 // AdminLoginEvent is one successful sign-in visible to an administrator.
@@ -50,7 +57,7 @@ func NewAdminLogins(repo repositories.LoginEventsRepository) *AdminLogins {
 	return &AdminLogins{repo: repo}
 }
 
-// List returns successful password and remember-cookie sign-ins, newest first.
+// List returns filtered successful password and remember-cookie sign-ins.
 func (s *AdminLogins) List(ctx context.Context, query AdminLoginQuery) (*AdminLoginPage, error) {
 	if query.Page == 0 {
 		query.Page = 1
@@ -64,8 +71,43 @@ func (s *AdminLogins) List(ctx context.Context, query AdminLoginQuery) (*AdminLo
 	if query.PerPage < 1 || query.PerPage > maxAdminLoginPageSize {
 		return nil, fmt.Errorf("%w: perPage must be between 1 and %d", ErrValidation, maxAdminLoginPageSize)
 	}
+	query.User = strings.TrimSpace(query.User)
+	query.IP = strings.TrimSpace(query.IP)
+	query.Method = strings.ToLower(strings.TrimSpace(query.Method))
+	query.Sort = strings.ToLower(strings.TrimSpace(query.Sort))
+	if len(query.User) > 255 {
+		return nil, fmt.Errorf("%w: user filter must be at most 255 characters", ErrValidation)
+	}
+	if len(query.IP) > 64 {
+		return nil, fmt.Errorf("%w: IP filter must be at most 64 characters", ErrValidation)
+	}
 
-	rows, total, err := s.repo.List(ctx, LoginActions, query.Page, query.PerPage)
+	methodAction := ""
+	switch query.Method {
+	case "":
+	case "password":
+		methodAction = loginActionPassword
+	case "remember":
+		methodAction = loginActionRemember
+	default:
+		return nil, fmt.Errorf("%w: method must be password or remember", ErrValidation)
+	}
+	oldestFirst := false
+	switch query.Sort {
+	case "", "desc":
+	case "asc":
+		oldestFirst = true
+	default:
+		return nil, fmt.Errorf("%w: sort must be asc or desc", ErrValidation)
+	}
+
+	rows, total, err := s.repo.List(ctx, repositories.LoginEventFilter{
+		Actions:      LoginActions,
+		User:         query.User,
+		IP:           query.IP,
+		MethodAction: methodAction,
+		OldestFirst:  oldestFirst,
+	}, query.Page, query.PerPage)
 	if err != nil {
 		return nil, fmt.Errorf("list administrator logins: %w", err)
 	}

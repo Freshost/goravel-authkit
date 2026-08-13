@@ -38,9 +38,13 @@ successful password and remember-cookie sign-ins for the current guard.
 
 | Method | Path | `@ID` | Auth | Success | Errors |
 | --- | --- | --- | --- | --- | --- |
-| GET | `/auth/admin/logins?page=1&perPage=20` | `listAdminLogins` | cookie + admin role | `200` AdminLoginPageResponse | `400` `401` `403` `500` |
+| GET | `/auth/admin/logins?page=1&perPage=20&sort=desc` | `listAdminLogins` | cookie + admin role | `200` AdminLoginPageResponse | `400` `401` `403` `500` |
 
 `page` defaults to `1`; `perPage` defaults to `20` and is capped at `100`.
+Optional `user` and `ip` filters perform case-insensitive literal substring
+matches. `user` searches the live name and effective email. `method` accepts
+`password` or `remember`; `sort` accepts `asc` or `desc` and defaults to
+newest-first (`desc`).
 
 ## Sessions (when `features.sessions`)
 

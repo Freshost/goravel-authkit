@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -24,7 +25,17 @@ type LoginEventRecord struct {
 
 // LoginEventsRepository reads successful sign-ins across a guard.
 type LoginEventsRepository interface {
-	List(ctx context.Context, actions []string, page, perPage int) ([]LoginEventRecord, int64, error)
+	List(ctx context.Context, filter LoginEventFilter, page, perPage int) ([]LoginEventRecord, int64, error)
+}
+
+// LoginEventFilter is the normalized persistence query for administrator
+// sign-in activity. MethodAction is an audit action, not a transport value.
+type LoginEventFilter struct {
+	Actions      []string
+	User         string
+	IP           string
+	MethodAction string
+	OldestFirst  bool
 }
 
 // LoginEvents is the table-aware ORM implementation.
@@ -50,23 +61,27 @@ func (r *LoginEvents) query(ctx context.Context) ormcontract.Query {
 	return facades.Orm().WithContext(ctx).Query().Table(r.auditTable + " AS audit")
 }
 
-// List returns one page ordered newest first and the total matching row count.
-func (r *LoginEvents) List(ctx context.Context, actions []string, page, perPage int) ([]LoginEventRecord, int64, error) {
-	total, err := r.query(ctx).Where("audit.action IN ?", actions).Count()
+// List returns one filtered page and the total matching row count.
+func (r *LoginEvents) List(ctx context.Context, filter LoginEventFilter, page, perPage int) ([]LoginEventRecord, int64, error) {
+	countQuery := r.filteredQuery(ctx, filter)
+	total, err := countQuery.Count()
 	if err != nil {
 		return nil, 0, err
 	}
 
+	order := "audit.created_at DESC, audit.id DESC"
+	if filter.OldestFirst {
+		order = "audit.created_at ASC, audit.id ASC"
+	}
+
 	rows := make([]LoginEventRecord, 0, perPage)
-	err = r.query(ctx).
+	err = r.filteredQuery(ctx, filter).
 		Select(
-			"audit.id, audit.actor_id AS user_id, users.name AS user_name, "+
-				"COALESCE(users.email, audit.actor_email) AS user_email, "+
+			"audit.id, audit.actor_id AS user_id, users.name AS user_name, " +
+				"COALESCE(users.email, audit.actor_email) AS user_email, " +
 				"audit.action, audit.ip, audit.created_at",
 		).
-		Join("LEFT JOIN "+r.usersTable+" AS users ON users.id = audit.actor_id").
-		Where("audit.action IN ?", actions).
-		OrderByRaw("audit.created_at DESC, audit.id DESC").
+		OrderByRaw(order).
 		Offset((page - 1) * perPage).
 		Limit(perPage).
 		Get(&rows)
@@ -74,4 +89,36 @@ func (r *LoginEvents) List(ctx context.Context, actions []string, page, perPage 
 		return nil, 0, err
 	}
 	return rows, total, nil
+}
+
+func (r *LoginEvents) filteredQuery(ctx context.Context, filter LoginEventFilter) ormcontract.Query {
+	query := r.query(ctx).
+		Join("LEFT JOIN "+r.usersTable+" AS users ON users.id = audit.actor_id").
+		Where("audit.action IN ?", filter.Actions)
+	if filter.MethodAction != "" {
+		query = query.Where("audit.action = ?", filter.MethodAction)
+	}
+	if filter.User != "" {
+		pattern := literalContainsPattern(filter.User)
+		query = query.Where(
+			"(LOWER(COALESCE(users.name, '')) LIKE ? ESCAPE '!' OR "+
+				"LOWER(COALESCE(users.email, audit.actor_email, '')) LIKE ? ESCAPE '!')",
+			pattern, pattern,
+		)
+	}
+	if filter.IP != "" {
+		query = query.Where(
+			"LOWER(COALESCE(audit.ip, '')) LIKE ? ESCAPE '!'",
+			literalContainsPattern(filter.IP),
+		)
+	}
+	return query
+}
+
+func literalContainsPattern(value string) string {
+	value = strings.ToLower(value)
+	value = strings.ReplaceAll(value, "!", "!!")
+	value = strings.ReplaceAll(value, "%", "!%")
+	value = strings.ReplaceAll(value, "_", "!_")
+	return "%" + value + "%"
 }

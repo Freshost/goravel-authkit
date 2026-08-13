@@ -3,6 +3,7 @@ package feature
 import (
 	"bytes"
 	"net/http"
+	"net/url"
 	"testing"
 	"time"
 
@@ -95,6 +96,7 @@ func (s *AuditLogTestSuite) TestAdminCanListAllSuccessfulLogins() {
 	memberName := "Audit Member"
 	memberID := s.createUser(memberEmail, "password123", memberName, "user")
 	s.Require().NotNil(s.loginAs(memberEmail, "password123"))
+	s.Require().NotNil(s.loginAs(memberEmail, "password123"))
 
 	resp, err := s.Http(s.T()).WithCookie(adminCookie).
 		Get("/api/v1/auth/admin/logins?page=1&perPage=20")
@@ -122,9 +124,11 @@ func (s *AuditLogTestSuite) TestAdminCanListAllSuccessfulLogins() {
 	s.GreaterOrEqual(page.TotalPages, 1)
 
 	found := false
+	memberIP := ""
 	for _, item := range page.Items {
 		if item.UserID != nil && *item.UserID == memberID.String() {
 			found = true
+			memberIP = item.IP
 			s.Equal(memberName, item.UserName)
 			s.Equal(memberEmail, item.UserEmail)
 			s.Equal("auth.login", item.Action)
@@ -133,6 +137,47 @@ func (s *AuditLogTestSuite) TestAdminCanListAllSuccessfulLogins() {
 		}
 	}
 	s.True(found, "administrator login overview should contain the member sign-in")
+
+	filteredResp, err := s.Http(s.T()).WithCookie(adminCookie).Get(
+		"/api/v1/auth/admin/logins?page=1&perPage=20&sort=asc&method=password&user=" +
+			url.QueryEscape(memberEmail) + "&ip=" + url.QueryEscape(memberIP),
+	)
+	s.Require().NoError(err)
+	filteredResp.AssertStatus(http.StatusOK)
+
+	var filteredPage struct {
+		Items []struct {
+			UserID    *string `json:"userId"`
+			UserEmail string  `json:"userEmail"`
+			Action    string  `json:"action"`
+			IP        string  `json:"ip"`
+			CreatedAt string  `json:"createdAt"`
+		} `json:"items"`
+		Total int64 `json:"total"`
+	}
+	s.Require().NoError(filteredResp.Bind(&filteredPage))
+	s.Equal(int64(2), filteredPage.Total)
+	s.Require().Len(filteredPage.Items, 2)
+	for _, item := range filteredPage.Items {
+		s.Require().NotNil(item.UserID)
+		s.Equal(memberID.String(), *item.UserID)
+		s.Equal(memberEmail, item.UserEmail)
+		s.Equal("auth.login", item.Action)
+		s.Equal(memberIP, item.IP)
+	}
+	first, err := time.Parse(time.RFC3339Nano, filteredPage.Items[0].CreatedAt)
+	s.Require().NoError(err)
+	second, err := time.Parse(time.RFC3339Nano, filteredPage.Items[1].CreatedAt)
+	s.Require().NoError(err)
+	s.False(second.Before(first), "ascending sort should return the oldest sign-in first")
+}
+
+func (s *AuditLogTestSuite) TestAdminLoginFiltersRejectUnknownValues() {
+	adminCookie := s.login()
+	resp, err := s.Http(s.T()).WithCookie(adminCookie).
+		Get("/api/v1/auth/admin/logins?method=magic-link&sort=sideways")
+	s.Require().NoError(err)
+	resp.AssertStatus(http.StatusBadRequest)
 }
 
 func (s *AuditLogTestSuite) TestNonAdminCannotListAllLogins() {

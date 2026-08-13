@@ -25,6 +25,10 @@ func (c *AdminLoginsController) Index(ctx contractshttp.Context) contractshttp.R
 	page, err := c.logins.List(ctx.Context(), services.AdminLoginQuery{
 		Page:    ctx.Request().QueryInt("page", 1),
 		PerPage: ctx.Request().QueryInt("perPage", 20),
+		User:    ctx.Request().Query("user"),
+		IP:      ctx.Request().Query("ip"),
+		Method:  ctx.Request().Query("method"),
+		Sort:    ctx.Request().Query("sort", "desc"),
 	})
 	if err != nil {
 		if errors.Is(err, services.ErrValidation) {

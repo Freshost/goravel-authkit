@@ -227,8 +227,10 @@ Audit writes are best-effort: a write failure is logged but does not fail the
 parent request.
 
 Administrators can inspect successful sign-ins for their current guard through
-`GET {prefix}/auth/admin/logins`. The endpoint is server-paginated, uses the
-same fail-closed roles as user management, and is blocked while impersonating.
+`GET {prefix}/auth/admin/logins`. The endpoint is server-paginated, supports
+literal user/IP filtering, sign-in-method filtering, and timestamp sorting. It
+uses the same fail-closed roles as user management and is blocked while
+impersonating.
 It joins the audit actor to the live user only to display the current name and
 email; deleted users retain the email snapshot stored with their audit event.
 Correct `http.trusted_proxies` configuration remains mandatory because the

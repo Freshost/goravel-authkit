@@ -324,7 +324,7 @@ Each guard mounts the same endpoint set under its own `prefix` (e.g.
 | `POST /auth/two-factor` … | TOTP enroll / confirm / disable / recovery-codes (toggleable) |
 | `GET/DELETE /auth/sessions` | List / terminate active sessions |
 | `GET  /auth/logins` | Recent sign-in history |
-| `GET  /auth/admin/logins` | Paginated sign-ins across all users (admin role-gated) |
+| `GET  /auth/admin/logins` | Filterable, sortable, paginated sign-ins across all users (admin role-gated) |
 | `GET/POST/PUT/DELETE /auth/users` | Admin user management (toggleable, role-gated) |
 | `POST /auth/users/{id}/password` | Admin set-password |
 | `POST /auth/impersonate` … `/stop` | Login as a user / stop (toggleable, role/guard-gated, audited) |
