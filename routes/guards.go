@@ -147,6 +147,7 @@ func OptionsForGuard(name string) Options {
 	if v := cfg.Get(base + "impersonation.protected_roles"); v != nil {
 		o.ImpersonationProtectedRoles = toStringSlice(v)
 	}
+	o.ImpersonationAllowSensitiveActions = cfg.GetBool(base+"impersonation.allow_sensitive_actions", o.ImpersonationAllowSensitiveActions)
 
 	// Per-guard feature overrides default to the global feature flag.
 	o.EnableUserManagement = cfg.GetBool(base+"features.user_management", o.EnableUserManagement)

@@ -203,7 +203,7 @@ The reject-while-impersonating guard returns `403 impersonation_forbidden` on
 {
   "roles": ["admin", "user"],
   "minPasswordLength": 8,
-  "features": { "userManagement": true, "twoFactor": true, "auditLog": true, "sessions": true, "impersonation": false, "apiTokens": true },
+  "features": { "userManagement": true, "twoFactor": true, "auditLog": true, "sessions": true, "impersonation": false, "apiTokens": true, "impersonationSensitiveActions": false },
   "apiTokens": { "allowedScopes": ["deployments:read"], "defaultLifetimeDays": 30, "maxLifetimeDays": 365, "maxPerUser": 20 }
 }
 
@@ -320,9 +320,13 @@ The reject-while-impersonating guard returns `403 impersonation_forbidden` on
   (`403 account_disabled`), and must not hold a `protected_role`
   (`403 forbidden`). While a switch is active, `GET /auth/me` returns the
   impersonated user with an `impersonatedBy` object ({ guard, id, email }), and the
-  password-change, user-management and nested-impersonate routes return
-  `403 impersonation_forbidden`. `GET /auth/meta` reports
-  `features.impersonation`. Both the start and stop are audited
+  password-change, PAT-management and user-management routes return
+  `403 impersonation_forbidden` by default. With
+  `impersonation.allow_sensitive_actions = true` on the target guard, these
+  actions and administrator sign-in history use the target's normal role and
+  credential checks, as for direct login. Nested switches remain unsupported.
+  `GET /auth/meta` reports `features.impersonation` and
+  `features.impersonationSensitiveActions`. Both the start and stop are audited
   (`auth.impersonation_started` / `auth.impersonation_stopped`).
 
 ## Go API (mounting & host integration)
@@ -384,6 +388,7 @@ authkitroutes.Register(facades.Route(), opts)
 | `ImpersonationRoles` | The actor must hold one of these roles to impersonate (empty = any authenticated user in this guard). |
 | `ImpersonationTargetGuards` | Guards this guard's actors may impersonate into (`"*"` = any; include this guard's own name for same-guard; empty = cannot impersonate). |
 | `ImpersonationProtectedRoles` | Target users holding one of these roles can never be impersonated. |
+| `ImpersonationAllowSensitiveActions` | Allow the target's normal account actions during impersonation (default `false`); exposed as `features.impersonationSensitiveActions` in `/auth/meta`. |
 
 ### Impersonation policy hook
 
