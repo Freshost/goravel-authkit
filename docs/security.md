@@ -167,11 +167,17 @@ Because this **bypasses the target's password by design**, authorization is the
   from a stored cookie; it lives only for the current session and ends on "stop".
 - **Target must be live.** The target user must exist and must not be disabled;
   `protected_roles` blocks impersonating privileged accounts.
-- **Reject while impersonating.** While a switch is active, the guard blocks the
+- **Configurable account actions.** By default, while a switch is active, the guard blocks the
   credential- and privilege-sensitive routes — password change
   (`PUT /auth/password`), user management (`/auth/users*`) and a nested
   impersonation — with `403 impersonation_forbidden`, so an actor acting "as" a user
   cannot change that user's password, manage users as them, or chain switches.
+  Setting `impersonation.allow_sensitive_actions = true` on the target guard
+  permits password changes, PAT management, user management and administrator
+  sign-in history according to the target's normal role and credential checks.
+  A switched regular user therefore has the same account actions as a direct
+  regular-user login. The session supports one switch at a time; nested switches
+  remain unsupported so the original actor can be restored.
 - **Session-id regeneration** happens on both the switch and the stop
   (anti-fixation), the same as login. `GET /auth/me` exposes `impersonatedBy` while
   impersonating so a UI can show a banner and an exit control.

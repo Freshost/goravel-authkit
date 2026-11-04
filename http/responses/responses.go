@@ -129,12 +129,13 @@ type APITokenMeta struct {
 
 // MetaFeatures mirrors the authkit.features toggles for the frontend.
 type MetaFeatures struct {
-	UserManagement bool `json:"userManagement" example:"true"`
-	TwoFactor      bool `json:"twoFactor" example:"true"`
-	AuditLog       bool `json:"auditLog" example:"true"`
-	Sessions       bool `json:"sessions" example:"true"`
-	Impersonation  bool `json:"impersonation" example:"false"`
-	APITokens      bool `json:"apiTokens" example:"false"`
+	UserManagement                bool `json:"userManagement" example:"true"`
+	TwoFactor                     bool `json:"twoFactor" example:"true"`
+	AuditLog                      bool `json:"auditLog" example:"true"`
+	Sessions                      bool `json:"sessions" example:"true"`
+	Impersonation                 bool `json:"impersonation" example:"false"`
+	APITokens                     bool `json:"apiTokens" example:"false"`
+	ImpersonationSensitiveActions bool `json:"impersonationSensitiveActions" example:"false"`
 }
 
 // CreateAPITokenRequest is the POST /auth/api-tokens body. The password and,

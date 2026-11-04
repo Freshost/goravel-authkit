@@ -283,6 +283,12 @@ host hook (it can only tighten the decision):
 authkit.RegisterImpersonationPolicy(myPolicy{}) // implements authkit.Impersonator
 ```
 
+To expose the target user's normal account actions during a switch, set
+`impersonation.allow_sensitive_actions: true` globally or on the target guard.
+This includes password changes and PAT management, with the same role, password
+and TOTP checks as direct login. `/auth/meta` reports the setting as
+`features.impersonationSensitiveActions` for the companion UI.
+
 See [docs/configuration.md](docs/configuration.md#impersonation) and
 [docs/security.md](docs/security.md) for the full gate and security properties.
 

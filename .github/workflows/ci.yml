@@ -37,6 +37,6 @@ jobs:
       # no database. The demo's feature tests live in a separate module and need
       # Postgres, so they're intentionally out of this hermetic gate.
       - name: test
-        run: go test ./...
+        run: go test -race ./...
         env:
           AUTHKIT_RATE_LIMIT_ATTEMPTS: "100000"

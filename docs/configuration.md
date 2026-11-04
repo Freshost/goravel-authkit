@@ -279,6 +279,7 @@ Two things turn it on:
 | `roles` | []string | The actor must hold one of these roles. Empty = any authenticated user in this guard may impersonate |
 | `target_guards` | []string | Guards this guard's actors may impersonate into — `"*"` = any, specific guard names, or this guard's own name for same-guard. **Empty = this guard cannot impersonate** (fail-closed) |
 | `protected_roles` | []string | Target users holding one of these roles can never be impersonated |
+| `allow_sensitive_actions` | bool (default `false`) | On the target guard, allow the same password, PAT, user-management and sign-in-history actions as direct login; normal target-role and credential checks still apply. Inherits the global value when omitted. |
 
 Cross-guard adds the target guard's session alongside the actor's (one shared
 cookie), so the actor stays signed in to its own guard and "stop" just drops the
