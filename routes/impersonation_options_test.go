@@ -40,3 +40,35 @@ func TestImpersonationActionPolicyConfig(t *testing.T) {
 		})
 	}
 }
+
+func TestImpersonatedAPITokenPolicyConfig(t *testing.T) {
+	t.Setenv("APP_KEY", "01234567890123456789012345678901")
+	for _, tc := range []struct {
+		name       string
+		global     map[string]any
+		guard      map[string]any
+		wantGlobal bool
+		wantGuard  bool
+	}{
+		{name: "existing default"},
+		{name: "global delegation inherited", global: map[string]any{"allow_impersonated_creation": true}, wantGlobal: true, wantGuard: true},
+		{name: "guard opts in", guard: map[string]any{"allow_impersonated_creation": true}, wantGuard: true},
+		{name: "guard opts out", global: map[string]any{"allow_impersonated_creation": true}, guard: map[string]any{"allow_impersonated_creation": false}, wantGlobal: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := frameworkconfig.NewApplication("")
+			cfg.Add("authkit", map[string]any{
+				"api_tokens": tc.global,
+				"guards":     map[string]any{"client": map[string]any{"api_tokens": tc.guard}},
+			})
+			app := &foundation.Application{Container: foundation.NewContainer()}
+			app.Instance(binding.Config, cfg)
+			previous := foundation.App
+			foundation.App = app
+			t.Cleanup(func() { foundation.App = previous })
+
+			require.Equal(t, tc.wantGlobal, OptionsFromConfig().APITokenAllowImpersonatedCreation)
+			require.Equal(t, tc.wantGuard, OptionsForGuard("client").APITokenAllowImpersonatedCreation)
+		})
+	}
+}

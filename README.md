@@ -162,6 +162,7 @@ keys optional — the package falls back to safe defaults).
 | `authkit.features.remember_me` | bool | `true` | Persistent "remember me" login |
 | `authkit.features.sessions` | bool | `true` | Active-session tracking + endpoints |
 | `authkit.features.api_tokens` | bool | `false` | Personal API-token management and bearer authentication |
+| `authkit.api_tokens.allow_impersonated_creation` | bool | `false` | Issue target-owned PATs using the original actor's current impersonation authorization instead of target password/TOTP; requires sensitive actions enabled |
 | `authkit.api_tokens.allowed_scopes` | []string | `[]` | Scopes users may assign; empty permits unscoped tokens only |
 | `authkit.api_tokens.default_lifetime_days` | int | `30` | Default expiry suggested to clients |
 | `authkit.api_tokens.max_lifetime_days` | int | `365` | Maximum token lifetime |
@@ -177,6 +178,10 @@ Root-level `authkit.*` settings apply to **every** guard; anything set inside an
 `authkit.guards.<name>` entry overrides them for that guard. A guard's secondary
 tables default from its `users_table` (e.g. `client_users` → `client_audit_logs`).
 See [docs/configuration.md](docs/configuration.md) for the full reference.
+
+Cross-guard PAT delegation requires `routes.RegisterAll`, which supplies the
+actual actor and target guard options together. `routes.Register` supports
+delegated creation within its explicitly registered guard.
 
 ## Multi-guard
 

@@ -78,6 +78,9 @@ type Options struct {
 	// ProtectToken/ProtectAny to authenticate this guard's opaque bearer tokens.
 	// It is off by default.
 	EnableAPITokens bool
+	// APITokenAllowImpersonatedCreation authorizes target-owned tokens through
+	// the original actor's current impersonation policy instead of target credentials.
+	APITokenAllowImpersonatedCreation bool
 	// APITokenAllowedScopes is the allow-list users may assign to tokens. An empty
 	// list permits only unscoped tokens.
 	APITokenAllowedScopes   []string
@@ -187,6 +190,7 @@ func OptionsFromConfig() Options {
 	}
 	o.EnableSessions = cfg.GetBool("authkit.features.sessions", o.EnableSessions)
 	o.EnableAPITokens = cfg.GetBool("authkit.features.api_tokens", o.EnableAPITokens)
+	o.APITokenAllowImpersonatedCreation = cfg.GetBool("authkit.api_tokens.allow_impersonated_creation", o.APITokenAllowImpersonatedCreation)
 	o.APITokenAllowedScopes = toStringSlice(cfg.Get("authkit.api_tokens.allowed_scopes"))
 	if v := cfg.GetInt("authkit.api_tokens.default_lifetime_days"); v > 0 {
 		o.APITokenDefaultLifetime = time.Duration(v) * 24 * time.Hour
@@ -254,6 +258,10 @@ func toStringSlice(v any) []string {
 // router. router is typically facades.Route(). Zero-valued Options fields fall
 // back to DefaultOptions so a bare Register(router, Options{}) is safe.
 func Register(router route.Router, opts Options) {
+	register(router, opts, []Options{opts})
+}
+
+func register(router route.Router, opts Options, delegationGuards []Options) {
 	def := DefaultOptions()
 	if opts.Prefix == "" {
 		opts.Prefix = def.Prefix
@@ -321,6 +329,22 @@ func Register(router route.Router, opts Options) {
 	var apiTokensSvc *services.APITokens
 	if opts.EnableAPITokens {
 		apiTokensSvc = services.NewAPITokens(repositories.NewAPITokensWithTable(opts.APITokensTable), usersRepo, hasher, twoFactorSvc, opts.APITokenAllowedScopes, opts.APITokenMaxLifetime, opts.APITokenMaxPerUser)
+		if opts.APITokenAllowImpersonatedCreation && opts.ImpersonationAllowSensitiveActions {
+			actors := make(map[string]services.APITokenDelegationGuard)
+			// Use the actual registration snapshot, never inferred actor options.
+			// Register supports same-guard delegation; RegisterAll supplies all guards.
+			guardOptions := append(append([]Options{}, delegationGuards...), opts)
+			for _, actor := range guardOptions {
+				delete(actors, actor.Guard)
+				if actor.EnableImpersonation {
+					actors[actor.Guard] = services.APITokenDelegationGuard{
+						Users:  repositories.NewUsersWithTable(actor.UsersTable),
+						Policy: services.NewImpersonation(actor.ImpersonationRoles, actor.ImpersonationTargetGuards, actor.ImpersonationProtectedRoles),
+					}
+				}
+			}
+			apiTokensSvc.AllowImpersonatedCreation(opts.Guard, actors)
+		}
 	}
 	usersSvc := services.NewUsers(usersRepo, hasher, opts.MinPasswordLength, opts.Roles, managementRoles, apiTokensSvc, !opts.KeepAPITokensOnPasswordChange)
 
@@ -345,10 +369,11 @@ func Register(router route.Router, opts Options) {
 			allowedScopes = []string{}
 		}
 		apiTokenMeta = &responses.APITokenMeta{
-			AllowedScopes:       allowedScopes,
-			DefaultLifetimeDays: int(opts.APITokenDefaultLifetime / (24 * time.Hour)),
-			MaxLifetimeDays:     int(opts.APITokenMaxLifetime / (24 * time.Hour)),
-			MaxPerUser:          opts.APITokenMaxPerUser,
+			AllowImpersonatedCreation: opts.APITokenAllowImpersonatedCreation && opts.ImpersonationAllowSensitiveActions,
+			AllowedScopes:             allowedScopes,
+			DefaultLifetimeDays:       int(opts.APITokenDefaultLifetime / (24 * time.Hour)),
+			MaxLifetimeDays:           int(opts.APITokenMaxLifetime / (24 * time.Hour)),
+			MaxPerUser:                opts.APITokenMaxPerUser,
 		}
 	}
 	metaCtrl := controllers.NewMetaController(opts.Roles, opts.MinPasswordLength, responses.MetaFeatures{
@@ -363,6 +388,9 @@ func Register(router route.Router, opts Options) {
 	var apiTokensCtrl *controllers.APITokensController
 	if apiTokensSvc != nil {
 		apiTokensCtrl = controllers.NewAPITokensController(apiTokensSvc, auditSvc, attemptLimiter, opts.RateLimitPasswordAttempts)
+		if opts.APITokenAllowImpersonatedCreation && opts.ImpersonationAllowSensitiveActions {
+			apiTokensCtrl.WithGuard(opts.Guard)
+		}
 	}
 
 	// Impersonation: build the controller with a guard -> users-table map (so a

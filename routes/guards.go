@@ -156,6 +156,7 @@ func OptionsForGuard(name string) Options {
 	o.EnableRememberMe = cfg.GetBool(base+"features.remember_me", o.EnableRememberMe)
 	o.EnableSessions = cfg.GetBool(base+"features.sessions", o.EnableSessions)
 	o.EnableAPITokens = cfg.GetBool(base+"features.api_tokens", o.EnableAPITokens)
+	o.APITokenAllowImpersonatedCreation = cfg.GetBool(base+"api_tokens.allow_impersonated_creation", o.APITokenAllowImpersonatedCreation)
 	if v := cfg.Get(base + "api_tokens.allowed_scopes"); v != nil {
 		o.APITokenAllowedScopes = toStringSlice(v)
 	}
@@ -183,8 +184,9 @@ func OptionsForGuard(name string) Options {
 // guard when none are declared). A single-domain app keeps working unchanged with
 // the same one-liner.
 func RegisterAll(router route.Router) {
-	for _, o := range GuardOptions() {
-		Register(router, o)
+	options := GuardOptions()
+	for _, o := range options {
+		register(router, o, options)
 	}
 }
 
