@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	frameworkconfig "github.com/goravel/framework/config"
+	"github.com/goravel/framework/contracts/binding"
 	"github.com/goravel/framework/foundation"
-	mockfoundation "github.com/goravel/framework/mocks/foundation"
 	"github.com/stretchr/testify/require"
 )
 
@@ -29,8 +29,8 @@ func TestImpersonationActionPolicyConfig(t *testing.T) {
 				"impersonation": tc.global,
 				"guards":        map[string]any{"client": map[string]any{"impersonation": tc.guard}},
 			})
-			app := mockfoundation.NewApplication(t)
-			app.On("MakeConfig").Return(cfg)
+			app := &foundation.Application{Container: foundation.NewContainer()}
+			app.Instance(binding.Config, cfg)
 			previous := foundation.App
 			foundation.App = app
 			t.Cleanup(func() { foundation.App = previous })
