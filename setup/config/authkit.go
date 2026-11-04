@@ -47,11 +47,14 @@ func init() {
 			"api_tokens": false,
 		},
 		"api_tokens": map[string]any{
-			"allowed_scopes":            []string{},
-			"default_lifetime_days":     30,
-			"max_lifetime_days":         365,
-			"max_per_user":              20,
-			"revoke_on_password_change": true,
+			// Permit an authorized impersonator to issue target-owned PATs without
+			// the target's password or TOTP. Sensitive actions must also be enabled.
+			"allow_impersonated_creation": false,
+			"allowed_scopes":              []string{},
+			"default_lifetime_days":       30,
+			"max_lifetime_days":           365,
+			"max_per_user":                20,
+			"revoke_on_password_change":   true,
 		},
 		// Table overrides for legacy single-guard mode. In multi-guard mode use
 		// api_tokens_table inside each guard; it defaults to <guard>_api_tokens.
