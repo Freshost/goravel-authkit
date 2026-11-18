@@ -131,6 +131,7 @@ func (p *Provider) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		d.EndSessionEndpoint = ""
 		d.DeviceAuthorizationEndpoint = ""
 		d.CheckSessionIframe = ""
+		d.RequestObjectSigningAlgValuesSupported = nil
 		op.Discover(w, d)
 	case "/keys":
 		if method(w, r, http.MethodGet) {

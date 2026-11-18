@@ -110,10 +110,12 @@ jobs:
       - name: Basic OP plan
         run: >-
           python "$RUNNER_TEMP/oidf/scripts/run-test-plan.py" --no-parallel --export-dir oidf-results
+          --expected-failures-file .ci/oidf/expected-warnings.json --expected-skips-file .ci/oidf/expected-skips.json
           'oidcc-basic-certification-test-plan[server_metadata=discovery][client_registration=static_client]' .ci/oidf/config.json
       - name: Form Post Basic OP plan
         run: >-
           python "$RUNNER_TEMP/oidf/scripts/run-test-plan.py" --no-parallel --export-dir oidf-results
+          --expected-failures-file .ci/oidf/expected-warnings.json --expected-skips-file .ci/oidf/expected-skips.json
           'oidcc-formpost-basic-certification-test-plan[server_metadata=discovery][client_registration=static_client]' .ci/oidf/config.json
       - name: Public PKCE module
         run: |

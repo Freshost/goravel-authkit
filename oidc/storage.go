@@ -334,6 +334,8 @@ func setUserinfo(info *protocol.UserInfo, u *models.User, scopes []string) {
 	if slices.Contains(scopes, "email") {
 		info.Email = u.Email
 		info.EmailVerified = protocol.Bool(u.EmailVerified != nil)
+		// The SDK's struct field uses omitempty, which otherwise drops false.
+		info.AppendClaims("email_verified", u.EmailVerified != nil)
 	}
 }
 func (s *storage) SetIntrospectionFromToken(context.Context, *protocol.IntrospectionResponse, string, string, string) error {

@@ -300,6 +300,10 @@ func TestCodeFlowDiscoveryAndClaims(t *testing.T) {
 	require.Equal(t, u.user.ID.String(), claims["sub"])
 	require.Equal(t, "request-nonce", claims["nonce"])
 	require.Equal(t, "public", claims["azp"])
+	// Additional SDK claims must never accidentally disclose profile or secrets.
+	for claim := range claims {
+		require.Contains(t, []string{"iss", "sub", "aud", "exp", "iat", "auth_time", "nonce", "amr", "azp", "client_id", "at_hash", "c_hash"}, claim)
+	}
 	identity, err := p.ResolveAccessToken(context.Background(), out.AccessToken, "https://api.example", "api:read")
 	require.NoError(t, err)
 	require.Equal(t, u.user.ID, identity.UserID)
@@ -323,7 +327,7 @@ func TestCodeFlowDiscoveryAndClaims(t *testing.T) {
 	var info map[string]any
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &info))
 	require.Equal(t, u.user.Email, info["email"])
-	require.NotEqual(t, true, info["email_verified"])
+	require.Equal(t, false, info["email_verified"])
 }
 
 func TestInvalidPKCEDoesNotConsumeCode(t *testing.T) {

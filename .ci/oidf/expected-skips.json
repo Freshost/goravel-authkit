@@ -1,0 +1,26 @@
+[
+  {
+    "test-name": "oidcc-scope-address",
+    "variant": "*",
+    "configuration-filename": ".ci/oidf/config.json",
+    "comment": "Address is not stored by Authkit and address scope is not advertised."
+  },
+  {
+    "test-name": "oidcc-scope-phone",
+    "variant": "*",
+    "configuration-filename": ".ci/oidf/config.json",
+    "comment": "Phone numbers are not stored by Authkit and phone scope is not advertised."
+  },
+  {
+    "test-name": "oidcc-scope-all",
+    "variant": "*",
+    "configuration-filename": ".ci/oidf/config.json",
+    "comment": "The official module requires both phone and address scopes, neither of which is advertised."
+  },
+  {
+    "test-name": "oidcc-unsigned-request-object-supported-correctly-or-rejected-as-unsupported",
+    "variant": "*",
+    "configuration-filename": ".ci/oidf/config.json",
+    "comment": "Optional request objects are explicitly unsupported. The provider returns request_not_supported; the official module marks this permitted behavior SKIPPED."
+  }
+]
