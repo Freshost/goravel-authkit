@@ -10,6 +10,8 @@ Before a provider release:
 1. Run the package test, race and vet gates and PostgreSQL demo feature tests in
    CI. This includes code/refresh concurrency, client/issuer binding, account
    invalidation, consent, PKCE and key rotation.
+   An independent `coreos/go-oidc` client also exercises HTTPS discovery, public
+   and confidential code flows, ID-token/JWKS validation, UserInfo and refresh.
 2. Deploy the demo/host integration with a stable HTTPS issuer reachable by the
    [OpenID Foundation conformance suite](https://openid.net/certification/testing/).
    Supply an actual login UI that honors the documented reauthentication and

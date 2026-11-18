@@ -222,7 +222,7 @@ func (s *OIDCTestSuite) TestPasswordChangeInvalidatesOriginalRefreshGrant() {
 	_, err := s.provider.ResolveAccessToken(context.Background(), out.Access, "https://api.example")
 	s.ErrorIs(err, oidc.ErrInvalidGrant)
 	form := url.Values{"grant_type": {"refresh_token"}, "client_id": {s.clientID}, "refresh_token": {out.Refresh}}
-	r, err := s.Http(s.T()).WithHeader("Content-Type", "application/x-www-form-urlencoded").Post("/ci-oidc/oauth/token", strings.NewReader(form.Encode()))
+	r, err = s.Http(s.T()).WithHeader("Content-Type", "application/x-www-form-urlencoded").Post("/ci-oidc/oauth/token", strings.NewReader(form.Encode()))
 	s.Require().NoError(err)
 	r.AssertBadRequest()
 	r.AssertJson(map[string]any{"error": "invalid_grant"})
