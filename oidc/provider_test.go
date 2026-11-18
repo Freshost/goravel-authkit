@@ -682,3 +682,35 @@ func TestUserinfoBearerChallengesAndBodyTransport(t *testing.T) {
 	require.Equal(t, 401, w.Code)
 	require.Contains(t, w.Header().Get("WWW-Authenticate"), "invalid_token")
 }
+
+// Request Objects are optional. Unsupported JWT content must not select a
+// transport, callback or state; errors use only the validated outer request.
+func TestUnsupportedRequestObjectUsesOuterResponseMode(t *testing.T) {
+	p, b, _ := testProvider(t)
+	object := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"none"}`)) + "." +
+		base64.RawURLEncoding.EncodeToString([]byte(`{"response_mode":"form_post","redirect_uri":"https://untrusted.example/callback","state":"inner-state"}`)) + "."
+	for _, mode := range []string{"", "form_post"} {
+		t.Run(mode, func(t *testing.T) {
+			params := url.Values{"client_id": {"public"}, "redirect_uri": {"https://app.example/callback"}, "response_type": {"code"}, "scope": {"openid"}, "state": {"outer-state"}, "request": {object}, "code_challenge": {protocol.NewSHACodeChallenge(strings.Repeat("v", 43))}, "code_challenge_method": {"S256"}}
+			if mode != "" {
+				params.Set("response_mode", mode)
+			}
+			response := request(p, b, http.MethodGet, "/authorize?"+params.Encode(), nil)
+			var fields url.Values
+			if mode == "form_post" {
+				fields = formFields(t, response)
+				require.Contains(t, response.Body.String(), `action="https://app.example/callback"`)
+			} else {
+				require.Equal(t, 302, response.Code)
+				callback, err := url.Parse(response.Header().Get("Location"))
+				require.NoError(t, err)
+				require.Equal(t, "app.example", callback.Host)
+				fields = callback.Query()
+			}
+			require.Equal(t, "request_not_supported", fields.Get("error"))
+			require.Equal(t, "outer-state", fields.Get("state"))
+			require.Empty(t, fields.Get("code"))
+			require.NotContains(t, response.Body.String(), "untrusted.example")
+		})
+	}
+}

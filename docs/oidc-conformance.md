@@ -35,12 +35,13 @@ workaround indicates an integration defect.
 
 ## Reproducible CI run
 
-The `OIDC conformance` workflow runs the unmodified OpenID Foundation suite
+The `OIDC conformance (transport fix)` workflow runs the OpenID Foundation suite
 `release-v5.3.4` (source revision `23353b36957d6466010de767c812d2c91ed37638`)
-and its official Python runner. It runs Config OP, Basic OP and Form Post Basic
+with the request-builder correction described below and its unmodified official
+Python runner. It runs Config OP, Basic OP and Form Post Basic
 OP with static registration against the actual Goravel/Authkit integration and
-PostgreSQL. The workflow uses official prebuilt suite images; all host builds
-and verification run in CI.
+PostgreSQL. The workflow builds the suite from the pinned official source plus one recorded
+transport correction; all suite/host builds and verification run in CI.
 
 `demo/conformance` is a separate CI executable. It supplies a minimal HTML login
 form backed by the existing Authkit login endpoint and session middleware. It
@@ -102,3 +103,42 @@ inappropriate: [Discovery 4.2](https://openid.net/specs/openid-connect-discovery
 requires zero-element claims to be omitted. The release conformance gate remains
 open until this result is resolved with the suite maintainers or its handling is
 explicitly accepted in the release review. No OpenID certification is claimed.
+
+## Request transport correction and release evidence review
+
+The same issue is independently reported in
+[OIDF issue 2042](https://gitlab.com/openid/conformance-suite/-/work_items/2042).
+Our retained unmodified-suite result above is unchanged. The CI suite now applies
+`.ci/oidf/outer-response-mode.patch` to the pinned 5.3.4 source. It keeps an
+existing outer `response_mode` parameter when building a Request Object request.
+It does not read an inner mode into the outer request, change a provider response,
+or weaken any Form Post assertion. The JAR/PAR `includeDuplicates=false` branch
+is unchanged. Focused upstream Java tests cover the changed construction and the
+unchanged absent/inner-only/JAR cases; all four provider plans run against the
+resulting build. The patch and SHA-256 are included in the evidence artifact.
+This is a corrected-suite verification, not an unmodified 5.3.4 pass or an OIDF
+certification. Remove the patch once an official release includes the correction.
+
+The internal engineering review of the eight `REVIEW` cases in
+[the retained verification](https://github.com/Freshost/goravel-authkit/actions/runs/44337214165)
+found no behavior gaps:
+
+| Case, in both query and Form Post | Reviewed evidence |
+| --- | --- |
+| `prompt=login` | A second empty credential form, successful second login/callback and strictly later signed `auth_time`. |
+| `max_age=1` | A fresh credential form after the delay; presence, recency and increase of signed `auth_time` all pass the official conditions. |
+| Unregistered redirect | HTTP 400 error page at the provider, with no callback to either the registered or supplied URI. |
+| Request Object redirect mismatch | HTTP 400 error page with no callback; this is an explicitly allowed alternative in the official test. |
+
+The raw outcomes remain `REVIEW`: they mark browser evidence needing assessment,
+not stalled tests. Each case is `FINISHED`, contains the actual page source, and
+has no failure or warning conditions. This is an internal code/evidence review;
+OIDF certification review remains separate.
+
+Documented warning dispositions do not expand the provider's data model or
+assurance claims: unavailable profile attributes are omitted (Core 5.4); `claims`
+is optional and unsupported; no ACR class is claimed for arbitrary requested
+values; the SDK's extra registered `client_id` claim identifies the client, not
+additional user data. The package's explicit ID-token claim-set test guards
+against unintended disclosure. Mandatory public S256 and default confidential
+PKCE remain unchanged.

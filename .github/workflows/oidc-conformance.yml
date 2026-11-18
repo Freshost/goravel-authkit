@@ -1,4 +1,4 @@
-name: OIDC conformance
+name: OIDC conformance (transport fix)
 
 on:
   pull_request:
@@ -58,6 +58,19 @@ jobs:
           python-version: "3.13"
       - name: Official suite source
         run: git clone --depth 1 --branch release-v5.3.4 https://gitlab.com/openid/conformance-suite.git "$RUNNER_TEMP/oidf"
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+          cache-dependency-path: ${{ runner.temp }}/oidf/pom.xml
+      - name: Apply suite request transport fix
+        run: git -C "$RUNNER_TEMP/oidf" apply "$GITHUB_WORKSPACE/.ci/oidf/outer-response-mode.patch"
+      - name: Build and test suite transport fix
+        working-directory: ${{ runner.temp }}/oidf
+        run: mvn --batch-mode -Dtest='BuildRequestObjectBy*Redirect*_UnitTest' -Dpmd.skip=true -Dcheckstyle.skip=true package
+      - name: Package corrected suite
+        run: docker build -t authkit-oidf-suite:5.3.4-response-mode "$RUNNER_TEMP/oidf"
       - name: Official runner dependencies
         run: pip install -r "$RUNNER_TEMP/oidf/scripts/requirements.txt"
       - name: Isolated hostnames
@@ -82,7 +95,7 @@ jobs:
           OIDF_TLS_CERT: ${{ runner.temp }}/oidf.crt
           OIDF_TLS_KEY: ${{ runner.temp }}/oidf.key
         run: '"$RUNNER_TEMP/authkit-oidf" > "$RUNNER_TEMP/authkit-oidf.log" 2>&1 &'
-      - name: Start official suite
+      - name: Start suite with request transport fix
         run: >-
           docker run -d --name oidf-server --network host
           --add-host localhost.emobix.co.uk:127.0.0.1
@@ -91,7 +104,7 @@ jobs:
           -e MONGODB_HOST=127.0.0.1 -e SPRING_PROFILES_ACTIVE=dev
           -e OIDC_GOOGLE_CLIENTID=ci-google -e OIDC_GOOGLE_SECRET=ci-google
           -e OIDC_GITLAB_CLIENTID=ci-gitlab -e OIDC_GITLAB_SECRET=ci-gitlab
-          registry.gitlab.com/openid/conformance-suite:release-v5.3.4
+          authkit-oidf-suite:5.3.4-response-mode
       - name: Start suite HTTPS endpoint
         run: >-
           docker run -d --name oidf-https --network host
@@ -130,6 +143,8 @@ jobs:
           cp "$RUNNER_TEMP/authkit-oidf.log" oidf-results/host.log
           git -C "$RUNNER_TEMP/oidf" rev-parse HEAD > oidf-results/suite-revision.txt
           git rev-parse HEAD > oidf-results/host-revision.txt
+          cp .ci/oidf/outer-response-mode.patch oidf-results/
+          sha256sum .ci/oidf/outer-response-mode.patch > oidf-results/suite-patch-sha256.txt
           curl --insecure --fail "${CONFORMANCE_SERVER}api/plan" -o oidf-results/plans.json
           jq -r '.data[] | .id // ._id' oidf-results/plans.json | while read -r plan_id; do
             curl --insecure --fail "${CONFORMANCE_SERVER}api/plan/export/$plan_id" -o "oidf-results/$plan_id.zip"
