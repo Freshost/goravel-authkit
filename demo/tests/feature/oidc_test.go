@@ -74,7 +74,7 @@ func (s *OIDCTestSuite) SetupTest() {
 }
 func (s *OIDCTestSuite) TearDownTest() {
 	q := facades.Orm().Query()
-	s.NoError(repositories.NewSessionsWithTable("client_auth_sessions").DeleteByUser(context.Background(), s.user.ID))
+	s.NoError(repositories.NewSessionsWithTable("client_auth_sessions", "client_remember_tokens").DeleteByUser(context.Background(), s.user.ID))
 	_, auditErr := q.Exec("DELETE FROM client_audit_logs WHERE actor_id = ? OR metadata->>'client_id' = ?", s.user.ID, s.clientID)
 	s.NoError(auditErr)
 	_, err := q.Exec("DELETE FROM authkit_oidc_tokens WHERE grant_id IN (SELECT id FROM authkit_oidc_grants WHERE issuer = ? AND client_id = ?)", s.provider.Issuer(), s.clientID)
@@ -238,7 +238,7 @@ func (s *OIDCTestSuite) TestPasswordChangeInvalidatesOriginalRefreshGrant() {
 }
 func (s *OIDCTestSuite) TestTerminatedSessionCannotManageConnections() {
 	cookie := s.login()
-	s.Require().NoError(repositories.NewSessionsWithTable("client_auth_sessions").DeleteByUser(context.Background(), s.user.ID))
+	s.Require().NoError(repositories.NewSessionsWithTable("client_auth_sessions", "client_remember_tokens").DeleteByUser(context.Background(), s.user.ID))
 	r, err := s.Http(s.T()).WithCookie(cookie).Get("/api/client/v1/auth/oidc/connections")
 	s.Require().NoError(err)
 	r.AssertUnauthorized()

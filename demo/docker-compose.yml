@@ -5,6 +5,9 @@ services:
     build:
       context: ..
       dockerfile: demo/Dockerfile
+    environment:
+      APP_HOST: 0.0.0.0
+      APP_PORT: "3000"
     ports:
       - "3000:3000"
     restart: always

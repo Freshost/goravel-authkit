@@ -195,3 +195,16 @@ func TestTwoFactorGenerationAndReplayStateFollowCredential(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ok)
 }
+
+func TestTwoFactorMutationsPreserveNotFoundErrors(t *testing.T) {
+	tf := newTwoFactor(newFakeRepo())
+	id := uuid.New()
+	_, err := tf.Enable(context.Background(), id)
+	require.ErrorIs(t, err, ErrNotFound)
+	_, err = tf.Confirm(context.Background(), id, "123456")
+	require.ErrorIs(t, err, ErrNotFound)
+	err = tf.Disable(context.Background(), id)
+	require.ErrorIs(t, err, ErrNotFound)
+	_, err = tf.RegenerateRecoveryCodes(context.Background(), id)
+	require.ErrorIs(t, err, ErrNotFound)
+}

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 
 	"github.com/freshost/goravel-authkit/models"
 	"github.com/freshost/goravel-authkit/repositories"
@@ -152,9 +153,12 @@ func (f *fakeRepo) UpdateTwoFactor(_ context.Context, id uuid.UUID, secret, reco
 }
 
 func (f *fakeRepo) MutateLocked(_ context.Context, id uuid.UUID, fn func(u *models.User) error) error {
+	if f.failOp {
+		return errBoom
+	}
 	u, ok := f.byID[id]
 	if !ok {
-		return errBoom
+		return gorm.ErrRecordNotFound
 	}
 	return fn(u) // mutates the stored user in place (persisted)
 }

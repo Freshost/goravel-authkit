@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
+	"gorm.io/gorm"
 
 	"github.com/freshost/goravel-authkit/models"
 	"github.com/freshost/goravel-authkit/repositories"
@@ -246,12 +247,13 @@ func (s *TwoFactor) matchTOTPStep(secret, code string, now time.Time) (time.Time
 
 // Disable clears all two-factor state for the user.
 func (s *TwoFactor) Disable(ctx context.Context, id uuid.UUID) error {
-	return s.repo.MutateLocked(ctx, id, func(u *models.User) error {
+	err := s.repo.MutateLocked(ctx, id, func(u *models.User) error {
 		u.TwoFactorSecret, u.TwoFactorRecoveryCodes, u.TwoFactorConfirmedAt = nil, nil, nil
 		u.TwoFactorLastUsedAt = nil
 		u.TwoFactorVersion++
 		return nil
 	})
+	return twoFactorMutationError(err)
 }
 
 // RemainingRecoveryCodes returns how many unused recovery codes the user has
@@ -371,4 +373,17 @@ func randomRecoveryCode() (string, error) {
 		out = append(out, recoveryAlphabet[int(buf[0])%alphabetLen])
 	}
 	return string(out), nil
+}
+
+func twoFactorMutationError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return ErrNotFound
+	}
+	if errors.Is(err, ErrTwoFactorNotEnrolled) || errors.Is(err, ErrTwoFactorAlreadyEnabled) || errors.Is(err, ErrInvalidCode) {
+		return err
+	}
+	return errors.Join(ErrInternal, err)
 }
