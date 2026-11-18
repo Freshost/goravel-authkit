@@ -1,0 +1,955 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Batteries-included session authentication + user management for Goravel">
+      
+      
+      
+        <link rel="canonical" href="https://freshost.github.io/goravel-authkit/oidc-conformance/">
+      
+      
+        <link rel="prev" href="../oidc/">
+      
+      
+        <link rel="next" href="../api-reference/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+    
+    
+      
+        <title>OIDC conformance - goravel-authkit</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="green" data-md-color-accent="green">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#oidc-conformance-verification" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="goravel-authkit" class="md-header__button md-logo" aria-label="goravel-authkit" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            goravel-authkit
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              OIDC conformance
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="green" data-md-color-accent="green"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="green" data-md-color-accent="green"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/Freshost/goravel-authkit" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Freshost/goravel-authkit
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="goravel-authkit" class="md-nav__button md-logo" aria-label="goravel-authkit" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    goravel-authkit
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/Freshost/goravel-authkit" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Freshost/goravel-authkit
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../oidc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OIDC provider
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OIDC conformance
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OIDC conformance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#reproducible-ci-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reproducible CI run
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#interpreting-results" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Interpreting results
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Interpreting results">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#known-upstream-form-post-result-in-suite-534" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known upstream Form Post result in suite 5.3.4
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#request-transport-correction-and-release-evidence-review" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Request transport correction and release evidence review
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Request transport correction and release evidence review">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#verified-release-profile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verified release profile
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#reproducible-ci-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reproducible CI run
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#interpreting-results" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Interpreting results
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Interpreting results">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#known-upstream-form-post-result-in-suite-534" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known upstream Form Post result in suite 5.3.4
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#request-transport-correction-and-release-evidence-review" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Request transport correction and release evidence review
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Request transport correction and release evidence review">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#verified-release-profile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verified release profile
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/Freshost/goravel-authkit/edit/main/docs/oidc-conformance.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="oidc-conformance-verification">OIDC conformance verification<a class="headerlink" href="#oidc-conformance-verification" title="Permanent link">&para;</a></h1>
+<p>The supported provider profile is documented in <a href="../oidc/">OIDC</a>. Compatibility
+must be established for the integrated Authkit provider, not inferred from its
+dependency. OpenID certification is a separate process; no certification is
+claimed by adding the SDK.</p>
+<p>Before a provider release:</p>
+<ol>
+<li>Run the package test, race and vet gates and PostgreSQL demo feature tests in
+   CI. This includes code/refresh concurrency, client/issuer binding, account
+   invalidation, consent, PKCE and key rotation.
+   An independent <code>coreos/go-oidc</code> client also exercises HTTPS discovery, public
+   and confidential code flows, ID-token/JWKS validation, UserInfo and refresh.</li>
+<li>Deploy the demo/host integration with a stable HTTPS issuer reachable by the
+   <a href="https://openid.net/certification/testing/">OpenID Foundation conformance suite</a>.
+   Supply an actual login UI that honors the documented reauthentication and
+   continuation contract, plus an isolated test account.</li>
+<li>Register the suite's confidential web client using <code>client_secret_basic</code>, its
+   exact redirect URIs, <code>openid profile email</code> and the requested test secret.
+   Register a public PKCE client separately. Grant refresh/offline access only
+   to the test client exercising that extension.</li>
+<li>Run the applicable Basic OP and provider-configuration tests, the advertised
+   form-post profile, and PKCE/refresh/revocation interoperability tests. Exercise
+   required request parameters and error responses, <code>prompt=none/login/consent</code>,
+   <code>max_age</code>, ID-token hints, nonce, UserInfo, and signature/JWKS validation.</li>
+<li>Record the exact revision, configuration, test-plan versions and results with
+   the release review. Resolve failures before claiming conformance. Submit for
+   certification separately if an OpenID Certified designation is desired.</li>
+</ol>
+<p>The public client must use S256 without a client secret. The confidential client
+must authenticate even when using PKCE. A client should require only discovery
+and ordinary OAuth/OIDC configuration; any necessary proprietary client-side
+workaround indicates an integration defect.</p>
+<h2 id="reproducible-ci-run">Reproducible CI run<a class="headerlink" href="#reproducible-ci-run" title="Permanent link">&para;</a></h2>
+<p>The <code>OIDC conformance (transport fix)</code> workflow runs the OpenID Foundation suite
+<code>release-v5.3.4</code> (source revision <code>23353b36957d6466010de767c812d2c91ed37638</code>)
+with the request-builder correction described below and its unmodified official
+Python runner. It runs Config OP, Basic OP and Form Post Basic
+OP with static registration against the actual Goravel/Authkit integration and
+PostgreSQL. The workflow builds the suite from the pinned official source plus one recorded
+transport correction; all suite/host builds and verification run in CI.</p>
+<p><code>demo/conformance</code> is a separate CI executable. It supplies a minimal HTML login
+form backed by the existing Authkit login endpoint and session middleware. It
+creates isolated synthetic accounts/clients, ephemeral signing/encryption keys
+and a self-signed HTTPS endpoint. No production credentials or hosted
+certification account are required. This exercises protocol HTTPS transport;
+it does not establish public certificate-chain trust for a production domain.</p>
+<p>The Basic clients explicitly allow the legacy confidential code flow without
+PKCE. Separate standard PKCE modules exercise public and confidential S256; the
+default client policy remains mandatory PKCE. The <code>oidf-results</code> artifact retains
+the official module results and browser evidence for seven days, including
+warnings, skips and review outcomes. A workflow result alone is not a certificate:
+review the full module results and evidence before making conformance claims.</p>
+<h2 id="interpreting-results">Interpreting results<a class="headerlink" href="#interpreting-results" title="Permanent link">&para;</a></h2>
+<p>The official runner's <code>--expected-failures-file</code> option is used only for the
+warnings listed in <code>.ci/oidf/expected-warnings.json</code>: the SDK's additional
+registered JWT <code>client_id</code> claim, unavailable optional profile attributes,
+undefined ACR classes and the unsupported optional <code>claims</code> parameter. No
+<code>failure</code> outcome is accepted by this file. Package tests assert the ID token's
+allowed claim set. <code>email_verified=false</code> is returned explicitly.</p>
+<p><code>.ci/oidf/expected-skips.json</code> documents four optional cases: address, phone,
+all standard scopes (which requires both address and phone), and unsigned
+Request Objects. The complete plans still run; the suite decides whether these
+modules are applicable from discovery and protocol responses. New warnings,
+failures and unexpected skips fail CI. The four browser-evidence cases retain
+the suite's <code>REVIEW</code> result and include the actual page source in the signed
+export; they are not relabeled <code>PASSED</code>.</p>
+<h3 id="known-upstream-form-post-result-in-suite-534">Known upstream Form Post result in suite 5.3.4<a class="headerlink" href="#known-upstream-form-post-result-in-suite-534" title="Permanent link">&para;</a></h3>
+<p><a href="https://github.com/Freshost/goravel-authkit/actions/runs/44335598245">Verification run</a>
+completed Config OP with 0 failures/0 warnings and Basic OP with 0 failures,
+5 documented warnings, 4 optional skips and 4 browser-evidence reviews.</p>
+<p>The Form Post Basic plan has one failing module:
+<code>oidcc-unsigned-request-object-supported-correctly-or-rejected-as-unsupported</code>.
+Its <code>response_mode=form_post</code> appears only inside an unsupported Request Object;
+the outer request has no response mode. Authkit returns <code>request_not_supported</code>
+using the outer request's default query mode. The suite applies Form Post
+transport assertions before recognizing the permitted unsupported response,
+producing four failure conditions from this single module. The same module
+correctly becomes <code>SKIPPED</code> in the Basic/query variant.</p>
+<p>This is assessed as a suite mismatch for an optional unsupported feature, based
+on the actual request and the unmodified suite's
+<a href="https://gitlab.com/openid/conformance-suite/-/blob/release-v5.3.4/src/main/java/net/openid/conformance/condition/client/AbstractBuildRequestObjectRedirectToAuthorizationEndpoint.java">request builder</a>
+and <a href="https://gitlab.com/openid/conformance-suite/-/blob/release-v5.3.4/src/main/java/net/openid/conformance/openid/AbstractOIDCCRequestObjectServerTest.java">response handler</a>.
+The upstream maintainers have not confirmed this assessment. Evidence and the
+original failed CI run are retained. The public PKCE module runs
+independently even when another plan fails.</p>
+<p>The provider neither parses unsupported JWT request objects nor advertises
+algorithms for an unsupported capability. An empty algorithm list is also
+inappropriate: <a href="https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderConfigurationResponse">Discovery 4.2</a>
+requires zero-element claims to be omitted. The engineering disposition and
+corrected-suite verification are recorded below. No OpenID certification is claimed.</p>
+<h2 id="request-transport-correction-and-release-evidence-review">Request transport correction and release evidence review<a class="headerlink" href="#request-transport-correction-and-release-evidence-review" title="Permanent link">&para;</a></h2>
+<p>The same issue is independently reported in
+<a href="https://gitlab.com/openid/conformance-suite/-/work_items/2042">OIDF issue 2042</a>.
+Our retained unmodified-suite result above is unchanged. The CI suite now applies
+<code>.ci/oidf/outer-response-mode.patch</code> to the pinned 5.3.4 source. It keeps an
+existing outer <code>response_mode</code> parameter when building a Request Object request.
+It does not read an inner mode into the outer request, change a provider response,
+or weaken any Form Post assertion. The JAR/PAR <code>includeDuplicates=false</code> branch
+is unchanged. Focused upstream Java tests cover the changed construction and the
+unchanged absent/inner-only/JAR cases; all four provider plans run against the
+resulting build. The patch and SHA-256 are included in the evidence artifact.
+This is a corrected-suite verification, not an unmodified 5.3.4 pass or an OIDF
+certification. Remove the patch once an official release includes the correction.</p>
+<h3 id="verified-release-profile">Verified release profile<a class="headerlink" href="#verified-release-profile" title="Permanent link">&para;</a></h3>
+<p><a href="https://github.com/Freshost/goravel-authkit/actions/runs/44375639863">Corrected-suite CI</a>
+completed all four profiles with zero failure conditions. Its 11 Java transport
+regression tests also passed. <a href="https://github.com/Freshost/goravel-authkit/actions/runs/44375639725">Regression CI</a>
+passed package and PostgreSQL feature tests, race detection, vet, formatting and
+dependency consistency.</p>
+<table>
+<thead>
+<tr>
+<th>Profile</th>
+<th>Raw module results</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Config OP</td>
+<td>1 passed; no warnings or failures</td>
+</tr>
+<tr>
+<td>Basic OP</td>
+<td>23 passed, 4 warning, 4 optional skipped, 4 review</td>
+</tr>
+<tr>
+<td>Form Post Basic OP</td>
+<td>23 passed, 4 warning, 4 optional skipped, 4 review</td>
+</tr>
+<tr>
+<td>Public S256 PKCE</td>
+<td>1 passed; no warnings or failures</td>
+</tr>
+</tbody>
+</table>
+<p>Each Basic profile has five documented warning conditions across four modules.
+The formerly failing Form Post module now receives an outer <code>response_mode</code>,
+verifies the POST response and records the permitted unsupported-feature skip.
+No failure is suppressed or accepted. Together with the evidence review below,
+this closes the internal engineering conformance finding for the supported first
+release profile. It does not represent upstream acceptance of the patch or OIDF
+certification.</p>
+<p>The internal engineering review of the eight <code>REVIEW</code> cases in
+<a href="https://github.com/Freshost/goravel-authkit/actions/runs/44337214165">the retained verification</a>
+found no behavior gaps. The corrected-suite exports retain the same eight
+review cases and no failure or warning conditions in those modules:</p>
+<table>
+<thead>
+<tr>
+<th>Case, in both query and Form Post</th>
+<th>Reviewed evidence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>prompt=login</code></td>
+<td>A second empty credential form, successful second login/callback and strictly later signed <code>auth_time</code>.</td>
+</tr>
+<tr>
+<td><code>max_age=1</code></td>
+<td>A fresh credential form after the delay; presence, recency and increase of signed <code>auth_time</code> all pass the official conditions.</td>
+</tr>
+<tr>
+<td>Unregistered redirect</td>
+<td>HTTP 400 error page at the provider, with no callback to either the registered or supplied URI.</td>
+</tr>
+<tr>
+<td>Request Object redirect mismatch</td>
+<td>HTTP 400 error page with no callback; this is an explicitly allowed alternative in the official test.</td>
+</tr>
+</tbody>
+</table>
+<p>The raw outcomes remain <code>REVIEW</code>: they mark browser evidence needing assessment,
+not stalled tests. Each case is <code>FINISHED</code>, contains the actual page source, and
+has no failure or warning conditions. This is an internal code/evidence review;
+OIDF certification review remains separate.</p>
+<p>Documented warning dispositions do not expand the provider's data model or
+assurance claims: unavailable profile attributes are omitted (Core 5.4); <code>claims</code>
+is optional and unsupported; no ACR class is claimed for arbitrary requested
+values; the SDK's extra registered <code>client_id</code> claim identifies the client, not
+additional user data. The package's explicit ID-token claim-set test guards
+against unintended disclosure. Mandatory public S256 and default confidential
+PKCE remain unchanged.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      MIT &copy; Freshost
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.top", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.action.edit"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+    
+  </body>
+</html>
