@@ -163,6 +163,7 @@ keys optional — the package falls back to safe defaults).
 | `authkit.features.remember_me` | bool | `true` | Persistent "remember me" login |
 | `authkit.features.sessions` | bool | `true` | Active-session tracking + endpoints |
 | `authkit.features.api_tokens` | bool | `false` | Personal API-token management and bearer authentication |
+| `authkit.api_tokens.allow_impersonated_creation` | bool | `false` | Issue target-owned PATs using the original actor's current impersonation authorization instead of target password/TOTP; requires sensitive actions enabled |
 | `authkit.api_tokens.allowed_scopes` | []string | `[]` | Scopes users may assign; empty permits unscoped tokens only |
 | `authkit.api_tokens.default_lifetime_days` | int | `30` | Default expiry suggested to clients |
 | `authkit.api_tokens.max_lifetime_days` | int | `365` | Maximum token lifetime |
@@ -178,6 +179,10 @@ Root-level `authkit.*` settings apply to **every** guard; anything set inside an
 `authkit.guards.<name>` entry overrides them for that guard. A guard's secondary
 tables default from its `users_table` (e.g. `client_users` → `client_audit_logs`).
 See [docs/configuration.md](docs/configuration.md) for the full reference.
+
+Cross-guard PAT delegation requires `routes.RegisterAll`, which supplies the
+actual actor and target guard options together. `routes.Register` supports
+delegated creation within its explicitly registered guard.
 
 ## Multi-guard
 
@@ -279,13 +284,22 @@ replaces the user and "stop" restores them. No remember cookie is issued (the
 switch is ephemeral), both ends are audited, and `GET /auth/me` exposes
 `impersonatedBy` for a UI banner. Profile, session and 2FA support operations are
 intentionally delegated; password change, user administration and nested switches
-remain blocked. The actor and policy are revalidated on every switched request,
+are blocked by default. Nested switches remain unsupported. The actor and policy are revalidated on every switched request,
 so disabling/demoting the actor revokes the open switch. For finer rules than the
 config gate, register a host hook (it can only tighten the decision):
 
 ```go
 authkit.RegisterImpersonationPolicy(myPolicy{}) // implements authkit.Impersonator
 ```
+
+To expose the target user's normal account actions during a switch, set
+`impersonation.allow_sensitive_actions: true` globally or on the target guard.
+This includes password changes and PAT management, with the same role, password
+and TOTP checks as direct login. Additionally enabling
+`api_tokens.allow_impersonated_creation` authorizes PAT issuance through the
+original actor's current impersonation authority instead of target credentials.
+`/auth/meta` reports the sensitive-actions setting as
+`features.impersonationSensitiveActions` for the companion UI.
 
 See [docs/configuration.md](docs/configuration.md#impersonation) and
 [docs/security.md](docs/security.md) for the full gate and security properties.
@@ -366,8 +380,9 @@ Read before deploying:
   (anti-fixation) and `password_changed_at` multi-session invalidation. Set
   `session.same_site` to `lax`/`strict` and `session.secure=true` in production.
 - **API tokens are credentials.** Never log or persist the returned plaintext.
-  Token management requires a live session, CSRF protection, the current password,
-  and TOTP when enabled. Password changes revoke tokens by default.
+  Management requires a live session and CSRF protection. Direct creation also
+  verifies the password and TOTP when enabled; delegated issuance follows the
+  explicitly enabled impersonation policy. Password changes revoke tokens by default.
 
 ## Documentation
 

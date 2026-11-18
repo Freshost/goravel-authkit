@@ -22,6 +22,13 @@ type APITokensController struct {
 	audit            *services.Audit
 	rateLimiter      *middleware.AttemptLimiter
 	passwordAttempts int
+	guard            string
+}
+
+// WithGuard identifies the session holding the native impersonator marker.
+func (c *APITokensController) WithGuard(guard string) *APITokensController {
+	c.guard = guard
+	return c
 }
 
 func NewAPITokensController(tokens *services.APITokens, audit *services.Audit, rateLimiter *middleware.AttemptLimiter, passwordAttempts int) *APITokensController {
@@ -54,14 +61,33 @@ func (c *APITokensController) Store(ctx contractshttp.Context) contractshttp.Res
 	if response := enforceRateLimit(ctx, c.rateLimiter, "api-token-user", userID.String(), c.passwordAttempts); response != nil {
 		return response
 	}
-	issued, err := c.tokens.Issue(ctx.Context(), services.IssueAPITokenCommand{
+	cmd := services.IssueAPITokenCommand{
 		UserID: userID, Name: req.Name, ExpiresAt: expiresAt, Scopes: req.Scopes,
 		Password: req.Password, TwoFactorCode: req.TwoFactorCode,
-	})
+	}
+	var issued *services.IssuedAPIToken
+	if actor, ok := helpers.Impersonator(ctx, c.guard); ok {
+		issued, err = c.tokens.IssueImpersonated(ctx.Context(), actor.Guard, actor.UserID, cmd)
+	} else {
+		issued, err = c.tokens.Issue(ctx.Context(), cmd)
+	}
 	if err != nil {
 		return c.mapError(ctx, err)
 	}
-	c.writeAudit(ctx, userID, "auth.api_token_created", issued.Token.ID.String())
+	if actor := issued.DelegatedBy; actor != nil {
+		resourceID := issued.Token.ID.String()
+		if c.audit != nil {
+			if auditErr := c.audit.Log(ctx.Context(), services.AuditEntry{
+				ActorID: &actor.UserID, ActorEmail: actor.Email, Action: "auth.api_token_created",
+				ResourceType: "api_token", ResourceID: &resourceID, IP: ctx.Request().Ip(),
+				Metadata: map[string]any{"target_user_id": userID.String(), "target_guard": c.guard, "actor_guard": actor.Guard},
+			}); auditErr != nil {
+				facades.Log().Errorf("audit auth.api_token_created: %v", auditErr)
+			}
+		}
+	} else {
+		c.writeAudit(ctx, userID, "auth.api_token_created", issued.Token.ID.String())
+	}
 	return ctx.Response().Json(http.StatusCreated, responses.IssuedAPITokenResponse{
 		APITokenResponse: responses.NewAPITokenResponse(issued.Token), Token: issued.Plaintext,
 	})
@@ -91,6 +117,8 @@ func (c *APITokensController) DestroyAll(ctx contractshttp.Context) contractshtt
 
 func (c *APITokensController) mapError(ctx contractshttp.Context, err error) contractshttp.Response {
 	switch {
+	case errors.Is(err, services.ErrForbidden):
+		return ctx.Response().Json(http.StatusForbidden, responses.ErrorResponse{Error: "forbidden", Message: "Impersonated token creation is not authorized"})
 	case errors.Is(err, services.ErrWrongPassword):
 		return ctx.Response().Json(http.StatusBadRequest, responses.ErrorResponse{Error: "wrong_password", Message: "Current password is incorrect"})
 	case errors.Is(err, services.ErrInvalidCode):

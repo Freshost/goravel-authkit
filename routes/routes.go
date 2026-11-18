@@ -78,6 +78,9 @@ type Options struct {
 	// ProtectToken/ProtectAny to authenticate this guard's opaque bearer tokens.
 	// It is off by default.
 	EnableAPITokens bool
+	// APITokenAllowImpersonatedCreation authorizes target-owned tokens through
+	// the original actor's current impersonation policy instead of target credentials.
+	APITokenAllowImpersonatedCreation bool
 	// APITokenAllowedScopes is the allow-list users may assign to tokens. An empty
 	// list permits only unscoped tokens.
 	APITokenAllowedScopes   []string
@@ -108,6 +111,9 @@ type Options struct {
 	// default. Who may impersonate whom is decided by the config gate below plus an
 	// optional host hook (authkit.RegisterImpersonationPolicy).
 	EnableImpersonation bool
+	// ImpersonationAllowSensitiveActions gives an impersonated session the same
+	// account actions as a direct login. Normal role and credential checks apply.
+	ImpersonationAllowSensitiveActions bool
 	// ImpersonationRoles: the actor must hold one of these roles to impersonate
 	// (empty = any authenticated user in this guard).
 	ImpersonationRoles []string
@@ -184,6 +190,7 @@ func OptionsFromConfig() Options {
 	}
 	o.EnableSessions = cfg.GetBool("authkit.features.sessions", o.EnableSessions)
 	o.EnableAPITokens = cfg.GetBool("authkit.features.api_tokens", o.EnableAPITokens)
+	o.APITokenAllowImpersonatedCreation = cfg.GetBool("authkit.api_tokens.allow_impersonated_creation", o.APITokenAllowImpersonatedCreation)
 	o.APITokenAllowedScopes = toStringSlice(cfg.Get("authkit.api_tokens.allowed_scopes"))
 	if v := cfg.GetInt("authkit.api_tokens.default_lifetime_days"); v > 0 {
 		o.APITokenDefaultLifetime = time.Duration(v) * 24 * time.Hour
@@ -221,6 +228,7 @@ func OptionsFromConfig() Options {
 	o.APITokensTable = cfg.GetString("authkit.tables.api_tokens")
 	o.RememberCookieName = cfg.GetString("authkit.remember.cookie_name")
 	o.EnableImpersonation = cfg.GetBool("authkit.impersonation.enabled", o.EnableImpersonation)
+	o.ImpersonationAllowSensitiveActions = cfg.GetBool("authkit.impersonation.allow_sensitive_actions", o.ImpersonationAllowSensitiveActions)
 	o.ImpersonationRoles = toStringSlice(cfg.Get("authkit.impersonation.roles"))
 	o.ImpersonationTargetGuards = toStringSlice(cfg.Get("authkit.impersonation.target_guards"))
 	o.ImpersonationProtectedRoles = toStringSlice(cfg.Get("authkit.impersonation.protected_roles"))
@@ -250,6 +258,10 @@ func toStringSlice(v any) []string {
 // router. router is typically facades.Route(). Zero-valued Options fields fall
 // back to DefaultOptions so a bare Register(router, Options{}) is safe.
 func Register(router route.Router, opts Options) {
+	register(router, opts, []Options{opts})
+}
+
+func register(router route.Router, opts Options, delegationGuards []Options) {
 	def := DefaultOptions()
 	if opts.Prefix == "" {
 		opts.Prefix = def.Prefix
@@ -317,6 +329,22 @@ func Register(router route.Router, opts Options) {
 	var apiTokensSvc *services.APITokens
 	if opts.EnableAPITokens {
 		apiTokensSvc = services.NewAPITokens(repositories.NewAPITokensWithTable(opts.APITokensTable), usersRepo, hasher, twoFactorSvc, opts.APITokenAllowedScopes, opts.APITokenMaxLifetime, opts.APITokenMaxPerUser, !opts.KeepAPITokensOnPasswordChange)
+		if opts.APITokenAllowImpersonatedCreation && opts.ImpersonationAllowSensitiveActions {
+			actors := make(map[string]services.APITokenDelegationGuard)
+			// Use the actual registration snapshot, never inferred actor options.
+			// Register supports same-guard delegation; RegisterAll supplies all guards.
+			guardOptions := append(append([]Options{}, delegationGuards...), opts)
+			for _, actor := range guardOptions {
+				delete(actors, actor.Guard)
+				if actor.EnableImpersonation {
+					actors[actor.Guard] = services.APITokenDelegationGuard{
+						Users:  repositories.NewUsersWithTable(actor.UsersTable),
+						Policy: services.NewImpersonation(actor.ImpersonationRoles, actor.ImpersonationTargetGuards, actor.ImpersonationProtectedRoles),
+					}
+				}
+			}
+			apiTokensSvc.AllowImpersonatedCreation(opts.Guard, actors)
+		}
 	}
 	usersSvc := services.NewUsers(usersRepo, hasher, opts.MinPasswordLength, opts.Roles, managementRoles, apiTokensSvc, !opts.KeepAPITokensOnPasswordChange)
 
@@ -341,23 +369,28 @@ func Register(router route.Router, opts Options) {
 			allowedScopes = []string{}
 		}
 		apiTokenMeta = &responses.APITokenMeta{
-			AllowedScopes:       allowedScopes,
-			DefaultLifetimeDays: int(opts.APITokenDefaultLifetime / (24 * time.Hour)),
-			MaxLifetimeDays:     int(opts.APITokenMaxLifetime / (24 * time.Hour)),
-			MaxPerUser:          opts.APITokenMaxPerUser,
+			AllowImpersonatedCreation: opts.APITokenAllowImpersonatedCreation && opts.ImpersonationAllowSensitiveActions,
+			AllowedScopes:             allowedScopes,
+			DefaultLifetimeDays:       int(opts.APITokenDefaultLifetime / (24 * time.Hour)),
+			MaxLifetimeDays:           int(opts.APITokenMaxLifetime / (24 * time.Hour)),
+			MaxPerUser:                opts.APITokenMaxPerUser,
 		}
 	}
 	metaCtrl := controllers.NewMetaController(opts.Roles, opts.MinPasswordLength, responses.MetaFeatures{
-		UserManagement: opts.EnableUserManagement,
-		TwoFactor:      opts.EnableTwoFactor,
-		AuditLog:       opts.EnableAuditLog,
-		Sessions:       opts.EnableSessions,
-		Impersonation:  opts.EnableImpersonation,
-		APITokens:      opts.EnableAPITokens,
+		UserManagement:                opts.EnableUserManagement,
+		TwoFactor:                     opts.EnableTwoFactor,
+		AuditLog:                      opts.EnableAuditLog,
+		Sessions:                      opts.EnableSessions,
+		Impersonation:                 opts.EnableImpersonation,
+		APITokens:                     opts.EnableAPITokens,
+		ImpersonationSensitiveActions: opts.ImpersonationAllowSensitiveActions,
 	}, apiTokenMeta)
 	var apiTokensCtrl *controllers.APITokensController
 	if apiTokensSvc != nil {
 		apiTokensCtrl = controllers.NewAPITokensController(apiTokensSvc, auditSvc, attemptLimiter, opts.RateLimitPasswordAttempts)
+		if opts.APITokenAllowImpersonatedCreation && opts.ImpersonationAllowSensitiveActions {
+			apiTokensCtrl.WithGuard(opts.Guard)
+		}
 	}
 
 	// Impersonation: build the controller with a guard -> users-table map (so a
@@ -424,8 +457,8 @@ func Register(router route.Router, opts Options) {
 			g.Post("/logout", authCtrl.Logout)
 			g.Get("/me", authCtrl.Me)
 			g.Put("/me", authCtrl.UpdateProfile)
-			if opts.EnableImpersonation {
-				// An actor acting "as" a user must not change that user's password.
+			if opts.EnableImpersonation && !opts.ImpersonationAllowSensitiveActions {
+				// Hosts choose whether a switched session may change credentials.
 				g.Middleware(middleware.RejectWhileImpersonating(opts.Guard), middleware.RateLimitByIP(attemptLimiter, opts.RateLimitIPAttempts)).Put("/password", authCtrl.ChangePassword)
 			} else {
 				g.Middleware(middleware.RateLimitByIP(attemptLimiter, opts.RateLimitIPAttempts)).Put("/password", authCtrl.ChangePassword)
@@ -436,9 +469,9 @@ func Register(router route.Router, opts Options) {
 
 				// The cross-user view is privileged even when user-management CRUD is
 				// disabled. Reuse the fail-closed management roles as the definition
-				// of an administrator and never expose it during impersonation.
+				// of an administrator, using the target user's role during impersonation.
 				adminLoginMw := make([]contractshttp.Middleware, 0, 2)
-				if opts.EnableImpersonation {
+				if opts.EnableImpersonation && !opts.ImpersonationAllowSensitiveActions {
 					adminLoginMw = append(adminLoginMw, middleware.RejectWhileImpersonating(opts.Guard))
 				}
 				adminLoginMw = append(adminLoginMw, middleware.RequireRole(opts.Guard, usersRepo, managementRoles...))
@@ -460,7 +493,7 @@ func Register(router route.Router, opts Options) {
 
 			if apiTokensCtrl != nil {
 				tokenRoutes := g
-				if opts.EnableImpersonation {
+				if opts.EnableImpersonation && !opts.ImpersonationAllowSensitiveActions {
 					tokenRoutes = g.Middleware(middleware.RejectWhileImpersonating(opts.Guard))
 				}
 				tokenRoutes.Get("/api-tokens", apiTokensCtrl.Index)
@@ -481,8 +514,8 @@ func Register(router route.Router, opts Options) {
 				// mounted behind the RequireRole gate using the effective management
 				// roles, so no /users endpoint is reachable by a non-admin.
 				userMw := make([]contractshttp.Middleware, 0, 2)
-				if opts.EnableImpersonation {
-					// An actor acting "as" a user must not manage users as them.
+				if opts.EnableImpersonation && !opts.ImpersonationAllowSensitiveActions {
+					// Retain the default lockout unless the host delegates these actions.
 					userMw = append(userMw, middleware.RejectWhileImpersonating(opts.Guard))
 				}
 				userMw = append(userMw, middleware.RequireRole(opts.Guard, usersRepo, managementRoles...))

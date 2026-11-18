@@ -121,30 +121,33 @@ type MetaResponse struct {
 
 // APITokenMeta describes the non-sensitive token policy used by account UIs.
 type APITokenMeta struct {
-	AllowedScopes       []string `json:"allowedScopes"`
-	DefaultLifetimeDays int      `json:"defaultLifetimeDays"`
-	MaxLifetimeDays     int      `json:"maxLifetimeDays"`
-	MaxPerUser          int      `json:"maxPerUser"`
+	AllowImpersonatedCreation bool     `json:"allowImpersonatedCreation"`
+	AllowedScopes             []string `json:"allowedScopes"`
+	DefaultLifetimeDays       int      `json:"defaultLifetimeDays"`
+	MaxLifetimeDays           int      `json:"maxLifetimeDays"`
+	MaxPerUser                int      `json:"maxPerUser"`
 }
 
 // MetaFeatures mirrors the authkit.features toggles for the frontend.
 type MetaFeatures struct {
-	UserManagement bool `json:"userManagement" example:"true"`
-	TwoFactor      bool `json:"twoFactor" example:"true"`
-	AuditLog       bool `json:"auditLog" example:"true"`
-	Sessions       bool `json:"sessions" example:"true"`
-	Impersonation  bool `json:"impersonation" example:"false"`
-	APITokens      bool `json:"apiTokens" example:"false"`
+	UserManagement                bool `json:"userManagement" example:"true"`
+	TwoFactor                     bool `json:"twoFactor" example:"true"`
+	AuditLog                      bool `json:"auditLog" example:"true"`
+	Sessions                      bool `json:"sessions" example:"true"`
+	Impersonation                 bool `json:"impersonation" example:"false"`
+	APITokens                     bool `json:"apiTokens" example:"false"`
+	ImpersonationSensitiveActions bool `json:"impersonationSensitiveActions" example:"false"`
 }
 
 // CreateAPITokenRequest is the POST /auth/api-tokens body. The password and,
 // when enabled for the user, a live TOTP code re-authenticate this sensitive
-// operation. Expiration is mandatory and must be RFC3339.
+// operation for direct sign-ins. Authorized impersonated creation instead uses
+// the original actor's current policy. Expiration is mandatory and must be RFC3339.
 type CreateAPITokenRequest struct {
 	Name          string   `json:"name" binding:"required"`
 	ExpiresAt     string   `json:"expiresAt" binding:"required"`
 	Scopes        []string `json:"scopes"`
-	Password      string   `json:"password" binding:"required"`
+	Password      string   `json:"password"`
 	TwoFactorCode string   `json:"twoFactorCode"`
 }
 

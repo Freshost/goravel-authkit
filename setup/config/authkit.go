@@ -47,11 +47,14 @@ func init() {
 			"api_tokens": false,
 		},
 		"api_tokens": map[string]any{
-			"allowed_scopes":            []string{},
-			"default_lifetime_days":     30,
-			"max_lifetime_days":         365,
-			"max_per_user":              20,
-			"revoke_on_password_change": true,
+			// Permit an authorized impersonator to issue target-owned PATs without
+			// the target's password or TOTP. Sensitive actions must also be enabled.
+			"allow_impersonated_creation": false,
+			"allowed_scopes":              []string{},
+			"default_lifetime_days":       30,
+			"max_lifetime_days":           365,
+			"max_per_user":                20,
+			"revoke_on_password_change":   true,
 		},
 		// Optional OIDC provider. This does not enable external OIDC login.
 		// Key material belongs in the host's secret store; see docs/oidc.md.

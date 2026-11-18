@@ -21,6 +21,27 @@ While the package is pre-1.0, minor versions may contain breaking changes.
 - Go 1.26 is the minimum supported toolchain, including consumers with OIDC
   disabled. Goravel remains on the existing 1.18 baseline.
 
+## [0.8.0] - 2026-11-04
+
+### Added
+
+- Optional `api_tokens.allow_impersonated_creation` policy, including per-guard
+  overrides and metadata. Authorized impersonators can create target-owned PATs
+  without the target's password or TOTP. The original actor is reloaded and checked
+  against its guard's current impersonation policy; audit entries identify the actor
+  and target. Direct sign-ins retain password and TOTP verification.
+
+## [0.7.0] - 2026-11-04
+
+### Added
+
+- Let applications opt into the target user's normal account actions during
+  impersonation with `impersonation.allow_sensitive_actions`, globally or per
+  target guard. Includes PAT management, password changes, user management and
+  administrator sign-in history with ordinary role and credential checks.
+- Report the policy as `features.impersonationSensitiveActions` in `/auth/meta`
+  so the companion UI uses the same policy as the API.
+
 ## [0.6.0] - 2026-08-13
 
 ### Added

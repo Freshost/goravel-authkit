@@ -42,7 +42,12 @@ API tokens are off by default. When enabled, Authkit issues opaque
   once at creation and cannot be recovered.
 - Creation/list/revocation endpoints accept session authentication only, retain
   CSRF checks, and creation requires the current password plus TOTP when enabled.
-  All management is rejected during impersonation.
+  Management is rejected during impersonation by default. Enabling the target
+  guard's `impersonation.allow_sensitive_actions` permits normal management;
+  additionally enabling `api_tokens.allow_impersonated_creation` allows issuance
+  through the original actor's revalidated impersonation authority instead of
+  the target's credentials. OIDC authorization remains forbidden during any
+  impersonation, independently of these PAT policies.
 - Allowed scopes are configured per guard. Required middleware scopes only
   restrict a token; they never grant permissions beyond the live user's role and
   the host application's normal resource authorization.
@@ -177,11 +182,17 @@ Because this **bypasses the target's password by design**, authorization is the
   actor and target and re-applies the actor guard's current role, target-guard,
   protected-role and host-policy rules. Deleting, disabling or demoting the
   actor revokes an already-open impersonation on its next request.
-- **Reject while impersonating.** While a switch is active, the guard blocks the
+- **Configurable account actions.** By default, while a switch is active, the guard blocks the
   credential- and privilege-sensitive routes — password change
   (`PUT /auth/password`), user management (`/auth/users*`) and a nested
   impersonation — with `403 impersonation_forbidden`, so an actor acting "as" a user
   cannot change that user's password, manage users as them, or chain switches.
+  Setting `impersonation.allow_sensitive_actions = true` on the target guard
+  permits password changes, PAT management, user management and administrator
+  sign-in history according to the target's normal role and credential checks.
+  A switched regular user therefore has the same account actions as a direct
+  regular-user login. The session supports one switch at a time; nested switches
+  remain unsupported so the original actor can be restored.
 - **Delegated account support.** Profile changes, active-session management and
   two-factor enrollment/recovery operations intentionally remain available to
   the impersonator. Enabling impersonation therefore delegates those support

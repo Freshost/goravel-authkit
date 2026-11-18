@@ -15,6 +15,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/freshost/goravel-authkit/contracts"
 	"github.com/freshost/goravel-authkit/models"
 	"github.com/freshost/goravel-authkit/repositories"
 )
@@ -42,8 +43,16 @@ type IssueAPITokenCommand struct {
 }
 
 type IssuedAPIToken struct {
-	Token     *models.APIToken
-	Plaintext string
+	Token       *models.APIToken
+	Plaintext   string
+	DelegatedBy *contracts.Principal
+}
+
+// APITokenDelegationGuard uses the actor guard's current users and native
+// impersonation policy. A session marker alone does not confer authority.
+type APITokenDelegationGuard struct {
+	Users  repositories.UsersRepository
+	Policy *Impersonation
 }
 
 type APITokens struct {
@@ -56,9 +65,15 @@ type APITokens struct {
 	maxPerUser                 int
 	invalidateOnPasswordChange bool
 	now                        func() time.Time
+	delegationGuard            string
+	delegationActors           map[string]APITokenDelegationGuard
 }
 
-func NewAPITokens(repo repositories.APITokensRepository, users repositories.UsersRepository, hasher Hasher, twoFactor *TwoFactor, allowedScopes []string, maxLifetime time.Duration, maxPerUser int, invalidateOnPasswordChange bool) *APITokens {
+func NewAPITokens(repo repositories.APITokensRepository, users repositories.UsersRepository, hasher Hasher, twoFactor *TwoFactor, allowedScopes []string, maxLifetime time.Duration, maxPerUser int, invalidateOnPasswordChange ...bool) *APITokens {
+	invalidate := true
+	if len(invalidateOnPasswordChange) > 0 {
+		invalidate = invalidateOnPasswordChange[0]
+	}
 	if maxLifetime <= 0 {
 		maxLifetime = DefaultMaxAPITokenLifetime
 	}
@@ -69,10 +84,38 @@ func NewAPITokens(repo repositories.APITokensRepository, users repositories.User
 	for _, scope := range allowedScopes {
 		allowed[strings.TrimSpace(scope)] = struct{}{}
 	}
-	return &APITokens{repo: repo, users: users, hasher: hasher, twoFactor: twoFactor, allowedScopes: allowed, maxLifetime: maxLifetime, maxPerUser: maxPerUser, invalidateOnPasswordChange: invalidateOnPasswordChange, now: func() time.Time { return time.Now().UTC() }}
+	return &APITokens{repo: repo, users: users, hasher: hasher, twoFactor: twoFactor, allowedScopes: allowed, maxLifetime: maxLifetime, maxPerUser: maxPerUser, invalidateOnPasswordChange: invalidate, now: func() time.Time { return time.Now().UTC() }}
 }
 
 func (s *APITokens) Issue(ctx context.Context, cmd IssueAPITokenCommand) (*IssuedAPIToken, error) {
+	return s.issue(ctx, cmd, nil)
+}
+
+// AllowImpersonatedCreation is configured at boot by the host's guard options.
+func (s *APITokens) AllowImpersonatedCreation(targetGuard string, actors map[string]APITokenDelegationGuard) {
+	s.delegationGuard = targetGuard
+	s.delegationActors = actors
+}
+
+// IssueImpersonated creates a target-owned token after revalidating the original
+// actor against the current users and the native impersonation authorization.
+// HTTP callers must obtain actorGuard and actorID from the server-side session.
+func (s *APITokens) IssueImpersonated(ctx context.Context, actorGuard string, actorID uuid.UUID, cmd IssueAPITokenCommand) (*IssuedAPIToken, error) {
+	guard, ok := s.delegationActors[actorGuard]
+	if !ok || guard.Users == nil || guard.Policy == nil || s.delegationGuard == "" || actorID == uuid.Nil {
+		return nil, ErrForbidden
+	}
+	actor, err := guard.Users.FindByID(ctx, actorID)
+	if err != nil {
+		return nil, errors.Join(ErrInternal, err)
+	}
+	if actor == nil || actor.IsDisabled() {
+		return nil, ErrForbidden
+	}
+	return s.issue(ctx, cmd, &contracts.Principal{Guard: actorGuard, UserID: actor.ID, Email: actor.Email, Role: actor.Role})
+}
+
+func (s *APITokens) issue(ctx context.Context, cmd IssueAPITokenCommand, actor *contracts.Principal) (*IssuedAPIToken, error) {
 	now := s.now()
 	name := strings.TrimSpace(cmd.Name)
 	if name == "" || len([]rune(name)) > 100 {
@@ -94,19 +137,26 @@ func (s *APITokens) Issue(ctx context.Context, cmd IssueAPITokenCommand) (*Issue
 	if user == nil || user.IsDisabled() {
 		return nil, ErrUnauthorized
 	}
-	if user.PasswordHash == nil || !s.hasher.Check(cmd.Password, *user.PasswordHash) {
-		return nil, ErrWrongPassword
-	}
-	if user.TwoFactorEnabled() {
-		if s.twoFactor == nil || strings.TrimSpace(cmd.TwoFactorCode) == "" {
-			return nil, ErrInvalidCode
+	if actor != nil {
+		target := contracts.Principal{Guard: s.delegationGuard, UserID: user.ID, Email: user.Email, Role: user.Role}
+		if err := s.delegationActors[actor.Guard].Policy.Authorize(ctx, *actor, s.delegationGuard, target); err != nil {
+			return nil, err
 		}
-		ok, verifyErr := s.twoFactor.VerifyLoginCode(ctx, user.ID, cmd.TwoFactorCode)
-		if verifyErr != nil {
-			return nil, verifyErr
+	} else {
+		if user.PasswordHash == nil || !s.hasher.Check(cmd.Password, *user.PasswordHash) {
+			return nil, ErrWrongPassword
 		}
-		if !ok {
-			return nil, ErrInvalidCode
+		if user.TwoFactorEnabled() {
+			if s.twoFactor == nil || strings.TrimSpace(cmd.TwoFactorCode) == "" {
+				return nil, ErrInvalidCode
+			}
+			ok, verifyErr := s.twoFactor.VerifyLoginCode(ctx, user.ID, cmd.TwoFactorCode)
+			if verifyErr != nil {
+				return nil, verifyErr
+			}
+			if !ok {
+				return nil, ErrInvalidCode
+			}
 		}
 	}
 
@@ -129,7 +179,7 @@ func (s *APITokens) Issue(ctx context.Context, cmd IssueAPITokenCommand) (*Issue
 	if err := s.repo.Create(ctx, token); err != nil {
 		return nil, errors.Join(ErrInternal, err)
 	}
-	return &IssuedAPIToken{Token: token, Plaintext: apiTokenPrefix + selector + "." + validator}, nil
+	return &IssuedAPIToken{Token: token, Plaintext: apiTokenPrefix + selector + "." + validator, DelegatedBy: actor}, nil
 }
 
 func (s *APITokens) Resolve(ctx context.Context, plaintext string) (*models.APIToken, error) {
