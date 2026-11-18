@@ -55,3 +55,50 @@ default client policy remains mandatory PKCE. The `oidf-results` artifact retain
 the official module results and browser evidence for seven days, including
 warnings, skips and review outcomes. A workflow result alone is not a certificate:
 review the full module results and evidence before making conformance claims.
+
+## Interpreting results
+
+The official runner's `--expected-failures-file` option is used only for the
+warnings listed in `.ci/oidf/expected-warnings.json`: the SDK's additional
+registered JWT `client_id` claim, unavailable optional profile attributes,
+undefined ACR classes and the unsupported optional `claims` parameter. No
+`failure` outcome is accepted by this file. Package tests assert the ID token's
+allowed claim set. `email_verified=false` is returned explicitly.
+
+`.ci/oidf/expected-skips.json` documents four optional cases: address, phone,
+all standard scopes (which requires both address and phone), and unsigned
+Request Objects. The complete plans still run; the suite decides whether these
+modules are applicable from discovery and protocol responses. New warnings,
+failures and unexpected skips fail CI. The four browser-evidence cases retain
+the suite's `REVIEW` result and include the actual page source in the signed
+export; they are not relabeled `PASSED`.
+
+### Known upstream Form Post result in suite 5.3.4
+
+[Verification run](https://github.com/Freshost/goravel-authkit/actions/runs/44335598245)
+completed Config OP with 0 failures/0 warnings and Basic OP with 0 failures,
+5 documented warnings, 4 optional skips and 4 browser-evidence reviews.
+
+The Form Post Basic plan has one failing module:
+`oidcc-unsigned-request-object-supported-correctly-or-rejected-as-unsupported`.
+Its `response_mode=form_post` appears only inside an unsupported Request Object;
+the outer request has no response mode. Authkit returns `request_not_supported`
+using the outer request's default query mode. The suite applies Form Post
+transport assertions before recognizing the permitted unsupported response,
+producing four failure conditions from this single module. The same module
+correctly becomes `SKIPPED` in the Basic/query variant.
+
+This is assessed as a suite mismatch for an optional unsupported feature, based
+on the actual request and the unmodified suite's
+[request builder](https://gitlab.com/openid/conformance-suite/-/blob/release-v5.3.4/src/main/java/net/openid/conformance/condition/client/AbstractBuildRequestObjectRedirectToAuthorizationEndpoint.java)
+and [response handler](https://gitlab.com/openid/conformance-suite/-/blob/release-v5.3.4/src/main/java/net/openid/conformance/openid/AbstractOIDCCRequestObjectServerTest.java).
+The upstream maintainers have not confirmed this assessment. Evidence is
+retained and this failure remains visible in CI. The public PKCE module runs
+independently even when another plan fails.
+
+The provider neither parses unsupported JWT request objects nor advertises
+algorithms for an unsupported capability. An empty algorithm list is also
+inappropriate: [Discovery 4.2](https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderConfigurationResponse)
+requires zero-element claims to be omitted. The release conformance gate remains
+open until this result is resolved with the suite maintainers or its handling is
+explicitly accepted in the release review. No OpenID certification is claimed.

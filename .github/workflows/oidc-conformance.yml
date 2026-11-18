@@ -91,7 +91,6 @@ jobs:
           -e MONGODB_HOST=127.0.0.1 -e SPRING_PROFILES_ACTIVE=dev
           -e OIDC_GOOGLE_CLIENTID=ci-google -e OIDC_GOOGLE_SECRET=ci-google
           -e OIDC_GITLAB_CLIENTID=ci-gitlab -e OIDC_GITLAB_SECRET=ci-gitlab
-          -e JAVA_EXTRA_ARGS=-Dlogging.level.net.openid.conformance.frontchannel=DEBUG
           registry.gitlab.com/openid/conformance-suite:release-v5.3.4
       - name: Start suite HTTPS endpoint
         run: >-
@@ -118,6 +117,7 @@ jobs:
           --expected-failures-file .ci/oidf/expected-warnings.json --expected-skips-file .ci/oidf/expected-skips.json
           'oidcc-formpost-basic-certification-test-plan[server_metadata=discovery][client_registration=static_client]' .ci/oidf/config.json
       - name: Public PKCE module
+        if: ${{ !cancelled() }}
         run: |
           jq '.client = {client_id: "oidf-public", scope: "openid profile email"}' .ci/oidf/config.json > .ci/oidf/public.json
           python "$RUNNER_TEMP/oidf/scripts/run-test-plan.py" --no-parallel --export-dir oidf-results \
