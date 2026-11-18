@@ -129,7 +129,9 @@ func TestPrunedSessionStillRevokesRememberBinding(t *testing.T) {
 	sessions := services.NewSessions(repositories.NewSessions(), time.Hour)
 	require.NoError(t, sessions.Track(context.Background(), binding, user.ID, "", "", credential.Selector))
 	// Pruning removes only tracking, while a remembered browser may return later.
-	require.NoError(t, repositories.NewSessions().DeleteStale(context.Background(), time.Now().Add(time.Minute)))
+	_, err = facades.Orm().Query().Table("auth_sessions").Where("session_id", binding).Update("last_active_at", time.Now().Add(-365*24*time.Hour))
+	require.NoError(t, err)
+	require.NoError(t, repositories.NewSessions().DeleteStale(context.Background(), time.Now().Add(-180*24*time.Hour)))
 	require.NoError(t, repositories.NewSessions().DeleteBySessionID(context.Background(), binding))
 	_, _, err = remember.ResolveVerified(context.Background(), cookie)
 	require.Error(t, err)
@@ -140,7 +142,7 @@ func TestRememberPruningUsesEachGuardAndConfiguredLifetime(t *testing.T) {
 	oldLifetime := facades.Config().Get("session.lifetime")
 	facades.Config().Add("session.lifetime", 24*60)
 	defer facades.Config().Add("session.lifetime", oldLifetime)
-	for _, tables := range []struct{ remember, sessions string }{{"auth_remember_tokens", "auth_sessions"}, {"client_auth_remember_tokens", "client_auth_sessions"}} {
+	for _, tables := range []struct{ remember, sessions string }{{"auth_remember_tokens", "auth_sessions"}, {"client_remember_tokens", "client_auth_sessions"}} {
 		credential := &models.RememberToken{ID: uuid.New(), UserID: user.ID, Selector: uuid.NewString(), ValidatorHash: "expired", ExpiresAt: time.Now().Add(-time.Hour), CreatedAt: time.Now().Add(-48 * time.Hour)}
 		require.NoError(t, facades.Orm().Query().Table(tables.remember).Create(credential))
 		session := &models.AuthSession{ID: uuid.New(), SessionID: uuid.NewString(), UserID: user.ID, LastActiveAt: time.Now().Add(-3 * time.Hour)}
@@ -148,7 +150,7 @@ func TestRememberPruningUsesEachGuardAndConfiguredLifetime(t *testing.T) {
 		defer facades.Orm().Query().Table(tables.sessions).Where("id", session.ID).Delete(&models.AuthSession{})
 	}
 	require.NoError(t, facades.Artisan().Call("auth:prune-remember-tokens"))
-	for _, table := range []string{"auth_remember_tokens", "client_auth_remember_tokens"} {
+	for _, table := range []string{"auth_remember_tokens", "client_remember_tokens"} {
 		count, err := facades.Orm().Query().Table(table).Where("user_id", user.ID).Count()
 		require.NoError(t, err)
 		require.Zero(t, count)

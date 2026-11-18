@@ -166,7 +166,7 @@ require (
 	google.golang.org/grpc v1.81.1 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	gorm.io/driver/postgres v1.6.0 // indirect
-	gorm.io/gorm v1.31.2 // indirect
+	gorm.io/gorm v1.31.2
 	gorm.io/plugin/dbresolver v1.6.2 // indirect
 )
 

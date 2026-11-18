@@ -2,11 +2,11 @@ package commands
 
 import (
 	"context"
-	"github.com/goravel/framework/facades"
 	"time"
 
 	"github.com/goravel/framework/contracts/console"
 	"github.com/goravel/framework/contracts/console/command"
+	"github.com/goravel/framework/facades"
 
 	"github.com/freshost/goravel-authkit/repositories"
 	"github.com/freshost/goravel-authkit/services"

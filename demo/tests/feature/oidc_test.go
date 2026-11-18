@@ -250,7 +250,7 @@ func (s *OIDCTestSuite) TestRemoteTerminationProtectsHostOwnedRoutes() {
 		allowed, err := s.Http(s.T()).WithCookie(cookie).Get(path)
 		s.Require().NoError(err)
 		allowed.AssertOk()
-		s.Require().NoError(repositories.NewSessionsWithTable("client_auth_sessions", "client_auth_remember_tokens").DeleteByUser(context.Background(), s.user.ID))
+		s.Require().NoError(repositories.NewSessionsWithTable("client_auth_sessions", "client_remember_tokens").DeleteByUser(context.Background(), s.user.ID))
 		denied, err := s.Http(s.T()).WithCookie(cookie).Get(path)
 		s.Require().NoError(err)
 		denied.AssertUnauthorized()
