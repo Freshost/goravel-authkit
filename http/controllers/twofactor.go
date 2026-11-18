@@ -92,7 +92,11 @@ func (c *TwoFactorController) Challenge(ctx contractshttp.Context) contractshttp
 		wantRemember = true
 	}
 
-	return completeLogin(ctx, c.guard, c.rememberCookieName, c.audit, c.remember, c.sessions, wantRemember, user)
+	methods := []string{"pwd", "mfa"}
+	if strings.TrimSpace(req.Code) != "" {
+		methods = append(methods, "otp")
+	}
+	return completeLogin(ctx, c.guard, c.rememberCookieName, c.audit, c.remember, c.sessions, wantRemember, user, methods...)
 }
 
 // Enable starts 2FA enrollment by generating a TOTP secret (not yet active) and

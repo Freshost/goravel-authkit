@@ -47,17 +47,18 @@ type IssuedAPIToken struct {
 }
 
 type APITokens struct {
-	repo          repositories.APITokensRepository
-	users         repositories.UsersRepository
-	hasher        Hasher
-	twoFactor     *TwoFactor
-	allowedScopes map[string]struct{}
-	maxLifetime   time.Duration
-	maxPerUser    int
-	now           func() time.Time
+	repo                       repositories.APITokensRepository
+	users                      repositories.UsersRepository
+	hasher                     Hasher
+	twoFactor                  *TwoFactor
+	allowedScopes              map[string]struct{}
+	maxLifetime                time.Duration
+	maxPerUser                 int
+	invalidateOnPasswordChange bool
+	now                        func() time.Time
 }
 
-func NewAPITokens(repo repositories.APITokensRepository, users repositories.UsersRepository, hasher Hasher, twoFactor *TwoFactor, allowedScopes []string, maxLifetime time.Duration, maxPerUser int) *APITokens {
+func NewAPITokens(repo repositories.APITokensRepository, users repositories.UsersRepository, hasher Hasher, twoFactor *TwoFactor, allowedScopes []string, maxLifetime time.Duration, maxPerUser int, invalidateOnPasswordChange bool) *APITokens {
 	if maxLifetime <= 0 {
 		maxLifetime = DefaultMaxAPITokenLifetime
 	}
@@ -68,7 +69,7 @@ func NewAPITokens(repo repositories.APITokensRepository, users repositories.User
 	for _, scope := range allowedScopes {
 		allowed[strings.TrimSpace(scope)] = struct{}{}
 	}
-	return &APITokens{repo: repo, users: users, hasher: hasher, twoFactor: twoFactor, allowedScopes: allowed, maxLifetime: maxLifetime, maxPerUser: maxPerUser, now: func() time.Time { return time.Now().UTC() }}
+	return &APITokens{repo: repo, users: users, hasher: hasher, twoFactor: twoFactor, allowedScopes: allowed, maxLifetime: maxLifetime, maxPerUser: maxPerUser, invalidateOnPasswordChange: invalidateOnPasswordChange, now: func() time.Time { return time.Now().UTC() }}
 }
 
 func (s *APITokens) Issue(ctx context.Context, cmd IssueAPITokenCommand) (*IssuedAPIToken, error) {
@@ -142,6 +143,15 @@ func (s *APITokens) Resolve(ctx context.Context, plaintext string) (*models.APIT
 	}
 	if token == nil || subtle.ConstantTimeCompare([]byte(hashAPITokenValidator(validator)), []byte(token.ValidatorHash)) != 1 || !token.Active(s.now()) {
 		return nil, ErrInvalidAPIToken
+	}
+	if s.invalidateOnPasswordChange {
+		user, err := s.users.FindByID(ctx, token.UserID)
+		if err != nil {
+			return nil, errors.Join(ErrInternal, err)
+		}
+		if user == nil || user.IsDisabled() || token.CreatedAt.Before(user.PasswordChangedAt) {
+			return nil, ErrInvalidAPIToken
+		}
 	}
 	now := s.now()
 	if err := s.repo.TouchLastUsed(ctx, token.ID, now.Add(-apiTokenLastUsedInterval), now); err != nil {

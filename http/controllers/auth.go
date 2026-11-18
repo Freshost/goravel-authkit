@@ -82,6 +82,7 @@ func (c *AuthController) Login(ctx contractshttp.Context) contractshttp.Response
 	// session yet. Regenerate the session id (anti-fixation) before stashing the
 	// pending user id; the session stays unauthenticated until the challenge.
 	if c.twoFactor != nil && user.TwoFactorEnabled() {
+		helpers.ClearAuthentication(ctx, c.guard)
 		if err := helpers.RegenerateAndPersistSession(ctx); err != nil {
 			facades.Log().Errorf("auth: regenerate session: %v", err)
 		}
@@ -102,7 +103,7 @@ func (c *AuthController) Login(ctx contractshttp.Context) contractshttp.Response
 // user response. Shared by password-only login and the 2FA challenge. When
 // remember is non-nil and wantRemember is true it also issues a persistent
 // "remember me" cookie.
-func completeLogin(ctx contractshttp.Context, guard, rememberCookieName string, audit *services.Audit, remember *services.Remember, sessions *services.Sessions, wantRemember bool, user *models.User) contractshttp.Response {
+func completeLogin(ctx contractshttp.Context, guard, rememberCookieName string, audit *services.Audit, remember *services.Remember, sessions *services.Sessions, wantRemember bool, user *models.User, methods ...string) contractshttp.Response {
 	if _, err := facades.Auth(ctx).Guard(guard).Login(user); err != nil {
 		facades.Log().Errorf("auth: establish session: %v", err)
 		return ctx.Response().Json(http.StatusInternalServerError, responses.ErrorResponse{
@@ -117,6 +118,10 @@ func completeLogin(ctx contractshttp.Context, guard, rememberCookieName string, 
 		sess.Forget(helpers.TwoFactorUserIDKey(guard))
 		sess.Forget(helpers.RememberIntentKey(guard))
 	}
+	if len(methods) == 0 {
+		methods = []string{"pwd"}
+	}
+	helpers.RecordAuthentication(ctx, guard, methods, user)
 	if remember != nil && wantRemember {
 		if value, err := remember.Issue(ctx.Context(), user.ID); err != nil {
 			facades.Log().Errorf("auth: issue remember token: %v", err)
@@ -155,6 +160,7 @@ func completeLogin(ctx contractshttp.Context, guard, rememberCookieName string, 
 // Logout invalidates the current session and clears the session cookie. Handles
 // POST {prefix}/auth/logout.
 func (c *AuthController) Logout(ctx contractshttp.Context) contractshttp.Response {
+	helpers.ClearAuthentication(ctx, c.guard)
 	// Best-effort load of the current user (for the audit row) from the instance's
 	// table; the id was injected by Authenticated.
 	user, _ := c.auth.Me(ctx.Context(), helpers.AuthUserID(ctx))

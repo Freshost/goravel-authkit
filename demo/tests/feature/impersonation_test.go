@@ -222,6 +222,30 @@ func (s *ImpersonationTestSuite) TestRejectsSensitiveActionsWhileImpersonating()
 		Post("/api/client/v1/auth/impersonate", bytes.NewBufferString(`{"userId":"`+s.clientID.String()+`"}`))
 	s.Require().NoError(err)
 	nested.AssertForbidden()
+
+	// Profile management is intentionally delegated to the impersonator.
+	profile, err := s.Http(t).WithHeader("Content-Type", "application/json").WithCookie(both).
+		Put("/api/client/v1/auth/me", bytes.NewBufferString(`{"email":"`+s.clientEmail+`","name":"Updated by support"}`))
+	s.Require().NoError(err)
+	profile.AssertOk()
+}
+
+func (s *ImpersonationTestSuite) TestDemotedActorRevokesOpenImpersonation() {
+	t := s.T()
+	cookie := s.login(t, "/api/v1", s.adminEmail)
+	resp := s.impersonate(t, "/api/v1", cookie, "client", s.clientID.String())
+	resp.AssertOk()
+	both := cookieNamed(resp, "authkit_demo_session")
+	s.Require().NotNil(both)
+
+	_, err := facades.Orm().Query().Model(&authmodels.User{}).Where("id", s.adminID).Update("role", "user")
+	s.Require().NoError(err)
+
+	me, _ := s.me(t, "/api/client/v1", both)
+	me.AssertForbidden()
+	body, err := me.Json()
+	s.Require().NoError(err)
+	s.Equal("impersonation_revoked", body["error"])
 }
 
 // Impersonation must not issue a persistent remember cookie.

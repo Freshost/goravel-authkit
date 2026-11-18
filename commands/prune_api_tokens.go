@@ -35,7 +35,7 @@ func (r *PruneAPITokens) Handle(ctx console.Context) error {
 			continue
 		}
 		seen[table] = struct{}{}
-		tokens := services.NewAPITokens(repositories.NewAPITokensWithTable(table), nil, nil, nil, nil, 0, 0)
+		tokens := services.NewAPITokens(repositories.NewAPITokensWithTable(table), nil, nil, nil, nil, 0, 0, false)
 		if err := tokens.Prune(context.Background()); err != nil {
 			ctx.Error("Failed to prune API tokens: " + err.Error())
 			return err

@@ -1,13 +1,15 @@
 module github.com/freshost/goravel-authkit
 
-go 1.25.0
+go 1.26.0
 
 require (
+	github.com/go-jose/go-jose/v4 v4.1.9
 	github.com/google/uuid v1.6.0
 	github.com/goravel/framework v1.18.0
 	github.com/pquerna/otp v1.5.0
 	github.com/spf13/cast v1.10.0
 	github.com/stretchr/testify v1.11.1
+	github.com/zitadel/oidc/v3 v3.52.0
 	gorm.io/gorm v1.31.2
 )
 

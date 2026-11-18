@@ -47,8 +47,9 @@ API tokens are off by default. When enabled, Authkit issues opaque
   restrict a token; they never grant permissions beyond the live user's role and
   the host application's normal resource authorization.
 - Every request loads the live owner. Deleted or disabled owners are denied.
-  Password changes/resets and disabling/deleting a user revoke all tokens by
-  default.
+  By default a token issued before the owner's current `password_changed_at`
+  credential epoch is rejected, so password changes/resets and account disable
+  remain effective even if physical token cleanup fails.
 - `ProtectToken` is stateless. `ProtectAny` prefers any supplied Authorization
   header and never falls back to a session after an invalid token. Browser/session
   requests still receive CSRF protection.
@@ -71,6 +72,11 @@ API tokens are off by default. When enabled, Authkit issues opaque
   it to the live DB value on every request. A password change bumps the DB value,
   so every *other* session is rejected (`401 session_expired`) on its next
   request. The session that changed the password is re-stamped and stays in.
+- **Persistent-credential epoch.** Remember tokens and, by default, API tokens
+  carry an issuance time that must not predate the user's live
+  `password_changed_at`. Password reset and account disable therefore invalidate
+  old credentials atomically with the user update; deleting their rows is only
+  cleanup, not the security boundary.
 - **Atomic multi-dimensional rate-limiting.** Login and 2FA must pass both an IP
   bucket (default 20/min) and a hash-keyed account/user bucket (default 5/min).
   Change-password must pass IP and authenticated-user buckets. Bucket identifiers
@@ -167,11 +173,20 @@ Because this **bypasses the target's password by design**, authorization is the
   from a stored cookie; it lives only for the current session and ends on "stop".
 - **Target must be live.** The target user must exist and must not be disabled;
   `protected_roles` blocks impersonating privileged accounts.
+- **Actor authorization stays live.** Every impersonated request reloads the
+  actor and target and re-applies the actor guard's current role, target-guard,
+  protected-role and host-policy rules. Deleting, disabling or demoting the
+  actor revokes an already-open impersonation on its next request.
 - **Reject while impersonating.** While a switch is active, the guard blocks the
   credential- and privilege-sensitive routes — password change
   (`PUT /auth/password`), user management (`/auth/users*`) and a nested
   impersonation — with `403 impersonation_forbidden`, so an actor acting "as" a user
   cannot change that user's password, manage users as them, or chain switches.
+- **Delegated account support.** Profile changes, active-session management and
+  two-factor enrollment/recovery operations intentionally remain available to
+  the impersonator. Enabling impersonation therefore delegates those support
+  powers to every authorized actor; configure the gate and host policy
+  accordingly.
 - **Session-id regeneration** happens on both the switch and the stop
   (anti-fixation), the same as login. `GET /auth/me` exposes `impersonatedBy` while
   impersonating so a UI can show a banner and an exit control.
@@ -197,6 +212,8 @@ session cookie name/path is an optional knob for single-origin setups.
   `authkit.user_management_roles`). The `/users` endpoints are gated behind it
   (fail-closed default `["admin"]`), and the package keeps at least one active
   admin (you cannot delete, disable, demote, or self-disable the last admin).
+  Count-and-mutate operations are serialized inside a database transaction so
+  concurrent requests cannot both remove the final management users.
   Reaching `/users` already requires admin, so an admin assigning any allowed
   `role` is intended. Full roles/permissions tables (multiple privileges,
   per-resource grants) are a later phase.

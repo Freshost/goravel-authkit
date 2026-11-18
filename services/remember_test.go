@@ -15,7 +15,8 @@ import (
 
 // fakeRememberRepo is an in-memory RememberRepository for service unit tests.
 type fakeRememberRepo struct {
-	byID map[uuid.UUID]*models.RememberToken
+	byID           map[uuid.UUID]*models.RememberToken
+	deleteOnRotate bool
 }
 
 func newFakeRememberRepo() *fakeRememberRepo {
@@ -39,6 +40,10 @@ func (f *fakeRememberRepo) FindBySelector(_ context.Context, selector string) (*
 }
 
 func (f *fakeRememberRepo) RotateValidator(_ context.Context, id uuid.UUID, expectedCurrentHash, newCurrentHash, newPreviousHash string, rotatedAt, expiresAt time.Time) (int64, error) {
+	if f.deleteOnRotate {
+		delete(f.byID, id)
+		return 0, nil
+	}
 	t, ok := f.byID[id]
 	if !ok || t.ValidatorHash != expectedCurrentHash {
 		return 0, nil
@@ -48,6 +53,17 @@ func (f *fakeRememberRepo) RotateValidator(_ context.Context, id uuid.UUID, expe
 	t.RotatedAt = &rotatedAt
 	t.ExpiresAt = expiresAt
 	return 1, nil
+}
+
+func TestRemember_RevocationWinningRotationRaceFailsClosed(t *testing.T) {
+	repo := newFakeRememberRepo()
+	svc := NewRemember(repo, time.Hour)
+	cookie, err := svc.Issue(context.Background(), uuid.New())
+	require.NoError(t, err)
+
+	repo.deleteOnRotate = true
+	_, _, _, err = svc.Resolve(context.Background(), cookie)
+	assert.ErrorIs(t, err, ErrInvalidRememberToken)
 }
 
 func (f *fakeRememberRepo) Delete(_ context.Context, id uuid.UUID) error {
@@ -82,7 +98,7 @@ func TestRemember_IssueAndResolveRotates(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, cookie, ":")
 
-	gotUID, rotated, err := svc.Resolve(context.Background(), cookie)
+	gotUID, _, rotated, err := svc.Resolve(context.Background(), cookie)
 	require.NoError(t, err)
 	assert.Equal(t, uid, gotUID)
 	assert.NotEmpty(t, rotated, "a fresh cookie should be issued on rotation")
@@ -90,7 +106,7 @@ func TestRemember_IssueAndResolveRotates(t *testing.T) {
 	assert.Equal(t, selectorOf(cookie), selectorOf(rotated), "selector stays stable")
 
 	// The rotated (current) cookie validates and rotates again.
-	_, rotated2, err := svc.Resolve(context.Background(), rotated)
+	_, _, rotated2, err := svc.Resolve(context.Background(), rotated)
 	require.NoError(t, err)
 	assert.NotEmpty(t, rotated2)
 }
@@ -103,12 +119,12 @@ func TestRemember_SupersededValidatorWithinGraceAccepted(t *testing.T) {
 	cookie, err := svc.Issue(context.Background(), uid)
 	require.NoError(t, err)
 	// First use rotates: `cookie` becomes the previous validator (RotatedAt=now).
-	_, _, err = svc.Resolve(context.Background(), cookie)
+	_, _, _, err = svc.Resolve(context.Background(), cookie)
 	require.NoError(t, err)
 
 	// A concurrent request still carrying the original cookie is accepted within
 	// the grace window — not treated as theft — and issues no new cookie.
-	gotUID, fresh, err := svc.Resolve(context.Background(), cookie)
+	gotUID, _, fresh, err := svc.Resolve(context.Background(), cookie)
 	require.NoError(t, err)
 	assert.Equal(t, uid, gotUID)
 	assert.Empty(t, fresh, "grace acceptance must not overwrite the rotated cookie")
@@ -122,7 +138,7 @@ func TestRemember_SupersededValidatorAfterGraceIsTheft(t *testing.T) {
 
 	cookie, err := svc.Issue(context.Background(), uid)
 	require.NoError(t, err)
-	_, _, err = svc.Resolve(context.Background(), cookie)
+	_, _, _, err = svc.Resolve(context.Background(), cookie)
 	require.NoError(t, err)
 
 	// Push the rotation into the past, beyond the grace window.
@@ -132,21 +148,21 @@ func TestRemember_SupersededValidatorAfterGraceIsTheft(t *testing.T) {
 	}
 
 	// The original (now long-superseded) validator is treated as theft.
-	_, _, err = svc.Resolve(context.Background(), cookie)
+	_, _, _, err = svc.Resolve(context.Background(), cookie)
 	assert.ErrorIs(t, err, ErrInvalidRememberToken)
 	assert.Empty(t, repo.byID, "stale-beyond-grace reuse revokes the whole family")
 }
 
 func TestRemember_ResolveUnknownSelector(t *testing.T) {
 	svc := NewRemember(newFakeRememberRepo(), time.Hour)
-	_, _, err := svc.Resolve(context.Background(), "nosuch:validator")
+	_, _, _, err := svc.Resolve(context.Background(), "nosuch:validator")
 	assert.ErrorIs(t, err, ErrInvalidRememberToken)
 }
 
 func TestRemember_ResolveMalformed(t *testing.T) {
 	svc := NewRemember(newFakeRememberRepo(), time.Hour)
 	for _, bad := range []string{"", "noseparator", ":onlyvalidator", "onlyselector:"} {
-		_, _, err := svc.Resolve(context.Background(), bad)
+		_, _, _, err := svc.Resolve(context.Background(), bad)
 		assert.ErrorIs(t, err, ErrInvalidRememberToken, "input %q", bad)
 	}
 }
@@ -163,7 +179,7 @@ func TestRemember_ResolveExpired(t *testing.T) {
 		tk.ExpiresAt = time.Now().Add(-time.Minute)
 	}
 
-	_, _, err = svc.Resolve(context.Background(), cookie)
+	_, _, _, err = svc.Resolve(context.Background(), cookie)
 	assert.ErrorIs(t, err, ErrInvalidRememberToken)
 	assert.Empty(t, repo.byID, "expired token should be deleted")
 }
@@ -179,7 +195,7 @@ func TestRemember_WrongValidatorRevokesFamily(t *testing.T) {
 	require.NoError(t, err)
 
 	tampered := selectorOf(cookie) + ":" + "wrong-validator-value"
-	_, _, err = svc.Resolve(context.Background(), tampered)
+	_, _, _, err = svc.Resolve(context.Background(), tampered)
 	assert.ErrorIs(t, err, ErrInvalidRememberToken)
 	assert.Empty(t, repo.byID, "theft detection should revoke ALL of the user's tokens")
 }
@@ -191,7 +207,7 @@ func TestRemember_Revoke(t *testing.T) {
 	require.NoError(t, err)
 
 	require.NoError(t, svc.Revoke(context.Background(), cookie))
-	_, _, err = svc.Resolve(context.Background(), cookie)
+	_, _, _, err = svc.Resolve(context.Background(), cookie)
 	assert.ErrorIs(t, err, ErrInvalidRememberToken)
 }
 

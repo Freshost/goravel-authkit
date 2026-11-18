@@ -40,7 +40,14 @@ type UsersRepository interface {
 	// slice matches nothing (returns 0).
 	CountActiveByRolesExcluding(ctx context.Context, roles []string, exclude uuid.UUID) (int64, error)
 	Create(ctx context.Context, u *models.User) error
-	Save(ctx context.Context, u *models.User) error
+	// UpdateProfile writes only self-service profile fields. It must never write
+	// password, two-factor, role, or account-state columns from a stale model.
+	UpdateProfile(ctx context.Context, id uuid.UUID, email string, name *string, clearEmailVerified bool) error
+	// UpdateManaged writes only fields owned by the administrator user editor.
+	// setDisabled distinguishes "leave unchanged" from explicitly storing NULL.
+	// passwordChangedAt is set when disabling an account so every credential
+	// issued before the disable remains invalid after a later re-enable.
+	UpdateManaged(ctx context.Context, id uuid.UUID, email string, name *string, role string, disabledAt *time.Time, setDisabled bool, passwordChangedAt *time.Time) error
 	Delete(ctx context.Context, u *models.User) error
 	UpdatePassword(ctx context.Context, id uuid.UUID, passwordHash string, changedAt time.Time) error
 	// UpdateTwoFactor sets the three two_factor columns (nil clears a column to NULL).
@@ -49,10 +56,18 @@ type UsersRepository interface {
 	// (SELECT ... FOR UPDATE), applies fn, and saves — making a read-modify-write
 	// (e.g. consuming a recovery code, recording a used TOTP step) atomic.
 	MutateLocked(ctx context.Context, id uuid.UUID, fn func(u *models.User) error) error
+	// WithinTransaction supplies a repository bound to one database transaction.
+	WithinTransaction(ctx context.Context, fn func(tx UsersRepository) error) error
+	// LockManagementInvariant serializes count-and-mutate operations that could
+	// otherwise remove the final active management user.
+	LockManagementInvariant(ctx context.Context, roles []string) error
 }
 
 // Users is the ORM-backed UsersRepository, bound to a concrete table.
-type Users struct{ table string }
+type Users struct {
+	table string
+	tx    ormcontract.Query
+}
 
 // NewUsers returns an ORM-backed users repository over the default "users" table.
 func NewUsers() *Users { return NewUsersWithTable(DefaultUsersTable) }
@@ -70,6 +85,9 @@ func NewUsersWithTable(table string) *Users {
 var _ UsersRepository = (*Users)(nil)
 
 func (r *Users) query(ctx context.Context) ormcontract.Query {
+	if r.tx != nil {
+		return r.tx.Table(r.table)
+	}
 	return facades.Orm().WithContext(ctx).Query().Table(r.table)
 }
 
@@ -134,8 +152,25 @@ func (r *Users) Create(ctx context.Context, u *models.User) error {
 	return r.query(ctx).Create(u)
 }
 
-func (r *Users) Save(ctx context.Context, u *models.User) error {
-	return r.query(ctx).Save(u)
+func (r *Users) UpdateProfile(ctx context.Context, id uuid.UUID, email string, name *string, clearEmailVerified bool) error {
+	values := map[string]any{"email": email, "name": name}
+	if clearEmailVerified {
+		values["email_verified"] = nil
+	}
+	_, err := r.query(ctx).Model(&models.User{}).Where("id", id).Update(values)
+	return err
+}
+
+func (r *Users) UpdateManaged(ctx context.Context, id uuid.UUID, email string, name *string, role string, disabledAt *time.Time, setDisabled bool, passwordChangedAt *time.Time) error {
+	values := map[string]any{"email": email, "name": name, "role": role}
+	if setDisabled {
+		values["disabled_at"] = disabledAt
+	}
+	if passwordChangedAt != nil {
+		values["password_changed_at"] = *passwordChangedAt
+	}
+	_, err := r.query(ctx).Model(&models.User{}).Where("id", id).Update(values)
+	return err
 }
 
 func (r *Users) Delete(ctx context.Context, u *models.User) error {
@@ -144,7 +179,7 @@ func (r *Users) Delete(ctx context.Context, u *models.User) error {
 }
 
 func (r *Users) UpdatePassword(ctx context.Context, id uuid.UUID, passwordHash string, changedAt time.Time) error {
-	_, err := r.query(ctx).Where("id", id).Update(map[string]any{
+	_, err := r.query(ctx).Model(&models.User{}).Where("id", id).Update(map[string]any{
 		"password_hash":       passwordHash,
 		"password_changed_at": changedAt,
 	})
@@ -152,7 +187,7 @@ func (r *Users) UpdatePassword(ctx context.Context, id uuid.UUID, passwordHash s
 }
 
 func (r *Users) UpdateTwoFactor(ctx context.Context, id uuid.UUID, secret, recoveryCodes *string, confirmedAt *time.Time) error {
-	_, err := r.query(ctx).Where("id", id).Update(map[string]any{
+	_, err := r.query(ctx).Model(&models.User{}).Where("id", id).Update(map[string]any{
 		"two_factor_secret":         secret,
 		"two_factor_recovery_codes": recoveryCodes,
 		"two_factor_confirmed_at":   confirmedAt,
@@ -174,4 +209,28 @@ func (r *Users) MutateLocked(ctx context.Context, id uuid.UUID, fn func(u *model
 		}
 		return tx.Table(r.table).Save(&u)
 	})
+}
+
+func (r *Users) WithinTransaction(ctx context.Context, fn func(tx UsersRepository) error) error {
+	if r.tx != nil {
+		return fn(r)
+	}
+	return facades.Orm().WithContext(ctx).Transaction(func(tx ormcontract.Query) error {
+		return fn(&Users{table: r.table, tx: tx})
+	})
+}
+
+func (r *Users) LockManagementInvariant(ctx context.Context, roles []string) error {
+	// Lock every current management row in deterministic order. Concurrent
+	// demote/disable/delete operations then observe the preceding committed
+	// mutation before evaluating the invariant themselves. With no configured
+	// management roles, lock all rows for the legacy last-user fallback.
+	var users []models.User
+	query := r.query(ctx)
+	if len(roles) > 0 {
+		query = query.Where("role IN ?", roles)
+	}
+	return query.OrderBy("id").
+		LockForUpdate().
+		Find(&users)
 }

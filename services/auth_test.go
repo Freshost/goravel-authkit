@@ -106,6 +106,23 @@ func TestUpdateProfile_Success(t *testing.T) {
 	assert.Equal(t, "new@example.com", repo.byID[u.ID].Email)
 }
 
+func TestUpdateProfile_DoesNotOverwriteCredentialState(t *testing.T) {
+	repo := newFakeRepo()
+	u := seedUser(repo, "admin@example.com", "secret123")
+	secret := "encrypted-totp"
+	u.TwoFactorSecret = &secret
+	repo.seed(u)
+	originalHash := *u.PasswordHash
+	originalChangedAt := u.PasswordChangedAt
+
+	_, _, err := NewAuth(repo, fakeHasher{}, 8).UpdateProfile(context.Background(), u.ID, "new@example.com", "New")
+	require.NoError(t, err)
+	stored := repo.byID[u.ID]
+	assert.Equal(t, originalHash, *stored.PasswordHash)
+	assert.Equal(t, originalChangedAt, stored.PasswordChangedAt)
+	assert.Equal(t, secret, *stored.TwoFactorSecret)
+}
+
 func TestUpdateProfile_EmailChangeClearsVerified(t *testing.T) {
 	repo := newFakeRepo()
 	u := seedUser(repo, "admin@example.com", "secret123")

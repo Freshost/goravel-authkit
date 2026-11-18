@@ -316,7 +316,7 @@ func Register(router route.Router, opts Options) {
 
 	var apiTokensSvc *services.APITokens
 	if opts.EnableAPITokens {
-		apiTokensSvc = services.NewAPITokens(repositories.NewAPITokensWithTable(opts.APITokensTable), usersRepo, hasher, twoFactorSvc, opts.APITokenAllowedScopes, opts.APITokenMaxLifetime, opts.APITokenMaxPerUser)
+		apiTokensSvc = services.NewAPITokens(repositories.NewAPITokensWithTable(opts.APITokensTable), usersRepo, hasher, twoFactorSvc, opts.APITokenAllowedScopes, opts.APITokenMaxLifetime, opts.APITokenMaxPerUser, !opts.KeepAPITokensOnPasswordChange)
 	}
 	usersSvc := services.NewUsers(usersRepo, hasher, opts.MinPasswordLength, opts.Roles, managementRoles, apiTokensSvc, !opts.KeepAPITokensOnPasswordChange)
 
@@ -412,6 +412,9 @@ func Register(router route.Router, opts Options) {
 			guarded = append(guarded, middleware.RememberLogin(opts.Guard, opts.RememberCookieName, usersRepo, rememberSvc, auditSvc, sessionsSvc))
 		}
 		guarded = append(guarded, middleware.Authenticated(opts.Guard, usersRepo))
+		if validate := impersonationValidation(opts.Guard, opts); validate != nil {
+			guarded = append(guarded, validate)
+		}
 		if sessionsSvc != nil {
 			// After Authenticated: refresh the current session row and reject it if
 			// it was terminated elsewhere.

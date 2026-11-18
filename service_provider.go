@@ -31,6 +31,7 @@ import (
 
 	"github.com/freshost/goravel-authkit/commands"
 	"github.com/freshost/goravel-authkit/migrations"
+	"github.com/freshost/goravel-authkit/oidc"
 	"github.com/freshost/goravel-authkit/routes"
 )
 
@@ -133,6 +134,9 @@ func (r *ServiceProvider) Boot(app foundation.Application) {
 					APITokensTable:      o.APITokensTable,
 				}))
 			}
+			if routes.OIDCProviderConfig().Enabled {
+				schema.Register(oidc.Migrations())
+			}
 		}
 	}
 
@@ -145,6 +149,8 @@ func (r *ServiceProvider) Boot(app foundation.Application) {
 		commands.NewCreateUser(),
 		commands.NewPruneRememberTokens(),
 		commands.NewPruneAPITokens(tokenTables...),
+		commands.NewManageOIDCClient(),
+		commands.NewPruneOIDC(),
 	})
 
 	// Publishable config — `./artisan vendor:publish --tag=authkit` writes

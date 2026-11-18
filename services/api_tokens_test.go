@@ -96,8 +96,8 @@ func newAPITokenTestService(t *testing.T, max int) (*APITokens, *fakeAPITokensRe
 	users := newFakeRepo()
 	user := seedUser(users, "token@example.com", "secret123")
 	tokens := newFakeAPITokensRepo()
-	now := time.Date(2026, 8, 11, 12, 0, 0, 0, time.UTC)
-	svc := NewAPITokens(tokens, users, fakeHasher{}, nil, []string{"projects:read", "projects:write"}, 90*24*time.Hour, max)
+	now := user.PasswordChangedAt.Add(time.Hour)
+	svc := NewAPITokens(tokens, users, fakeHasher{}, nil, []string{"projects:read", "projects:write"}, 90*24*time.Hour, max, true)
 	svc.now = func() time.Time { return now }
 	return svc, tokens, user, now
 }
@@ -118,6 +118,19 @@ func TestAPITokensIssueAndResolve(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, issued.Token.ID, resolved.ID)
 	assert.NotNil(t, repo.tokens[issued.Token.ID].LastUsedAt)
+}
+
+func TestAPITokensIssuedBeforePasswordChangeAreInvalid(t *testing.T) {
+	svc, _, user, now := newAPITokenTestService(t, 20)
+	issued, err := svc.Issue(context.Background(), IssueAPITokenCommand{
+		UserID: user.ID, Name: "CLI", ExpiresAt: now.Add(time.Hour), Password: "secret123",
+	})
+	require.NoError(t, err)
+
+	user.PasswordChangedAt = issued.Token.CreatedAt.Add(time.Second)
+	svc.users.(*fakeRepo).seed(user)
+	_, err = svc.Resolve(context.Background(), issued.Plaintext)
+	assert.ErrorIs(t, err, ErrInvalidAPIToken)
 }
 
 func TestAPITokensRejectInvalidInputAndCredentials(t *testing.T) {

@@ -267,6 +267,7 @@ The reject-while-impersonating guard returns `403 impersonation_forbidden` on
 | 403 | `forbidden` | `RequireRole` gate failed, or the impersonation gate denied the actor |
 | 403 | `insufficient_scope` | Valid bearer token lacks a required route scope |
 | 403 | `impersonation_forbidden` | Action blocked while impersonating (password change, user management, nested impersonation) |
+| 403 | `impersonation_revoked` | The live actor/target or current impersonation policy no longer authorizes the open switch |
 | 403 | `csrf_failed` | Unsafe request has no same-origin or explicitly trusted Origin/Referer |
 | 409 | `already_impersonating` | An impersonation is already active on this guard (no nesting) |
 | 404 | `not_found` | User does not exist (or the impersonation target is unknown) |
@@ -298,13 +299,14 @@ The reject-while-impersonating guard returns `403 impersonation_forbidden` on
   stale beyond that (or simply wrong) for a known selector is treated as theft
   and revokes the user's whole token family. With 2FA the cookie is issued only
   after the challenge completes. Logout revokes this device's token; a password
-  change (and disabling the account) revokes **all** of the user's remember
-  tokens. Expired rows are pruned lazily on access and by the
+  change (and disabling the account) advances the user's credential epoch, so
+  every older remember token is rejected even if deleting its row fails.
+  Expired/invalid rows are pruned lazily on access and by the
   `auth:prune-remember-tokens` command (schedule it daily).
 - **Disabled accounts**: setting `disabled` on a user (`PUT /auth/users/{id}`)
   locks the account — login returns `403 account_disabled`, and any live session
-  or remember cookie is rejected on its next request. You cannot disable your own
-  account (`400 self_disable`).
+  or older persistent credential is rejected on its next request and cannot
+  revive after re-enabling. You cannot disable your own account (`400 self_disable`).
 - **Active sessions** (when `features.sessions`): each login is tracked in
   `auth_sessions` (session id, IP, user-agent, last-active). `GET /auth/logins`
   returns the user's recent successful sign-ins; `GET /auth/sessions` lists their
@@ -322,7 +324,10 @@ The reject-while-impersonating guard returns `403 impersonation_forbidden` on
   impersonated user with an `impersonatedBy` object ({ guard, id, email }), and the
   password-change, user-management and nested-impersonate routes return
   `403 impersonation_forbidden`. `GET /auth/meta` reports
-  `features.impersonation`. Both the start and stop are audited
+  `features.impersonation`. Profile, session and 2FA support operations remain
+  intentionally delegated to the authorized actor. The actor and policy are
+  revalidated on every switched request; a revoked switch returns
+  `403 impersonation_revoked`. Both the start and stop are audited
   (`auth.impersonation_started` / `auth.impersonation_stopped`).
 
 ## Go API (mounting & host integration)

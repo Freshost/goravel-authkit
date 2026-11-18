@@ -18,7 +18,7 @@ to the repo root (`..`), so nothing needs to be published.
 
 ## Prerequisites
 
-- Go 1.25+
+- Go 1.26+
 - [air](https://github.com/air-verse/air) for hot reload (`go install github.com/air-verse/air@latest`)
 - PostgreSQL on `127.0.0.1:5432` (the default). The package migrations are
   driver-agnostic — `DB_CONNECTION=sqlite` also works; use an **absolute**

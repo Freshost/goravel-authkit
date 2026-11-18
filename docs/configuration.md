@@ -1,5 +1,10 @@
 # Configuration
 
+The optional [OIDC provider](oidc.md) uses `authkit.oidc.provider` and is disabled
+by default. It is independent of personal API tokens and future external OIDC
+login support. See its integration guide for client registration, keys and
+token-lifetime settings.
+
 All behaviour is tuned through one file: `config/authkit.go`, which
 `package:install` writes into your app. The ServiceProvider reads it at boot —
 auto-registering a Goravel session guard and the migrations per guard — and

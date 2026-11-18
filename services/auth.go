@@ -113,22 +113,26 @@ func (s *Auth) UpdateProfile(ctx context.Context, id uuid.UUID, email, name stri
 		if other != nil && other.ID != user.ID {
 			return nil, false, ErrAlreadyExists
 		}
-		user.Email = email
-		user.EmailVerified = nil
 	}
+	var namePtr *string
 	if name != "" {
-		user.Name = &name
-	} else {
-		user.Name = nil
+		namePtr = &name
 	}
 
-	if err := s.repo.Save(ctx, user); err != nil {
+	if err := s.repo.UpdateProfile(ctx, user.ID, email, namePtr, emailChanged); err != nil {
 		if isUniqueViolation(err) {
 			return nil, false, ErrAlreadyExists
 		}
 		return nil, false, errors.Join(ErrInternal, err)
 	}
-	return user, true, nil
+	updated, err := s.repo.FindByID(ctx, user.ID)
+	if err != nil {
+		return nil, false, errors.Join(ErrInternal, err)
+	}
+	if updated == nil {
+		return nil, false, ErrUnauthorized
+	}
+	return updated, true, nil
 }
 
 // isUniqueViolation best-effort detects a unique-constraint failure from the

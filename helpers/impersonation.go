@@ -25,6 +25,7 @@ func ImpersonatorKey(guard string) string {
 // SetImpersonator records that the session's user under targetGuard is being
 // impersonated by m.
 func SetImpersonator(ctx contractshttp.Context, targetGuard string, m ImpersonatorMarker) {
+	ClearAuthentication(ctx, targetGuard)
 	sess := ctx.Request().Session()
 	if sess == nil {
 		return

@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -13,25 +14,23 @@ jobs:
   build-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
-          go-version-file: go.mod
+          go-version: "1.26.x"
           cache: true
 
       - name: gofmt
         run: |
-          unformatted=$(gofmt -l $(git ls-files '*.go'))
-          if [ -n "$unformatted" ]; then
-            echo "These files need gofmt:"; echo "$unformatted"; exit 1
-          fi
+          gofmt -w .
+          git diff --exit-code
 
-      - name: build
-        run: go build ./...
+      - name: Dependencies
+        run: go mod tidy
 
-      - name: vet
-        run: go vet ./...
+      - name: Dependency changes
+        run: git diff -- go.mod go.sum
 
       # Package-level tests (services + middleware) are hermetic — they use fakes,
       # no database. The demo's feature tests live in a separate module and need
@@ -40,3 +39,66 @@ jobs:
         run: go test ./...
         env:
           AUTHKIT_RATE_LIMIT_ATTEMPTS: "100000"
+
+      - name: Race detection
+        run: go test -race ./...
+
+      - name: vet
+        run: go vet ./...
+
+  postgres-feature-tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: authkit_demo
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: demo
+    env:
+      APP_NAME: AuthkitDemo
+      APP_ENV: testing
+      APP_KEY: 0123456789abcdef0123456789abcdef
+      APP_DEBUG: "false"
+      DB_CONNECTION: postgres
+      DB_HOST: 127.0.0.1
+      DB_PORT: "5432"
+      DB_DATABASE: authkit_demo
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      DB_SCHEMA: public
+      AUTHKIT_RATE_LIMIT_IP_ATTEMPTS: "100000"
+      AUTHKIT_RATE_LIMIT_ACCOUNT_ATTEMPTS: "100000"
+      AUTHKIT_RATE_LIMIT_PASSWORD_ATTEMPTS: "100000"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.26.x"
+          cache-dependency-path: |
+            go.sum
+            demo/go.sum
+      - name: Environment
+        run: cp .env.example .env
+      - name: Dependencies
+        run: go mod tidy
+      - name: Dependency changes
+        run: git diff -- go.mod go.sum
+      - name: Migrations
+        run: go run . artisan migrate
+      - name: Feature tests
+        run: go test ./...
+      - name: Race detection
+        run: go test -race ./...
+      - name: vet
+        run: go vet ./...

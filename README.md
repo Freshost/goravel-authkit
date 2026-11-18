@@ -64,6 +64,7 @@ bcrypt (cost 12), and keeps everything server-side.
 | **Remember-me** persistent login — rotating selector/validator tokens, per-guard cookie |
 | **Active-session tracking** — device list + remote termination, keyed by a stable per-guard token |
 | **Personal API tokens** (opt-in) — per-guard tables, mandatory expiry, scopes, one-time plaintext display |
+| **OIDC provider** (opt-in) — standard code flow with PKCE, registered clients, refresh rotation and revocation; see [OIDC integration](docs/oidc.md) |
 | **Admin user management** CRUD behind a fail-closed role gate; keeps at least one active admin (toggleable) |
 | **User impersonation** ("login as user") — same-guard or cross-guard, role/guard-gated and fail-closed, audited (opt-in) |
 | Per-guard **audit log** table + writer |
@@ -76,7 +77,7 @@ bcrypt (cost 12), and keeps everything server-side.
 
 ## Requirements
 
-- **Go** 1.25+
+- **Go** 1.26+
 - **Goravel** v1.18.x
 - A database supported by Goravel (PostgreSQL / MySQL / SQLite), with the session
   and hashing components enabled
@@ -276,8 +277,11 @@ This mounts two endpoints behind the session guard:
 A cross-guard switch keeps the actor signed in to its own guard; same-guard
 replaces the user and "stop" restores them. No remember cookie is issued (the
 switch is ephemeral), both ends are audited, and `GET /auth/me` exposes
-`impersonatedBy` for a UI banner. For finer rules than the config gate, register a
-host hook (it can only tighten the decision):
+`impersonatedBy` for a UI banner. Profile, session and 2FA support operations are
+intentionally delegated; password change, user administration and nested switches
+remain blocked. The actor and policy are revalidated on every switched request,
+so disabling/demoting the actor revokes the open switch. For finer rules than the
+config gate, register a host hook (it can only tighten the decision):
 
 ```go
 authkit.RegisterImpersonationPolicy(myPolicy{}) // implements authkit.Impersonator

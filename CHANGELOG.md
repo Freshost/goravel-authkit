@@ -8,6 +8,19 @@ While the package is pre-1.0, minor versions may contain breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- Optional embedded OIDC provider with Authorization Code + PKCE S256, public
+  and confidential clients, discovery/JWKS/UserInfo, rotating refresh tokens,
+  revocation and session-protected connection management.
+- PostgreSQL integration and concurrency coverage for authorization-code and
+  refresh-token single use, plus CI race and demo feature gates.
+
+### Changed
+
+- Go 1.26 is the minimum supported toolchain, including consumers with OIDC
+  disabled. Goravel remains on the existing 1.18 baseline.
+
 ## [0.6.0] - 2026-08-13
 
 ### Added

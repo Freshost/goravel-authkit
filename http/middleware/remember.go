@@ -56,8 +56,20 @@ func (middleware *rememberLoginMiddleware) Handle(ctx contractshttp.Context) {
 		return
 	}
 
-	userID, rotated, err := remember.Resolve(ctx.Context(), cookie)
+	userID, issuedAt, rotated, err := remember.Resolve(ctx.Context(), cookie)
 	if err != nil {
+		helpers.ClearRememberCookie(ctx, rememberCookieName)
+		ctx.Request().Next()
+		return
+	}
+
+	// Confirm the account still exists and is not locked (loaded from the
+	// instance's table, not Goravel's model-bound provider). A remember token
+	// issued before password_changed_at is invalid even if physical cleanup
+	// failed, so reset/disable credentials cannot later revive.
+	user, err := users.FindByID(ctx.Context(), userID)
+	if err != nil || user == nil || user.IsDisabled() || issuedAt.Before(user.PasswordChangedAt) {
+		_ = remember.RevokeAllForUser(ctx.Context(), userID)
 		helpers.ClearRememberCookie(ctx, rememberCookieName)
 		ctx.Request().Next()
 		return
@@ -70,20 +82,11 @@ func (middleware *rememberLoginMiddleware) Handle(ctx contractshttp.Context) {
 		return
 	}
 
-	// Confirm the account still exists and is not locked (loaded from the
-	// instance's table, not Goravel's model-bound provider).
-	user, err := users.FindByID(ctx.Context(), userID)
-	if err != nil || user == nil || user.IsDisabled() {
-		_ = facades.Auth(ctx).Guard(guard).Logout()
-		_ = remember.RevokeAllForUser(ctx.Context(), userID)
-		helpers.ClearRememberCookie(ctx, rememberCookieName)
-		ctx.Request().Next()
-		return
-	}
-
 	if sess := ctx.Request().Session(); sess != nil {
 		sess.Put(helpers.PasswordChangedAtKey(guard), FormatPasswordTimestamp(user.PasswordChangedAt))
 	}
+	// A rotated remember credential does not prove a fresh interactive login.
+	helpers.ClearAuthentication(ctx, guard)
 	if err := helpers.RegenerateAndPersistSession(ctx); err != nil {
 		facades.Log().Errorf("remember: regenerate session: %v", err)
 	}

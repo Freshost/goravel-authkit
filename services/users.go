@@ -161,11 +161,6 @@ func (s *Users) Create(ctx context.Context, email, name, password, role string) 
 // management role: it cannot self-disable, and it cannot be disabled or demoted
 // away from its management role if it is the last active admin (ErrLastAdmin).
 func (s *Users) Update(ctx context.Context, id uuid.UUID, email, name, role string, disabled *bool, actorID uuid.UUID) (*models.User, error) {
-	u, err := s.GetByID(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-
 	email = normalizeEmail(email)
 	name = strings.TrimSpace(name)
 	role = strings.TrimSpace(role)
@@ -176,61 +171,85 @@ func (s *Users) Update(ctx context.Context, id uuid.UUID, email, name, role stri
 		return nil, errors.Join(ErrValidation, errors.New("invalid role"))
 	}
 
-	// Guard the active-admin invariant before any mutation. Only relevant when
-	// the target currently holds a management role and is currently active.
-	wasManagement := s.isManagementRole(u.Role) && !u.IsDisabled()
-	if wasManagement {
+	disabledNow := false
+	err := s.repo.WithinTransaction(ctx, func(repo repositories.UsersRepository) error {
+		if err := repo.LockManagementInvariant(ctx, s.managementRoles); err != nil {
+			return errors.Join(ErrInternal, err)
+		}
+		u, err := repo.FindByID(ctx, id)
+		if err != nil {
+			return errors.Join(ErrInternal, err)
+		}
+		if u == nil {
+			return ErrNotFound
+		}
+
+		// The lock above makes this count-and-update decision atomic relative to
+		// every other management mutation.
+		wasManagement := s.isManagementRole(u.Role) && !u.IsDisabled()
 		disabling := disabled != nil && *disabled
 		demoting := role != "" && !s.isManagementRole(role)
-		if disabling || demoting {
-			// Self-disable is always refused (mirrors the controller guard so a
-			// non-controller caller can't bypass it).
+		if wasManagement && (disabling || demoting) {
 			if disabling && actorID != uuid.Nil && actorID == id {
-				return nil, errors.Join(ErrValidation, errors.New("you cannot disable your own account"))
+				return errors.Join(ErrValidation, errors.New("you cannot disable your own account"))
 			}
-			others, err := s.repo.CountActiveByRolesExcluding(ctx, s.managementRoles, id)
+			others, err := repo.CountActiveByRolesExcluding(ctx, s.managementRoles, id)
 			if err != nil {
-				return nil, errors.Join(ErrInternal, err)
+				return errors.Join(ErrInternal, err)
 			}
 			if others == 0 {
-				return nil, ErrLastAdmin
+				return ErrLastAdmin
 			}
 		}
-	}
 
-	if email != u.Email {
-		other, err := s.repo.FindByEmail(ctx, email)
-		if err != nil {
-			return nil, errors.Join(ErrInternal, err)
+		if email != u.Email {
+			other, err := repo.FindByEmail(ctx, email)
+			if err != nil {
+				return errors.Join(ErrInternal, err)
+			}
+			if other != nil && other.ID != u.ID {
+				return ErrAlreadyExists
+			}
 		}
-		if other != nil && other.ID != u.ID {
-			return nil, ErrAlreadyExists
-		}
-	}
 
-	u.Email = email
-	if name != "" {
-		u.Name = &name
-	} else {
-		u.Name = nil
-	}
-	if role != "" {
-		u.Role = role
-	}
-	if disabled != nil {
-		switch {
-		case *disabled && u.DisabledAt == nil:
-			now := time.Now().UTC()
-			u.DisabledAt = &now
-		case !*disabled:
-			u.DisabledAt = nil
+		var namePtr *string
+		if name != "" {
+			namePtr = &name
 		}
+		resolvedRole := u.Role
+		if role != "" {
+			resolvedRole = role
+		}
+		disabledAt := u.DisabledAt
+		var credentialChangedAt *time.Time
+		if disabled != nil {
+			switch {
+			case *disabled && u.DisabledAt == nil:
+				now := time.Now().UTC()
+				disabledAt = &now
+				credentialChangedAt = &now
+				disabledNow = true
+			case !*disabled:
+				disabledAt = nil
+			}
+		}
+		if err := repo.UpdateManaged(ctx, u.ID, email, namePtr, resolvedRole, disabledAt, disabled != nil, credentialChangedAt); err != nil {
+			if isUniqueViolation(err) {
+				return ErrAlreadyExists
+			}
+			return errors.Join(ErrInternal, err)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
-	if err := s.repo.Save(ctx, u); err != nil {
-		return nil, errors.Join(ErrInternal, err)
+	u, err := s.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
 	}
-	if disabled != nil && *disabled && s.apiTokens != nil {
-		if err := s.apiTokens.RevokeAll(ctx, u.ID); err != nil {
+	if disabledNow && s.apiTokens != nil {
+		if err := s.apiTokens.RevokeAll(ctx, id); err != nil {
 			return nil, err
 		}
 	}
@@ -241,34 +260,44 @@ func (s *Users) Update(ctx context.Context, id uuid.UUID, email, name, role stri
 // counts users holding a management role (not total rows): deleting a
 // management user is refused when no OTHER active management user remains.
 func (s *Users) Delete(ctx context.Context, id uuid.UUID) error {
-	u, err := s.GetByID(ctx, id)
+	err := s.repo.WithinTransaction(ctx, func(repo repositories.UsersRepository) error {
+		if err := repo.LockManagementInvariant(ctx, s.managementRoles); err != nil {
+			return errors.Join(ErrInternal, err)
+		}
+		u, err := repo.FindByID(ctx, id)
+		if err != nil {
+			return errors.Join(ErrInternal, err)
+		}
+		if u == nil {
+			return ErrNotFound
+		}
+		if s.isManagementRole(u.Role) {
+			others, err := repo.CountActiveByRolesExcluding(ctx, s.managementRoles, id)
+			if err != nil {
+				return errors.Join(ErrInternal, err)
+			}
+			if others == 0 {
+				return ErrLastAdmin
+			}
+		} else if len(s.managementRoles) == 0 {
+			count, err := repo.Count(ctx)
+			if err != nil {
+				return errors.Join(ErrInternal, err)
+			}
+			if count <= 1 {
+				return ErrLastAdmin
+			}
+		}
+		if err := repo.Delete(ctx, u); err != nil {
+			return errors.Join(ErrInternal, err)
+		}
+		return nil
+	})
 	if err != nil {
 		return err
 	}
-	if s.isManagementRole(u.Role) {
-		others, err := s.repo.CountActiveByRolesExcluding(ctx, s.managementRoles, id)
-		if err != nil {
-			return errors.Join(ErrInternal, err)
-		}
-		if others == 0 {
-			return ErrLastAdmin
-		}
-	} else if len(s.managementRoles) == 0 {
-		// No management roles configured: fall back to the legacy "never remove
-		// the last remaining user" guard so a single-user install stays usable.
-		count, err := s.repo.Count(ctx)
-		if err != nil {
-			return errors.Join(ErrInternal, err)
-		}
-		if count <= 1 {
-			return ErrLastAdmin
-		}
-	}
-	if err := s.repo.Delete(ctx, u); err != nil {
-		return errors.Join(ErrInternal, err)
-	}
 	if s.apiTokens != nil {
-		if err := s.apiTokens.RevokeAll(ctx, u.ID); err != nil {
+		if err := s.apiTokens.RevokeAll(ctx, id); err != nil {
 			return err
 		}
 	}

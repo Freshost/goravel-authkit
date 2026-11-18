@@ -99,3 +99,18 @@ func (s *RememberTestSuite) TestDisabledAccountRememberRefused() {
 	s.Require().NoError(err)
 	resp.AssertStatus(http.StatusUnauthorized)
 }
+
+func (s *RememberTestSuite) TestPasswordEpochInvalidatesRememberCookieWithoutCleanup() {
+	t := s.T()
+	remember := s.loginRemember()
+
+	// Simulate the atomic part of an admin password reset. Even if deleting the
+	// remember row later fails, the credential epoch alone must reject the cookie.
+	_, err := facades.Orm().Query().Model(&authmodels.User{}).
+		Where("email", s.email).Update("password_changed_at", time.Now().Add(time.Second).UTC())
+	s.Require().NoError(err)
+
+	resp, err := s.Http(t).WithCookie(remember).Get("/api/v1/auth/me")
+	s.Require().NoError(err)
+	resp.AssertStatus(http.StatusUnauthorized)
+}

@@ -143,9 +143,11 @@ func TestUsersUpdate_DisableAndEnable(t *testing.T) {
 	svc := newUsersSvc(repo, nil)
 
 	disabled := true
+	previousCredentialEpoch := admin.PasswordChangedAt
 	got, err := svc.Update(context.Background(), admin.ID, "admin@example.com", "Admin", "admin", &disabled, uuid.Nil)
 	require.NoError(t, err)
 	assert.True(t, got.IsDisabled())
+	assert.True(t, got.PasswordChangedAt.After(previousCredentialEpoch), "disable must invalidate credentials permanently")
 
 	enabled := false
 	got, err = svc.Update(context.Background(), admin.ID, "admin@example.com", "Admin", "admin", &enabled, uuid.Nil)

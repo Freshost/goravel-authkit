@@ -1,7 +1,7 @@
 # Installation
 
 `goravel-authkit` is a backend Go module for [Goravel](https://www.goravel.dev)
-apps (tested against Goravel **v1.18.x**, Go **1.25+**, PostgreSQL). It owns the
+apps (targeting Goravel **v1.18.x**, Go **1.26+**, PostgreSQL). It owns the
 `users` and `audit_logs` tables (plus a guard's remember-token and session
 tables) — or, in multi-guard mode, the per-guard tables you declare.
 
