@@ -20,6 +20,13 @@ While the package is pre-1.0, minor versions may contain breaking changes.
 
 - Go 1.26 is the minimum supported toolchain, including consumers with OIDC
   disabled. Goravel remains on the existing 1.18 baseline.
+- Existing installations must apply the credential timestamp precision
+  migrations before starting the upgraded application.
+
+### Fixed
+
+- Serialize and strictly advance credential epochs so rapid password changes
+  and account disable/re-enable cycles invalidate existing credentials.
 
 ## [0.8.0] - 2026-11-04
 

@@ -70,6 +70,7 @@ jobs:
       APP_ENV: testing
       APP_KEY: 0123456789abcdef0123456789abcdef
       APP_DEBUG: "false"
+      BCRYPT_ROUNDS: "4"
       DB_CONNECTION: postgres
       DB_HOST: 127.0.0.1
       DB_PORT: "5432"
