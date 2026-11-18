@@ -206,5 +206,5 @@ func TestTwoFactorMutationsPreserveNotFoundErrors(t *testing.T) {
 	err = tf.Disable(context.Background(), id)
 	require.ErrorIs(t, err, ErrNotFound)
 	_, err = tf.RegenerateRecoveryCodes(context.Background(), id)
-	require.ErrorIs(t, err, ErrNotFound)
+	require.ErrorIs(t, err, ErrTwoFactorNotEnrolled)
 }
