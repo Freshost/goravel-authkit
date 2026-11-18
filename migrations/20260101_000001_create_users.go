@@ -40,7 +40,7 @@ func (r *CreateUsers) Up() error {
 		table.Text("password_hash").Nullable()
 		// Stamped on every password change; compared per-request for session
 		// invalidation.
-		table.TimestampTz("password_changed_at").UseCurrent()
+		table.TimestampTz("password_changed_at", 6).UseCurrent()
 		// No DB-side default: the user-management service always sets the role
 		// explicitly, so a created row can never silently become "admin"
 		// (privilege escalation). See 20260101_000009 for the existing-DB drop.

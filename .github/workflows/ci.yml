@@ -30,7 +30,7 @@ jobs:
         run: go mod tidy
 
       - name: Dependency changes
-        run: git diff -- go.mod go.sum
+        run: git diff --exit-code -- go.mod go.sum
 
       # Package-level tests (services + middleware) are hermetic — they use fakes,
       # no database. The demo's feature tests live in a separate module and need
@@ -93,7 +93,7 @@ jobs:
       - name: Dependencies
         run: go mod tidy
       - name: Dependency changes
-        run: git diff -- go.mod go.sum
+        run: git diff --exit-code -- go.mod go.sum
       - name: Migrations
         run: go run . artisan migrate
       - name: Feature tests

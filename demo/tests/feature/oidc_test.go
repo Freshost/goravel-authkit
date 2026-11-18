@@ -75,7 +75,7 @@ func (s *OIDCTestSuite) SetupTest() {
 func (s *OIDCTestSuite) TearDownTest() {
 	q := facades.Orm().Query()
 	s.NoError(repositories.NewSessionsWithTable("client_auth_sessions").DeleteByUser(context.Background(), s.user.ID))
-	_, auditErr := q.Table("client_audit_logs").Where("actor_id = ? OR metadata->>'client_id' = ?", s.user.ID, s.clientID).Delete(&models.AuditLog{})
+	_, auditErr := q.Exec("DELETE FROM client_audit_logs WHERE actor_id = ? OR metadata->>'client_id' = ?", s.user.ID, s.clientID)
 	s.NoError(auditErr)
 	_, err := q.Exec("DELETE FROM authkit_oidc_tokens WHERE grant_id IN (SELECT id FROM authkit_oidc_grants WHERE issuer = ? AND client_id = ?)", s.provider.Issuer(), s.clientID)
 	s.NoError(err)
@@ -218,8 +218,17 @@ func (s *OIDCTestSuite) TestPasswordChangeInvalidatesOriginalRefreshGrant() {
 	r.AssertOk()
 	var out ciOIDCTokens
 	s.Require().NoError(r.Bind(&out))
-	s.Require().NoError(repositories.NewUsersWithTable("client_users").UpdatePassword(context.Background(), s.user.ID, *s.user.PasswordHash, time.Now().UTC()))
-	_, err := s.provider.ResolveAccessToken(context.Background(), out.Access, "https://api.example")
+	users := repositories.NewUsersWithTable("client_users")
+	previous, err := users.FindByID(context.Background(), s.user.ID)
+	s.Require().NoError(err)
+	s.Require().NotNil(previous)
+	// Force an identical requested epoch; the repository must still advance it.
+	s.Require().NoError(users.UpdatePassword(context.Background(), s.user.ID, *s.user.PasswordHash, previous.PasswordChangedAt))
+	updated, err := users.FindByID(context.Background(), s.user.ID)
+	s.Require().NoError(err)
+	s.Require().NotNil(updated)
+	s.Require().True(updated.PasswordChangedAt.After(previous.PasswordChangedAt))
+	_, err = s.provider.ResolveAccessToken(context.Background(), out.Access, "https://api.example")
 	s.ErrorIs(err, oidc.ErrInvalidGrant)
 	form := url.Values{"grant_type": {"refresh_token"}, "client_id": {s.clientID}, "refresh_token": {out.Refresh}}
 	r, err = s.Http(s.T()).WithHeader("Content-Type", "application/x-www-form-urlencoded").Post("/ci-oidc/oauth/token", strings.NewReader(form.Encode()))

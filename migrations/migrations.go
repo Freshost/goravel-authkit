@@ -65,5 +65,8 @@ func ForTables(cfg MigrationConfig) []schema.Migration {
 		&DropUsersRoleDefault{table: cfg.UsersTable, signature: sig(cfg.UsersTable, "role_no_default")},
 		&CreateAPITokens{table: cfg.APITokensTable, signature: sig(cfg.APITokensTable, "create")},
 		&AddAuditLoginIndex{table: cfg.AuditTable, signature: sig(cfg.AuditTable, "login_index")},
+		&CredentialTimestampPrecision{table: cfg.UsersTable, column: "password_changed_at", signature: sig(cfg.UsersTable, "credential_precision")},
+		&CredentialTimestampPrecision{table: cfg.RememberTokensTable, column: "created_at", signature: sig(cfg.RememberTokensTable, "credential_precision")},
+		&CredentialTimestampPrecision{table: cfg.APITokensTable, column: "created_at", signature: sig(cfg.APITokensTable, "credential_precision")},
 	}
 }

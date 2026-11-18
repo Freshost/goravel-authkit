@@ -208,6 +208,11 @@ resource permissions in the host service. ID tokens are not API access tokens.
   epoch or absolute grant expiry. Merely regenerating recovery-code inventory
   does not change the enrolled credential; explicitly revoke connections when
   the host's incident policy requires it.
+- Authkit repository mutations serialize credential changes and strictly advance
+  the password epoch. Apply the credential timestamp precision migrations to
+  existing user, remember-token and personal-token tables before upgrading.
+  Hosts writing credentials or disabling accounts directly must preserve this
+  invariant; repeating the same timestamp cannot invalidate an older grant.
 - Browser logout terminates the browser session; it does not revoke independent
   applications. Application logout should use the standard revocation endpoint
   and remove its local credentials. Offline local deletion cannot guarantee

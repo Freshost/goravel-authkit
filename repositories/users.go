@@ -167,7 +167,7 @@ func (r *Users) UpdateManaged(ctx context.Context, id uuid.UUID, email string, n
 		values["disabled_at"] = disabledAt
 	}
 	if passwordChangedAt != nil {
-		values["password_changed_at"] = *passwordChangedAt
+		return r.updateCredentialEpoch(ctx, id, values, *passwordChangedAt)
 	}
 	_, err := r.query(ctx).Model(&models.User{}).Where("id", id).Update(values)
 	return err
@@ -179,11 +179,29 @@ func (r *Users) Delete(ctx context.Context, u *models.User) error {
 }
 
 func (r *Users) UpdatePassword(ctx context.Context, id uuid.UUID, passwordHash string, changedAt time.Time) error {
-	_, err := r.query(ctx).Model(&models.User{}).Where("id", id).Update(map[string]any{
-		"password_hash":       passwordHash,
-		"password_changed_at": changedAt,
+	return r.updateCredentialEpoch(ctx, id, map[string]any{"password_hash": passwordHash}, changedAt)
+}
+
+// Serialize credential changes and advance by at least one stored microsecond
+// so rapid changes cannot retain an epoch. The precision migration is required.
+func (r *Users) updateCredentialEpoch(ctx context.Context, id uuid.UUID, values map[string]any, requested time.Time) error {
+	return r.WithinTransaction(ctx, func(repo UsersRepository) error {
+		tx := repo.(*Users)
+		var user models.User
+		if err := tx.query(ctx).Where("id", id).LockForUpdate().First(&user); err != nil {
+			return err
+		}
+		if user.ID == uuid.Nil {
+			return gorm.ErrRecordNotFound
+		}
+		epoch := requested.UTC().Truncate(time.Microsecond)
+		if !epoch.After(user.PasswordChangedAt) {
+			epoch = user.PasswordChangedAt.UTC().Truncate(time.Microsecond).Add(time.Microsecond)
+		}
+		values["password_changed_at"] = epoch
+		_, err := tx.query(ctx).Model(&models.User{}).Where("id", id).Update(values)
+		return err
 	})
-	return err
 }
 
 func (r *Users) UpdateTwoFactor(ctx context.Context, id uuid.UUID, secret, recoveryCodes *string, confirmedAt *time.Time) error {

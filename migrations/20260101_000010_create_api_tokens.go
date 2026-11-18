@@ -28,7 +28,7 @@ func (r *CreateAPITokens) Up() error {
 		table.TimestampTz("expires_at")
 		table.TimestampTz("last_used_at").Nullable()
 		table.TimestampTz("revoked_at").Nullable()
-		table.TimestampTz("created_at").UseCurrent()
+		table.TimestampTz("created_at", 6).UseCurrent()
 		table.Unique("selector")
 		table.Index("user_id")
 		table.Index("expires_at")

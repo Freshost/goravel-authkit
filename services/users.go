@@ -322,8 +322,12 @@ func (s *Users) SetPassword(ctx context.Context, id uuid.UUID, newPassword strin
 	if err := s.repo.UpdatePassword(ctx, id, hashed, changedAt); err != nil {
 		return nil, errors.Join(ErrInternal, err)
 	}
-	u.PasswordHash = &hashed
-	u.PasswordChangedAt = changedAt
+	// Re-read the serialized credential epoch rather than returning the caller's
+	// timestamp, which may have been advanced to preserve database precision.
+	u, err = s.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
 	if s.apiTokens != nil && s.revokeAPITokensOnPasswordChange {
 		if err := s.apiTokens.RevokeAll(ctx, u.ID); err != nil {
 			return nil, err

@@ -9,6 +9,12 @@ Goravel 1.18 changed `http.Middleware` from a function to an interface. Normal
 Authkit factory usage through `router.Middleware(...)` is unchanged; code that
 manually invoked a returned middleware value must use `middleware.Handle(ctx)`.
 
+Existing installations must run the new credential timestamp precision migrations
+for each guard before starting the upgraded application. They retain existing
+values and increase user password epochs and remember/personal-token issuance
+timestamps to microsecond precision. Repository mutations now serialize and
+strictly advance password epochs, including repeated changes within one second.
+
 ## Quick install (fresh app)
 
 ```bash
