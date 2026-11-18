@@ -85,7 +85,15 @@
         {
           "task": "Complete authorization",
           "match": "https://localhost.emobix.co.uk:8443/test/*/callback*",
-          "optional": true
+          "optional": true,
+          "commands": [
+            [
+              "wait",
+              "id",
+              "submission_complete",
+              10
+            ]
+          ]
         }
       ]
     }

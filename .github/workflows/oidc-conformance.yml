@@ -96,7 +96,7 @@ jobs:
       - name: Start suite HTTPS endpoint
         run: >-
           docker run -d --name oidf-https --network host
-          -v "$GITHUB_WORKSPACE/.ci/oidf/nginx.conf:/etc/nginx/nginx.conf:ro"
+          --add-host server:127.0.0.1
           registry.gitlab.com/openid/conformance-suite/nginx:release-v5.3.4
       - name: Wait for HTTPS endpoints
         run: |
@@ -128,9 +128,9 @@ jobs:
           cp "$RUNNER_TEMP/authkit-oidf.log" oidf-results/host.log
           git -C "$RUNNER_TEMP/oidf" rev-parse HEAD > oidf-results/suite-revision.txt
           git rev-parse HEAD > oidf-results/host-revision.txt
-          curl --insecure --fail "$CONFORMANCE_SERVER/api/plan" -o oidf-results/plans.json
+          curl --insecure --fail "${CONFORMANCE_SERVER}api/plan" -o oidf-results/plans.json
           jq -r '.data[] | .id // ._id' oidf-results/plans.json | while read -r plan_id; do
-            curl --insecure --fail "$CONFORMANCE_SERVER/api/plan/export/$plan_id" -o "oidf-results/$plan_id.zip"
+            curl --insecure --fail "${CONFORMANCE_SERVER}api/plan/export/$plan_id" -o "oidf-results/$plan_id.zip"
           done
       - uses: actions/upload-artifact@v6
         if: always()
