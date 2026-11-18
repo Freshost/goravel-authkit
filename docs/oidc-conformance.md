@@ -93,16 +93,15 @@ This is assessed as a suite mismatch for an optional unsupported feature, based
 on the actual request and the unmodified suite's
 [request builder](https://gitlab.com/openid/conformance-suite/-/blob/release-v5.3.4/src/main/java/net/openid/conformance/condition/client/AbstractBuildRequestObjectRedirectToAuthorizationEndpoint.java)
 and [response handler](https://gitlab.com/openid/conformance-suite/-/blob/release-v5.3.4/src/main/java/net/openid/conformance/openid/AbstractOIDCCRequestObjectServerTest.java).
-The upstream maintainers have not confirmed this assessment. Evidence is
-retained and this failure remains visible in CI. The public PKCE module runs
+The upstream maintainers have not confirmed this assessment. Evidence and the
+original failed CI run are retained. The public PKCE module runs
 independently even when another plan fails.
 
 The provider neither parses unsupported JWT request objects nor advertises
 algorithms for an unsupported capability. An empty algorithm list is also
 inappropriate: [Discovery 4.2](https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderConfigurationResponse)
-requires zero-element claims to be omitted. The release conformance gate remains
-open until this result is resolved with the suite maintainers or its handling is
-explicitly accepted in the release review. No OpenID certification is claimed.
+requires zero-element claims to be omitted. The engineering disposition and
+corrected-suite verification are recorded below. No OpenID certification is claimed.
 
 ## Request transport correction and release evidence review
 
@@ -119,9 +118,33 @@ resulting build. The patch and SHA-256 are included in the evidence artifact.
 This is a corrected-suite verification, not an unmodified 5.3.4 pass or an OIDF
 certification. Remove the patch once an official release includes the correction.
 
+### Verified release profile
+
+[Corrected-suite CI](https://github.com/Freshost/goravel-authkit/actions/runs/44375639863)
+completed all four profiles with zero failure conditions. Its 11 Java transport
+regression tests also passed. [Regression CI](https://github.com/Freshost/goravel-authkit/actions/runs/44375639725)
+passed package and PostgreSQL feature tests, race detection, vet, formatting and
+dependency consistency.
+
+| Profile | Raw module results |
+| --- | --- |
+| Config OP | 1 passed; no warnings or failures |
+| Basic OP | 23 passed, 4 warning, 4 optional skipped, 4 review |
+| Form Post Basic OP | 23 passed, 4 warning, 4 optional skipped, 4 review |
+| Public S256 PKCE | 1 passed; no warnings or failures |
+
+Each Basic profile has five documented warning conditions across four modules.
+The formerly failing Form Post module now receives an outer `response_mode`,
+verifies the POST response and records the permitted unsupported-feature skip.
+No failure is suppressed or accepted. Together with the evidence review below,
+this closes the internal engineering conformance finding for the supported first
+release profile. It does not represent upstream acceptance of the patch or OIDF
+certification.
+
 The internal engineering review of the eight `REVIEW` cases in
 [the retained verification](https://github.com/Freshost/goravel-authkit/actions/runs/44337214165)
-found no behavior gaps:
+found no behavior gaps. The corrected-suite exports retain the same eight
+review cases and no failure or warning conditions in those modules:
 
 | Case, in both query and Form Post | Reviewed evidence |
 | --- | --- |
