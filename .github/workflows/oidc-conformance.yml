@@ -91,6 +91,7 @@ jobs:
           -e MONGODB_HOST=127.0.0.1 -e SPRING_PROFILES_ACTIVE=dev
           -e OIDC_GOOGLE_CLIENTID=ci-google -e OIDC_GOOGLE_SECRET=ci-google
           -e OIDC_GITLAB_CLIENTID=ci-gitlab -e OIDC_GITLAB_SECRET=ci-gitlab
+          -e JAVA_EXTRA_ARGS=-Dlogging.level.net.openid.conformance.frontchannel=DEBUG
           registry.gitlab.com/openid/conformance-suite:release-v5.3.4
       - name: Start suite HTTPS endpoint
         run: >-
@@ -101,14 +102,23 @@ jobs:
         run: |
           curl --insecure --fail --retry 30 --retry-delay 2 --retry-all-errors https://localhost.emobix.co.uk:9443/oidc/.well-known/openid-configuration
           curl --insecure --fail --retry 60 --retry-delay 2 --retry-all-errors https://localhost.emobix.co.uk:8443/api/runner/available -o /dev/null
-      - name: Run official Config and Basic OP plans
+      - name: Config OP plan
         run: |
           mkdir -p oidf-results
+          python "$RUNNER_TEMP/oidf/scripts/run-test-plan.py" --no-parallel --export-dir oidf-results \
+            oidcc-config-certification-test-plan .ci/oidf/config.json
+      - name: Basic OP plan
+        run: >-
+          python "$RUNNER_TEMP/oidf/scripts/run-test-plan.py" --no-parallel --export-dir oidf-results
+          'oidcc-basic-certification-test-plan[server_metadata=discovery][client_registration=static_client]' .ci/oidf/config.json
+      - name: Form Post Basic OP plan
+        run: >-
+          python "$RUNNER_TEMP/oidf/scripts/run-test-plan.py" --no-parallel --export-dir oidf-results
+          'oidcc-formpost-basic-certification-test-plan[server_metadata=discovery][client_registration=static_client]' .ci/oidf/config.json
+      - name: Public PKCE module
+        run: |
           jq '.client = {client_id: "oidf-public", scope: "openid profile email"}' .ci/oidf/config.json > .ci/oidf/public.json
           python "$RUNNER_TEMP/oidf/scripts/run-test-plan.py" --no-parallel --export-dir oidf-results \
-            oidcc-config-certification-test-plan .ci/oidf/config.json \
-            'oidcc-basic-certification-test-plan[server_metadata=discovery][client_registration=static_client]' .ci/oidf/config.json \
-            'oidcc-formpost-basic-certification-test-plan[server_metadata=discovery][client_registration=static_client]' .ci/oidf/config.json \
             'oidcc-test-plan[client_auth_type=none][response_type=code][response_mode=default][client_registration=static_client]:oidcc-ensure-request-with-valid-pkce-succeeds' .ci/oidf/public.json
       - name: Export suite diagnostics
         if: always()
@@ -116,6 +126,12 @@ jobs:
           mkdir -p oidf-results
           docker logs oidf-server > oidf-results/suite.log 2>&1 || true
           cp "$RUNNER_TEMP/authkit-oidf.log" oidf-results/host.log
+          git -C "$RUNNER_TEMP/oidf" rev-parse HEAD > oidf-results/suite-revision.txt
+          git rev-parse HEAD > oidf-results/host-revision.txt
+          curl --insecure --fail "$CONFORMANCE_SERVER/api/plan" -o oidf-results/plans.json
+          jq -r '.data[] | .id // ._id' oidf-results/plans.json | while read -r plan_id; do
+            curl --insecure --fail "$CONFORMANCE_SERVER/api/plan/export/$plan_id" -o "oidf-results/$plan_id.zip"
+          done
       - uses: actions/upload-artifact@v6
         if: always()
         with:
