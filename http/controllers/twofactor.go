@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
@@ -61,8 +62,14 @@ func (c *TwoFactorController) Challenge(ctx contractshttp.Context) contractshttp
 		return c.badRequest(ctx, "Invalid request body")
 	}
 
-	user, err := c.users.GetByID(ctx.Context(), id)
+	var pending helpers.PendingAuthentication
+	rawProof, _ := sess.Get(helpers.PendingAuthenticationKey(c.guard)).(string)
+	_ = json.Unmarshal([]byte(rawProof), &pending)
+	user, err := c.auth.PendingLogin(ctx.Context(), id, pending.PasswordStamp, pending.TwoFactorStamp, pending.ExpiresAt)
 	if err != nil {
+		sess.Forget(helpers.TwoFactorUserIDKey(c.guard))
+		sess.Forget(helpers.PendingAuthenticationKey(c.guard))
+		sess.Forget(helpers.RememberIntentKey(c.guard))
 		return c.unauthorized(ctx, "no pending two-factor challenge")
 	}
 

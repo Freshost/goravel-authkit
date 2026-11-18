@@ -33,17 +33,21 @@ type SessionRepository interface {
 }
 
 // Sessions is the ORM-backed SessionRepository, bound to a concrete table.
-type Sessions struct{ table string }
+type Sessions struct{ table, rememberTable string }
 
 // NewSessions returns an ORM-backed sessions repository over the default table.
 func NewSessions() *Sessions { return NewSessionsWithTable(DefaultSessionsTable) }
 
 // NewSessionsWithTable returns an ORM-backed sessions repository over the named table.
-func NewSessionsWithTable(table string) *Sessions {
+func NewSessionsWithTable(table string, rememberTables ...string) *Sessions {
 	if table == "" {
 		table = DefaultSessionsTable
 	}
-	return &Sessions{table: table}
+	remember := DefaultRememberTokensTable
+	if len(rememberTables) > 0 && rememberTables[0] != "" {
+		remember = rememberTables[0]
+	}
+	return &Sessions{table: table, rememberTable: remember}
 }
 
 var _ SessionRepository = (*Sessions)(nil)
@@ -53,7 +57,28 @@ func (r *Sessions) query(ctx context.Context) ormcontract.Query {
 }
 
 func (r *Sessions) Create(ctx context.Context, s *models.AuthSession) error {
-	return r.query(ctx).Create(s)
+	return facades.Orm().WithContext(ctx).Transaction(func(tx ormcontract.Query) error {
+		if s.RememberSelector != "" {
+			var credential models.RememberToken
+			if err := tx.Table(r.rememberTable).Where("selector", s.RememberSelector).Where("session_id", s.SessionID).Where("user_id", s.UserID).LockForUpdate().First(&credential); err != nil {
+				return err
+			}
+			if credential.ID == uuid.Nil || !time.Now().Before(credential.ExpiresAt) {
+				return gorm.ErrRecordNotFound
+			}
+		}
+		var previous models.AuthSession
+		if err := tx.Table(r.table).Where("session_id", s.SessionID).LockForUpdate().First(&previous); err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		if previous.ID != uuid.Nil {
+			if previous.UserID != s.UserID {
+				return gorm.ErrRecordNotFound
+			}
+			s.ID, s.CreatedAt = previous.ID, previous.CreatedAt
+		}
+		return tx.Table(r.table).Save(s)
+	})
 }
 
 func (r *Sessions) FindByID(ctx context.Context, id uuid.UUID) (*models.AuthSession, error) {
@@ -90,26 +115,35 @@ func (r *Sessions) ListByUser(ctx context.Context, userID uuid.UUID, activeSince
 	return sessions, nil
 }
 
+// Delete the persistent credential first so a concurrent restore cannot replace a revoked session.
+func (r *Sessions) delete(ctx context.Context, condition string, args ...any) error {
+	return facades.Orm().WithContext(ctx).Transaction(func(tx ormcontract.Query) error {
+		var credentials []models.RememberToken
+		if err := tx.Table(r.rememberTable).Where(condition, args...).OrderBy("id").LockForUpdate().Find(&credentials); err != nil {
+			return err
+		}
+		if _, err := tx.Table(r.rememberTable).Where(condition, args...).Delete(&models.RememberToken{}); err != nil {
+			return err
+		}
+		_, err := tx.Table(r.table).Where(condition, args...).Delete(&models.AuthSession{})
+		return err
+	})
+}
 func (r *Sessions) DeleteByID(ctx context.Context, id uuid.UUID) error {
-	_, err := r.query(ctx).Where("id", id).Delete(&models.AuthSession{})
-	return err
+	session, err := r.FindByID(ctx, id)
+	if err != nil || session == nil {
+		return err
+	}
+	return r.DeleteBySessionID(ctx, session.SessionID)
 }
-
 func (r *Sessions) DeleteBySessionID(ctx context.Context, sessionID string) error {
-	_, err := r.query(ctx).Where("session_id", sessionID).Delete(&models.AuthSession{})
-	return err
+	return r.delete(ctx, "session_id = ?", sessionID)
 }
-
 func (r *Sessions) DeleteOthersForUser(ctx context.Context, userID uuid.UUID, exceptSessionID string) error {
-	_, err := r.query(ctx).
-		Where("user_id", userID).Where("session_id != ?", exceptSessionID).
-		Delete(&models.AuthSession{})
-	return err
+	return r.delete(ctx, "user_id = ? AND session_id != ?", userID, exceptSessionID)
 }
-
 func (r *Sessions) DeleteByUser(ctx context.Context, userID uuid.UUID) error {
-	_, err := r.query(ctx).Where("user_id", userID).Delete(&models.AuthSession{})
-	return err
+	return r.delete(ctx, "user_id = ?", userID)
 }
 
 func (r *Sessions) DeleteStale(ctx context.Context, before time.Time) error {

@@ -25,6 +25,15 @@ While the package is pre-1.0, minor versions may contain breaking changes.
 
 ### Fixed
 
+- Bind pending login, impersonation and remember credentials to the verified
+  password version; retain a monotonic MFA generation through disable/re-enrollment.
+- Enforce remote session termination on application routes and revoke linked
+  remember credentials atomically with concurrent restoration.
+- Serialize MFA changes and personal-token quotas; clear replay state on key
+  replacement and email verification on administrator address changes.
+- Bound OIDC consent queries, fix orphan request cleanup, respect all guard tables
+  and session lifetimes during pruning, and repair the demo container build.
+
 - Serialize and strictly advance credential epochs so rapid password changes
   and account disable/re-enable cycles invalidate existing credentials.
 

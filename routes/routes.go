@@ -328,7 +328,7 @@ func register(router route.Router, opts Options, delegationGuards []Options) {
 
 	var apiTokensSvc *services.APITokens
 	if opts.EnableAPITokens {
-		apiTokensSvc = services.NewAPITokens(repositories.NewAPITokensWithTable(opts.APITokensTable), usersRepo, hasher, twoFactorSvc, opts.APITokenAllowedScopes, opts.APITokenMaxLifetime, opts.APITokenMaxPerUser, !opts.KeepAPITokensOnPasswordChange)
+		apiTokensSvc = services.NewAPITokens(repositories.NewAPITokensWithTable(opts.APITokensTable, opts.UsersTable), usersRepo, hasher, twoFactorSvc, opts.APITokenAllowedScopes, opts.APITokenMaxLifetime, opts.APITokenMaxPerUser, !opts.KeepAPITokensOnPasswordChange)
 		if opts.APITokenAllowImpersonatedCreation && opts.ImpersonationAllowSensitiveActions {
 			actors := make(map[string]services.APITokenDelegationGuard)
 			// Use the actual registration snapshot, never inferred actor options.
@@ -355,7 +355,7 @@ func register(router route.Router, opts Options, delegationGuards []Options) {
 
 	var sessionsSvc *services.Sessions
 	if opts.EnableSessions {
-		sessionsSvc = services.NewSessions(repositories.NewSessionsWithTable(opts.SessionsTable), opts.SessionActiveWindow)
+		sessionsSvc = services.NewSessions(repositories.NewSessionsWithTable(opts.SessionsTable, opts.RememberTokensTable), opts.SessionActiveWindow)
 	}
 
 	authCtrl := controllers.NewAuthController(authSvc, auditSvc, twoFactorSvc, rememberSvc, sessionsSvc, apiTokensSvc, !opts.KeepAPITokensOnPasswordChange, opts.Guard, opts.RememberCookieName, attemptLimiter, opts.RateLimitAccountAttempts, opts.RateLimitPasswordAttempts)

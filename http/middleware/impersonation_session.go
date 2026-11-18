@@ -53,7 +53,7 @@ func (middleware *validateImpersonationSessionMiddleware) Handle(ctx contractsht
 		middleware.unavailable(ctx, err)
 		return
 	}
-	if actor == nil || actor.IsDisabled() || target == nil || target.IsDisabled() {
+	if actor == nil || actor.IsDisabled() || !actor.PasswordChangedAt.Equal(marker.PasswordStamp) || target == nil || target.IsDisabled() {
 		middleware.revoke(ctx)
 		return
 	}

@@ -103,16 +103,10 @@ func (s *Service) interaction(ctx context.Context, id string, b Browser, posted 
 	} else if !slices.Contains(req.original.Prompt, "consent") {
 		approved = c.SkipConsent
 		if !approved {
-			connections, err := s.Connections(ctx, u.ID)
+			var err error
+			approved, err = s.store.HasConsent(ctx, u.ID, c.ID, c.Version, u.PasswordChangedAt, twoFactorStamp(u), a.Scopes, s.now())
 			if err != nil {
 				return result, err
-			}
-			for _, g := range connections {
-				if g.ClientID != c.ID || g.ClientVersion != c.Version || !subset(a.Scopes, g.Scopes) {
-					continue
-				}
-				approved = true
-				break
 			}
 		}
 	}

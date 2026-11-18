@@ -209,3 +209,42 @@ func TestMe_RepoErrorWrapsInternal(t *testing.T) {
 	_, err := svc.Me(context.Background(), uuid.New())
 	assert.True(t, errors.Is(err, ErrInternal))
 }
+
+type resetDuringHash struct {
+	fakeHasher
+	users *fakeRepo
+	id    uuid.UUID
+}
+
+func (h resetDuringHash) Make(password string) (string, error) {
+	user := h.users.byID[h.id]
+	replacement := "hash:admin-reset"
+	user.PasswordHash = &replacement
+	user.AdvancePasswordEpoch(time.Now())
+	return h.fakeHasher.Make(password)
+}
+func TestPasswordChangeCannotOverwriteConcurrentReset(t *testing.T) {
+	repo := newFakeRepo()
+	user := seedUser(repo, "reset@example.com", "old-password")
+	svc := NewAuth(repo, resetDuringHash{users: repo, id: user.ID}, 8)
+	_, err := svc.ChangePassword(context.Background(), user.ID, "old-password", "attacker-password")
+	require.ErrorIs(t, err, ErrWrongPassword)
+	require.Equal(t, "hash:admin-reset", *repo.byID[user.ID].PasswordHash)
+}
+func TestPendingLoginRejectsChangedPasswordAndMFA(t *testing.T) {
+	repo := newFakeRepo()
+	user := seedUser(repo, "pending@example.com", "old-password")
+	svc := NewAuth(repo, fakeHasher{}, 8)
+	stamp, mfa := user.PasswordChangedAt, user.TwoFactorCredentialStamp()
+	_, err := svc.PendingLogin(context.Background(), user.ID, stamp, mfa, time.Now().Add(time.Minute))
+	require.NoError(t, err)
+	repo.byID[user.ID].TwoFactorVersion++
+	_, err = svc.PendingLogin(context.Background(), user.ID, stamp, mfa, time.Now().Add(time.Minute))
+	require.ErrorIs(t, err, ErrUnauthorized)
+	repo.byID[user.ID].TwoFactorVersion--
+	repo.byID[user.ID].AdvancePasswordEpoch(time.Now())
+	_, err = svc.PendingLogin(context.Background(), user.ID, stamp, mfa, time.Now().Add(time.Minute))
+	require.ErrorIs(t, err, ErrUnauthorized)
+	_, err = svc.PendingLogin(context.Background(), user.ID, repo.byID[user.ID].PasswordChangedAt, mfa, time.Now().Add(-time.Minute))
+	require.ErrorIs(t, err, ErrUnauthorized)
+}

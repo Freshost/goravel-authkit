@@ -231,3 +231,22 @@ func TestRemember_DefaultLifetime(t *testing.T) {
 func selectorOf(cookie string) string {
 	return strings.SplitN(cookie, ":", 2)[0]
 }
+
+func TestRememberVerifiedProofSurvivesRotationWithoutUpgrade(t *testing.T) {
+	repo := newFakeRememberRepo()
+	svc := NewRemember(repo, time.Hour)
+	id, stamp := uuid.New(), time.Now().Add(-time.Hour).UTC().Truncate(time.Microsecond)
+	legacy, err := svc.Issue(context.Background(), id)
+	require.NoError(t, err)
+	_, _, err = svc.ResolveVerified(context.Background(), legacy)
+	require.ErrorIs(t, err, ErrInvalidRememberToken)
+	cookie, err := svc.IssueVerified(context.Background(), id, stamp, "browser-binding")
+	require.NoError(t, err)
+	proof, rotated, err := svc.ResolveVerified(context.Background(), cookie)
+	require.NoError(t, err)
+	require.True(t, stamp.Equal(*proof.CredentialStamp))
+	require.Equal(t, "browser-binding", proof.SessionID)
+	proof, _, err = svc.ResolveVerified(context.Background(), rotated)
+	require.NoError(t, err)
+	require.True(t, stamp.Equal(*proof.CredentialStamp))
+}

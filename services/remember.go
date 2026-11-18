@@ -51,6 +51,18 @@ func NewRemember(repo repositories.RememberRepository, ttl time.Duration) *Remem
 // Issue creates a new remember token for the user and returns the cookie value
 // ("selector:validator") to set on the response.
 func (s *Remember) Issue(ctx context.Context, userID uuid.UUID) (string, error) {
+	return s.issue(ctx, userID, nil, "")
+}
+
+// IssueVerified binds the credential to the password proof and browser session.
+func (s *Remember) IssueVerified(ctx context.Context, userID uuid.UUID, stamp time.Time, sessionID string) (string, error) {
+	if stamp.IsZero() || sessionID == "" {
+		return "", ErrUnauthorized
+	}
+	return s.issue(ctx, userID, &stamp, sessionID)
+}
+
+func (s *Remember) issue(ctx context.Context, userID uuid.UUID, stamp *time.Time, sessionID string) (string, error) {
 	selector, err := randomToken(rememberSelectorBytes)
 	if err != nil {
 		return "", errors.Join(ErrInternal, err)
@@ -62,12 +74,13 @@ func (s *Remember) Issue(ctx context.Context, userID uuid.UUID) (string, error) 
 
 	now := time.Now().UTC()
 	token := &models.RememberToken{
-		ID:            uuid.New(),
-		UserID:        userID,
-		Selector:      selector,
-		ValidatorHash: hashValidator(validator),
-		ExpiresAt:     now.Add(s.ttl),
-		CreatedAt:     now,
+		ID:              uuid.New(),
+		UserID:          userID,
+		Selector:        selector,
+		ValidatorHash:   hashValidator(validator),
+		ExpiresAt:       now.Add(s.ttl),
+		CreatedAt:       now,
+		CredentialStamp: stamp, SessionID: sessionID,
 	}
 	if err := s.repo.Create(ctx, token); err != nil {
 		return "", errors.Join(ErrInternal, err)
@@ -218,4 +231,21 @@ func randomToken(n int) (string, error) {
 		return "", err
 	}
 	return base64.RawURLEncoding.EncodeToString(b), nil
+}
+
+// ResolveVerified never upgrades legacy cookies that have no verified password proof.
+func (s *Remember) ResolveVerified(ctx context.Context, cookie string) (*models.RememberToken, string, error) {
+	id, _, rotated, err := s.Resolve(ctx, cookie)
+	if err != nil {
+		return nil, "", err
+	}
+	selector, _, _ := splitToken(cookie)
+	token, err := s.repo.FindBySelector(ctx, selector)
+	if err != nil {
+		return nil, "", errors.Join(ErrInternal, err)
+	}
+	if token == nil || token.UserID != id || token.CredentialStamp == nil || token.SessionID == "" {
+		return nil, "", ErrInvalidRememberToken
+	}
+	return token, rotated, nil
 }

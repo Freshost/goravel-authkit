@@ -215,12 +215,13 @@ resource permissions in the host service. ID tokens are not API access tokens.
 - Access and refresh validation checks the live user, password epoch, enrolled
   2FA credential, client version, grant status, expiry, audience and scopes.
   Password changes/resets, account disable/delete and 2FA disable/re-enrollment
-  invalidate old grants. Refresh never advances the original authentication
+  invalidate old grants. A persistent MFA generation prevents old grants from
+  becoming valid again after disabling 2FA. Refresh never advances the original authentication
   epoch or absolute grant expiry. Merely regenerating recovery-code inventory
   does not change the enrolled credential; explicitly revoke connections when
   the host's incident policy requires it.
 - Authkit repository mutations serialize credential changes and strictly advance
-  the password epoch. Apply the credential timestamp precision migrations to
+  the password epoch. Apply the credential binding and timestamp precision migrations to
   existing user, remember-token and personal-token tables before upgrading.
   Hosts writing credentials or disabling accounts directly must preserve this
   invariant; repeating the same timestamp cannot invalidate an older grant.

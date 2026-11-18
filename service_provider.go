@@ -142,12 +142,14 @@ func (r *ServiceProvider) Boot(app foundation.Application) {
 
 	// Artisan commands.
 	tokenTables := make([]string, 0, len(guards))
+	pruneTables := make([]commands.PruneTables, 0, len(guards))
 	for _, o := range guards {
 		tokenTables = append(tokenTables, o.APITokensTable)
+		pruneTables = append(pruneTables, commands.PruneTables{Remember: o.RememberTokensTable, Sessions: o.SessionsTable})
 	}
 	app.Commands([]console.Command{
 		commands.NewCreateUser(),
-		commands.NewPruneRememberTokens(),
+		commands.NewPruneRememberTokens(pruneTables...),
 		commands.NewPruneAPITokens(tokenTables...),
 		commands.NewManageOIDCClient(),
 		commands.NewPruneOIDC(),

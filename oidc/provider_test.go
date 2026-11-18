@@ -159,6 +159,15 @@ func (s *memoryStore) Connections(_ context.Context, id uuid.UUID) ([]Connection
 	}
 	return out, nil
 }
+func (s *memoryStore) HasConsent(_ context.Context, user uuid.UUID, client string, version int64, stamp time.Time, mfa string, scopes []string, now time.Time) (bool, error) {
+	defer s.locked()()
+	for _, g := range s.data.grants {
+		if g.UserID == user && g.ClientID == client && g.ClientVersion == version && g.CredentialStamp.Equal(stamp) && g.TwoFactorStamp == mfa && g.RevokedAt == nil && now.Before(g.ExpiresAt) && subset(scopes, g.Scopes) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
 func (s *memoryStore) RevokeUser(_ context.Context, id uuid.UUID, now time.Time) error {
 	defer s.locked()()
 	for k, v := range s.data.grants {
@@ -209,7 +218,7 @@ func testProvider(t *testing.T) (*Provider, Browser, *testUsers) {
 	u := &testUsers{user: models.User{ID: uuid.New(), Email: "user@example.test", PasswordChangedAt: time.Now().UTC().Add(-time.Hour)}}
 	p, err := New(c, newMemoryStore(), u, testHasher{})
 	require.NoError(t, err)
-	b := Browser{Binding: "browser-secret", UserID: u.user.ID, CredentialStamp: u.user.PasswordChangedAt, AuthTime: time.Now().UTC().Add(-time.Minute), AuthEvent: "login-event", AMR: []string{"pwd"}}
+	b := Browser{Binding: "browser-secret", UserID: u.user.ID, CredentialStamp: u.user.PasswordChangedAt, AuthTime: time.Now().UTC().Add(-time.Minute), AuthEvent: "login-event", AMR: []string{"pwd"}, TwoFactorStamp: u.user.TwoFactorCredentialStamp()}
 	client := Client{ID: "public", Name: "Example application", ApplicationType: "web", AuthMethod: "none", RedirectURIs: models.StringSlice{"https://app.example/callback"}, Scopes: models.StringSlice{"openid", "profile", "email", "offline_access", "api:read", "api:write"}, Audience: models.StringSlice{"https://api.example"}, AllowRefresh: true, SkipConsent: true}
 	require.NoError(t, p.Service.RegisterClient(context.Background(), client, ""))
 	return p, b, u
@@ -713,4 +722,21 @@ func TestUnsupportedRequestObjectUsesOuterResponseMode(t *testing.T) {
 			require.NotContains(t, response.Body.String(), "untrusted.example")
 		})
 	}
+}
+
+func TestMFACycleNeverRevivesOriginalTokens(t *testing.T) {
+	p, browser, users := testProvider(t)
+	code, verifier := authorizeCode(t, p, browser, nil)
+	out := tokens(t, exchange(p, code, verifier, "public"))
+	users.user.TwoFactorVersion++
+	secret := "encrypted-key"
+	now := time.Now()
+	users.user.TwoFactorSecret, users.user.TwoFactorConfirmedAt = &secret, &now
+	_, err := p.ResolveAccessToken(context.Background(), out.AccessToken, "https://api.example")
+	require.ErrorIs(t, err, ErrInvalidGrant)
+	users.user.TwoFactorVersion++
+	users.user.TwoFactorSecret, users.user.TwoFactorConfirmedAt = nil, nil
+	_, err = p.ResolveAccessToken(context.Background(), out.AccessToken, "https://api.example")
+	require.ErrorIs(t, err, ErrInvalidGrant)
+	require.Equal(t, 400, refresh(p, out.RefreshToken, "public", "").Code)
 }

@@ -243,3 +243,43 @@ func (s *OIDCTestSuite) TestTerminatedSessionCannotManageConnections() {
 	s.Require().NoError(err)
 	r.AssertUnauthorized()
 }
+
+func (s *OIDCTestSuite) TestRemoteTerminationProtectsHostOwnedRoutes() {
+	for _, path := range []string{"/api/client/v1/portal/whoami", "/api/client/v1/either/whoami", "/ci-oidc-api"} {
+		cookie := s.login()
+		allowed, err := s.Http(s.T()).WithCookie(cookie).Get(path)
+		s.Require().NoError(err)
+		allowed.AssertOk()
+		s.Require().NoError(repositories.NewSessionsWithTable("client_auth_sessions", "client_auth_remember_tokens").DeleteByUser(context.Background(), s.user.ID))
+		denied, err := s.Http(s.T()).WithCookie(cookie).Get(path)
+		s.Require().NoError(err)
+		denied.AssertUnauthorized()
+	}
+}
+
+func (s *OIDCTestSuite) TestConsentLookupAndPruneUseLiveGrantWithoutLeakingRequests() {
+	cookie := s.login()
+	code, verifier := s.code(cookie)
+	s.exchange(code, verifier).AssertOk()
+	store := oidc.NewStore(s.provider.Issuer())
+	user, err := repositories.NewUsersWithTable("client_users").FindByID(context.Background(), s.user.ID)
+	s.Require().NoError(err)
+	// Thousands of unrelated grants must not be loaded to find a matching consent.
+	allowed, err := store.HasConsent(context.Background(), user.ID, s.clientID, 1, user.PasswordChangedAt, user.TwoFactorCredentialStamp(), []string{"openid"}, time.Now())
+	s.Require().NoError(err)
+	s.True(allowed)
+	allowed, err = store.HasConsent(context.Background(), user.ID, s.clientID, 1, user.PasswordChangedAt, user.TwoFactorCredentialStamp(), []string{"not-granted"}, time.Now())
+	s.Require().NoError(err)
+	s.False(allowed)
+	// A short-lived grant can precede its request's expiry under supported settings.
+	before := time.Now().Add(-31 * 24 * time.Hour).UTC()
+	_, err = facades.Orm().Query().Exec("UPDATE authkit_oidc_grants SET expires_at = ? WHERE issuer = ? AND client_id = ?", before.Add(-time.Minute), s.provider.Issuer(), s.clientID)
+	s.Require().NoError(err)
+	_, err = facades.Orm().Query().Exec("UPDATE authkit_oidc_requests SET expires_at = ? WHERE issuer = ? AND client_id = ?", before.Add(time.Minute), s.provider.Issuer(), s.clientID)
+	s.Require().NoError(err)
+	s.Require().NoError(store.Prune(context.Background(), before))
+	count, err := facades.Orm().Query().Table("authkit_oidc_requests").Where("issuer", s.provider.Issuer()).Where("client_id", s.clientID).Count()
+	s.Require().NoError(err)
+	s.Zero(count)
+	s.Require().NoError(store.Prune(context.Background(), before.Add(time.Hour)))
+}

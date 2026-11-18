@@ -112,6 +112,9 @@ func (f *fakeRepo) UpdateProfile(_ context.Context, id uuid.UUID, email string, 
 
 func (f *fakeRepo) UpdateManaged(_ context.Context, id uuid.UUID, email string, name *string, role string, disabledAt *time.Time, setDisabled bool, passwordChangedAt *time.Time) error {
 	u := f.byID[id]
+	if u.Email != email {
+		u.EmailVerified = nil
+	}
 	u.Email = email
 	u.Name = name
 	u.Role = role

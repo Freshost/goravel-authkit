@@ -145,14 +145,8 @@ func isUniqueViolation(err error) bool {
 	return strings.Contains(msg, "duplicate") || strings.Contains(msg, "unique")
 }
 
-// ChangePassword verifies the current password, validates the new one (min
-// length, must differ), updates the hash, and bumps password_changed_at so
-// every OTHER active session for this user is rejected on its next request. It
-// returns the new password_changed_at — re-read from the DB so it matches the
-// stored precision exactly — so the controller can re-stamp THIS session and
-// keep it alive. (A locally-generated time.Now() has nanosecond precision, but
-// Postgres timestamptz stores microseconds, so stamping the raw value would
-// never match the DB value on the next request and would log THIS session out.)
+// ChangePassword verifies the password proof and atomically replaces that exact
+// credential version. The returned stored epoch keeps only this session alive.
 func (s *Auth) ChangePassword(ctx context.Context, id uuid.UUID, currentPassword, newPassword string) (time.Time, error) {
 	user, err := s.repo.FindByID(ctx, id)
 	if err != nil {
@@ -177,22 +171,37 @@ func (s *Auth) ChangePassword(ctx context.Context, id uuid.UUID, currentPassword
 		return time.Time{}, errors.Join(ErrInternal, err)
 	}
 
-	if err := s.repo.UpdatePassword(ctx, id, hashed, time.Now().UTC()); err != nil {
-		return time.Time{}, errors.Join(ErrInternal, err)
-	}
-
-	// Re-read so the returned timestamp matches what the DB actually stored
-	// (driver precision), keeping the caller's own session valid.
-	updated, err := s.repo.FindByID(ctx, id)
+	var changedAt time.Time
+	err = s.repo.MutateLocked(ctx, id, func(current *models.User) error {
+		if current.IsDisabled() || current.PasswordHash == nil || *current.PasswordHash != *user.PasswordHash || !current.PasswordChangedAt.Equal(user.PasswordChangedAt) {
+			return ErrWrongPassword
+		}
+		current.AdvancePasswordEpoch(time.Now().UTC())
+		current.PasswordHash = &hashed
+		changedAt = current.PasswordChangedAt
+		return nil
+	})
 	if err != nil {
 		return time.Time{}, errors.Join(ErrInternal, err)
 	}
-	if updated == nil {
-		return time.Time{}, ErrUnauthorized
-	}
-	return updated.PasswordChangedAt, nil
+	return changedAt, nil
 }
 
 func normalizeEmail(email string) string {
 	return strings.ToLower(strings.TrimSpace(email))
+}
+
+// PendingLogin validates the password proof retained while the second factor is pending.
+func (s *Auth) PendingLogin(ctx context.Context, id uuid.UUID, stamp time.Time, mfa string, expires time.Time) (*models.User, error) {
+	if !time.Now().Before(expires) {
+		return nil, ErrUnauthorized
+	}
+	u, err := s.Me(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if !u.PasswordChangedAt.Equal(stamp) || u.TwoFactorCredentialStamp() != mfa {
+		return nil, ErrUnauthorized
+	}
+	return u, nil
 }

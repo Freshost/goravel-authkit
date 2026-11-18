@@ -2,6 +2,7 @@ package oidc
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -33,6 +34,7 @@ type Store interface {
 	Refresh(context.Context, string, bool) (*token, error)
 	SaveToken(context.Context, *token) error
 	Connections(context.Context, uuid.UUID) ([]Connection, error)
+	HasConsent(context.Context, uuid.UUID, string, int64, time.Time, string, []string, time.Time) (bool, error)
 	RevokeUser(context.Context, uuid.UUID, time.Time) error
 	Prune(context.Context, time.Time) error
 }
@@ -155,6 +157,17 @@ func (r *databaseStore) Connections(ctx context.Context, user uuid.UUID) ([]Conn
 	err := r.query(ctx, grantsTable).Where("user_id", user).WhereNull("revoked_at").Where("expires_at > ?", time.Now().UTC()).Order("created_at desc").Find(&result)
 	return result, err
 }
+
+// HasConsent checks only the requested client's live authorization, without listing every connection.
+func (r *databaseStore) HasConsent(ctx context.Context, user uuid.UUID, client string, version int64, stamp time.Time, mfa string, scopes []string, now time.Time) (bool, error) {
+	encoded, err := json.Marshal(scopes)
+	if err != nil {
+		return false, err
+	}
+	var grant Connection
+	err = find(r.query(ctx, grantsTable).Select("id").Where("user_id", user).Where("client_id", client).Where("client_version", version).Where("credential_stamp", stamp).Where("two_factor_stamp", mfa).WhereNull("revoked_at").Where("expires_at > ?", now).Where("scopes @> ?::jsonb", string(encoded)), &grant)
+	return grant.ID != "", err
+}
 func (r *databaseStore) RevokeUser(ctx context.Context, user uuid.UUID, now time.Time) error {
 	_, err := r.query(ctx, grantsTable).Where("user_id", user).WhereNull("revoked_at").Update("revoked_at", now)
 	return err
@@ -165,7 +178,7 @@ func (r *databaseStore) Prune(ctx context.Context, before time.Time) error {
 	if _, err := r.query(ctx, tokensTable).Where("grant_id IN (SELECT id FROM "+grantsTable+" WHERE issuer = ? AND expires_at < ?)", r.issuer, before).Delete(&token{}); err != nil {
 		return err
 	}
-	if _, err := r.query(ctx, requestsTable).Where("expires_at < ?", before).Where("grant_id = '' OR grant_id IN (SELECT id FROM "+grantsTable+" WHERE issuer = ? AND expires_at < ?)", r.issuer, before).Delete(&authorization{}); err != nil {
+	if _, err := r.query(ctx, requestsTable).Where("(grant_id = '' AND expires_at < ?) OR grant_id IN (SELECT id FROM "+grantsTable+" WHERE issuer = ? AND expires_at < ?)", before, r.issuer, before).Delete(&authorization{}); err != nil {
 		return err
 	}
 	_, err := r.query(ctx, grantsTable).Where("expires_at < ?", before).Delete(&Connection{})

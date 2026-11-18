@@ -209,7 +209,6 @@ func optionsByGuard(name string) Options {
 func impersonationValidation(targetGuard string, overrides ...Options) contractshttp.Middleware {
 	users := make(map[string]repositories.UsersRepository)
 	gates := make(map[string]*services.Impersonation)
-	enabled := false
 	resolved := make(map[string]Options)
 	for _, opts := range GuardOptions() {
 		resolved[opts.Guard] = opts
@@ -224,12 +223,6 @@ func impersonationValidation(targetGuard string, overrides ...Options) contracts
 		}
 		gate := services.NewImpersonation(opts.ImpersonationRoles, opts.ImpersonationTargetGuards, opts.ImpersonationProtectedRoles)
 		gates[opts.Guard] = gate
-		if gate.CanTargetGuard(targetGuard) {
-			enabled = true
-		}
-	}
-	if !enabled {
-		return nil
 	}
 	return middleware.ValidateImpersonationSession(targetGuard, users, gates)
 }
@@ -255,6 +248,9 @@ func Protect(guard string) []contractshttp.Middleware {
 	if validate := impersonationValidation(guard); validate != nil {
 		chain = append(chain, validate)
 	}
+	if opts.EnableSessions {
+		chain = append(chain, middleware.TrackSession(guard, services.NewSessions(repositories.NewSessionsWithTable(opts.SessionsTable, opts.RememberTokensTable), opts.SessionActiveWindow)))
+	}
 	return chain
 }
 
@@ -263,15 +259,7 @@ func Protect(guard string) []contractshttp.Middleware {
 func ProtectRole(guard string, roles ...string) []contractshttp.Middleware {
 	opts := optionsByGuard(guard)
 	repo := repositories.NewUsersWithTable(opts.UsersTable)
-	chain := []contractshttp.Middleware{sessionmiddleware.StartSession()}
-	if opts.EnableCSRF {
-		chain = append(chain, middleware.VerifyRequestOrigin(opts.TrustedOrigins))
-	}
-	chain = append(chain, middleware.Authenticated(guard, repo))
-	if validate := impersonationValidation(guard); validate != nil {
-		chain = append(chain, validate)
-	}
-	return append(chain, middleware.RequireRole(guard, repo, roles...))
+	return append(Protect(guard), middleware.RequireRole(guard, repo, roles...))
 }
 
 // ProtectToken guards a host route using only an API token from the named guard.
@@ -281,7 +269,7 @@ func ProtectToken(guard string, requiredScopes ...string) []contractshttp.Middle
 	users := repositories.NewUsersWithTable(opts.UsersTable)
 	var tokens *services.APITokens
 	if opts.EnableAPITokens {
-		tokens = services.NewAPITokens(repositories.NewAPITokensWithTable(opts.APITokensTable), users, nil, nil, opts.APITokenAllowedScopes, opts.APITokenMaxLifetime, opts.APITokenMaxPerUser, !opts.KeepAPITokensOnPasswordChange)
+		tokens = services.NewAPITokens(repositories.NewAPITokensWithTable(opts.APITokensTable, opts.UsersTable), users, nil, nil, opts.APITokenAllowedScopes, opts.APITokenMaxLifetime, opts.APITokenMaxPerUser, !opts.KeepAPITokensOnPasswordChange)
 	}
 	return []contractshttp.Middleware{middleware.BearerAuthenticated(guard, tokens, users, requiredScopes...)}
 }
@@ -293,7 +281,7 @@ func ProtectAny(guard string, requiredScopes ...string) []contractshttp.Middlewa
 	users := repositories.NewUsersWithTable(opts.UsersTable)
 	var tokens *services.APITokens
 	if opts.EnableAPITokens {
-		tokens = services.NewAPITokens(repositories.NewAPITokensWithTable(opts.APITokensTable), users, nil, nil, opts.APITokenAllowedScopes, opts.APITokenMaxLifetime, opts.APITokenMaxPerUser, !opts.KeepAPITokensOnPasswordChange)
+		tokens = services.NewAPITokens(repositories.NewAPITokensWithTable(opts.APITokensTable, opts.UsersTable), users, nil, nil, opts.APITokenAllowedScopes, opts.APITokenMaxLifetime, opts.APITokenMaxPerUser, !opts.KeepAPITokensOnPasswordChange)
 	}
 	chain := []contractshttp.Middleware{
 		middleware.UnlessBearer(sessionmiddleware.StartSession(), guard+".session"),
@@ -304,6 +292,10 @@ func ProtectAny(guard string, requiredScopes ...string) []contractshttp.Middlewa
 	chain = append(chain, middleware.AuthenticateAny(guard, tokens, users, requiredScopes...))
 	if validate := impersonationValidation(guard); validate != nil {
 		chain = append(chain, middleware.UnlessBearer(validate, guard+".impersonation"))
+	}
+	if opts.EnableSessions {
+		tracking := middleware.TrackSession(guard, services.NewSessions(repositories.NewSessionsWithTable(opts.SessionsTable, opts.RememberTokensTable), opts.SessionActiveWindow))
+		chain = append(chain, middleware.UnlessBearer(tracking, guard+".tracking"))
 	}
 	return chain
 }

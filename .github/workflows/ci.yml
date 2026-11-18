@@ -104,3 +104,16 @@ jobs:
         run: go test -race ./...
       - name: vet
         run: go vet ./...
+
+  demo-container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Demo environment
+        run: cp demo/.env.example demo/.env
+      - name: Build demo image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: demo/Dockerfile
+          push: false

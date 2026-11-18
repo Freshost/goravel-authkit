@@ -2,6 +2,7 @@ package helpers
 
 import (
 	"encoding/json"
+	"time"
 
 	"github.com/google/uuid"
 	contractshttp "github.com/goravel/framework/contracts/http"
@@ -11,10 +12,11 @@ import (
 // guard, so the switch can be reversed and surfaced to the UI. It is stored as a
 // JSON string in the session (server-side) under ImpersonatorKey(guard).
 type ImpersonatorMarker struct {
-	Guard     string    `json:"guard"`     // the impersonator's (actor's) guard
-	UserID    uuid.UUID `json:"userId"`    // the impersonator's user id
-	Email     string    `json:"email"`     // the impersonator's email (for the UI banner)
-	SameGuard bool      `json:"sameGuard"` // true when actor and target share a guard
+	Guard         string    `json:"guard"`  // the impersonator's (actor's) guard
+	UserID        uuid.UUID `json:"userId"` // the impersonator's user id
+	Email         string    `json:"email"`  // the impersonator's email (for the UI banner)
+	PasswordStamp time.Time `json:"passwordStamp"`
+	SameGuard     bool      `json:"sameGuard"` // true when actor and target share a guard
 }
 
 // ImpersonatorKey is the session key holding the impersonation marker for a guard.

@@ -2,6 +2,9 @@ package feature
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
+	"github.com/freshost/goravel-authkit/repositories"
 	"net/http"
 	"testing"
 	"time"
@@ -210,4 +213,34 @@ func (s *TwoFactorRecoveryTestSuite) TestRegenerateInvalidatesOld() {
 		Post("/api/v1/auth/two-factor-challenge", bytes.NewBufferString(chBody))
 	s.Require().NoError(err)
 	chResp.AssertStatus(http.StatusUnauthorized)
+}
+
+func (s *TwoFactorRecoveryTestSuite) TestResetRejectsPendingPasswordProof() {
+	_, codes := s.enroll()
+	pending := s.login()
+	var user authmodels.User
+	s.Require().NoError(facades.Orm().Query().Where("email", s.email).First(&user))
+	s.Require().NoError(repositories.NewUsers().UpdatePassword(context.Background(), user.ID, *user.PasswordHash, time.Now()))
+	body, _ := json.Marshal(map[string]string{"recoveryCode": codes[0]})
+	result, err := s.Http(s.T()).WithCookie(pending).WithHeader("Content-Type", "application/json").Post("/api/v1/auth/two-factor-challenge", bytes.NewReader(body))
+	s.Require().NoError(err)
+	result.AssertUnauthorized()
+}
+func (s *TwoFactorRecoveryTestSuite) TestNewAttemptClearsOldRememberIntent() {
+	_, codes := s.enroll()
+	body, _ := json.Marshal(map[string]any{"email": s.email, "password": s.password, "remember": true})
+	first, err := s.Http(s.T()).WithHeader("Content-Type", "application/json").Post("/api/v1/auth/login", bytes.NewReader(body))
+	s.Require().NoError(err)
+	first.AssertOk()
+	cookie := cookieNamed(first, "authkit_demo_session")
+	body, _ = json.Marshal(map[string]any{"email": s.email, "password": s.password, "remember": false})
+	second, err := s.Http(s.T()).WithCookie(cookie).WithHeader("Content-Type", "application/json").Post("/api/v1/auth/login", bytes.NewReader(body))
+	s.Require().NoError(err)
+	second.AssertOk()
+	cookie = cookieNamed(second, "authkit_demo_session")
+	body, _ = json.Marshal(map[string]string{"recoveryCode": codes[0]})
+	completed, err := s.Http(s.T()).WithCookie(cookie).WithHeader("Content-Type", "application/json").Post("/api/v1/auth/two-factor-challenge", bytes.NewReader(body))
+	s.Require().NoError(err)
+	completed.AssertOk()
+	s.Nil(completed.Cookie("authkit_remember"))
 }

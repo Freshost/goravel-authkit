@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"errors"
 	contractshttp "github.com/goravel/framework/contracts/http"
 	"github.com/goravel/framework/facades"
 
@@ -56,7 +57,11 @@ func (middleware *rememberLoginMiddleware) Handle(ctx contractshttp.Context) {
 		return
 	}
 
-	userID, issuedAt, rotated, err := remember.Resolve(ctx.Context(), cookie)
+	credential, rotated, err := remember.ResolveVerified(ctx.Context(), cookie)
+	if errors.Is(err, services.ErrInternal) {
+		_ = ctx.Response().Json(503, contractshttp.Json{"error": "authentication_unavailable"}).Abort()
+		return
+	}
 	if err != nil {
 		helpers.ClearRememberCookie(ctx, rememberCookieName)
 		ctx.Request().Next()
@@ -67,9 +72,14 @@ func (middleware *rememberLoginMiddleware) Handle(ctx contractshttp.Context) {
 	// instance's table, not Goravel's model-bound provider). A remember token
 	// issued before password_changed_at is invalid even if physical cleanup
 	// failed, so reset/disable credentials cannot later revive.
+	userID := credential.UserID
 	user, err := users.FindByID(ctx.Context(), userID)
-	if err != nil || user == nil || user.IsDisabled() || issuedAt.Before(user.PasswordChangedAt) {
-		_ = remember.RevokeAllForUser(ctx.Context(), userID)
+	if err != nil {
+		_ = ctx.Response().Json(503, contractshttp.Json{"error": "authentication_unavailable"}).Abort()
+		return
+	}
+	if user == nil || user.IsDisabled() || !credential.CredentialStamp.Equal(user.PasswordChangedAt) {
+		_ = remember.Revoke(ctx.Context(), cookie)
 		helpers.ClearRememberCookie(ctx, rememberCookieName)
 		ctx.Request().Next()
 		return
@@ -94,13 +104,17 @@ func (middleware *rememberLoginMiddleware) Handle(ctx contractshttp.Context) {
 	// Keyed by a stable per-guard token (not the rotating session id).
 	if sessions != nil {
 		if sess := ctx.Request().Session(); sess != nil {
-			if old := helpers.SessionTrackingToken(ctx, guard); old != "" {
+			if old := helpers.SessionTrackingToken(ctx, guard); old != "" && old != credential.SessionID {
 				_ = sessions.Forget(ctx.Context(), old)
 			}
-			token := helpers.NewSessionToken()
+			token := credential.SessionID
 			sess.Put(helpers.SessionTrackingTokenKey(guard), token)
-			if err := sessions.Track(ctx.Context(), token, user.ID, ctx.Request().Ip(), ctx.Request().Header("User-Agent", "")); err != nil {
+			if err := sessions.Track(ctx.Context(), token, user.ID, ctx.Request().Ip(), ctx.Request().Header("User-Agent", ""), credential.Selector); err != nil {
 				facades.Log().Errorf("remember: track session: %v", err)
+				_ = facades.Auth(ctx).Guard(guard).Logout()
+				helpers.ClearRememberCookie(ctx, rememberCookieName)
+				_ = ctx.Response().Json(503, contractshttp.Json{"error": "authentication_unavailable"}).Abort()
+				return
 			}
 		}
 	}

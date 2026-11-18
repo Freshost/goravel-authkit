@@ -47,3 +47,14 @@ func ClearAuthentication(ctx contractshttp.Context, guard string) {
 		session.Forget(AuthenticationKey(guard))
 	}
 }
+
+// PendingAuthentication contains only the proof verified at the password step.
+type PendingAuthentication struct {
+	PasswordStamp  time.Time `json:"passwordStamp"`
+	TwoFactorStamp string    `json:"twoFactorStamp"`
+	ExpiresAt      time.Time `json:"expiresAt"`
+}
+
+func PendingAuthenticationKey(guard string) string {
+	return "authkit_" + guard + "_pending_authentication"
+}

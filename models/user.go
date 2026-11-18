@@ -40,6 +40,7 @@ type User struct {
 	TwoFactorConfirmedAt   *time.Time `gorm:"type:timestamptz" json:"-"`
 	// Start time of the last accepted TOTP step; rejects replay within a code's
 	// validity window (single-use TOTP).
+	TwoFactorVersion    int64      `gorm:"not null;default:0" json:"-"`
 	TwoFactorLastUsedAt *time.Time `gorm:"type:timestamptz" json:"-"`
 
 	CreatedAt time.Time `json:"createdAt"`

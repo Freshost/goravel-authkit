@@ -13,13 +13,14 @@ import (
 // address a session for termination. A request whose session has no row is
 // treated as terminated.
 type AuthSession struct {
-	ID           uuid.UUID `gorm:"type:uuid;primaryKey" json:"id"`
-	SessionID    string    `gorm:"type:varchar(255);not null;uniqueIndex" json:"-"`
-	UserID       uuid.UUID `gorm:"type:uuid;not null;index" json:"userId"`
-	IP           string    `gorm:"type:varchar(64)" json:"ip,omitempty"`
-	UserAgent    string    `gorm:"type:text" json:"userAgent,omitempty"`
-	CreatedAt    time.Time `json:"createdAt"`
-	LastActiveAt time.Time `gorm:"type:timestamptz;not null" json:"lastActiveAt"`
+	ID               uuid.UUID `gorm:"type:uuid;primaryKey" json:"id"`
+	RememberSelector string    `gorm:"-" json:"-"`
+	SessionID        string    `gorm:"type:varchar(255);not null;uniqueIndex" json:"-"`
+	UserID           uuid.UUID `gorm:"type:uuid;not null;index" json:"userId"`
+	IP               string    `gorm:"type:varchar(64)" json:"ip,omitempty"`
+	UserAgent        string    `gorm:"type:text" json:"userAgent,omitempty"`
+	CreatedAt        time.Time `json:"createdAt"`
+	LastActiveAt     time.Time `gorm:"type:timestamptz;not null" json:"lastActiveAt"`
 }
 
 func (AuthSession) TableName() string {

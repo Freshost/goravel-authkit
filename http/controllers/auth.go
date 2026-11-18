@@ -5,9 +5,11 @@
 package controllers
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	contractshttp "github.com/goravel/framework/contracts/http"
@@ -88,6 +90,9 @@ func (c *AuthController) Login(ctx contractshttp.Context) contractshttp.Response
 		}
 		if sess := ctx.Request().Session(); sess != nil {
 			sess.Put(helpers.TwoFactorUserIDKey(c.guard), user.ID.String())
+			pending, _ := json.Marshal(helpers.PendingAuthentication{PasswordStamp: user.PasswordChangedAt, TwoFactorStamp: user.TwoFactorCredentialStamp(), ExpiresAt: time.Now().Add(5 * time.Minute)})
+			sess.Put(helpers.PendingAuthenticationKey(c.guard), string(pending))
+			sess.Forget(helpers.RememberIntentKey(c.guard))
 			if req.Remember {
 				sess.Put(helpers.RememberIntentKey(c.guard), "1")
 			}
@@ -116,16 +121,23 @@ func completeLogin(ctx contractshttp.Context, guard, rememberCookieName string, 
 	if sess := ctx.Request().Session(); sess != nil {
 		sess.Put(helpers.PasswordChangedAtKey(guard), middleware.FormatPasswordTimestamp(user.PasswordChangedAt))
 		sess.Forget(helpers.TwoFactorUserIDKey(guard))
+		sess.Forget(helpers.PendingAuthenticationKey(guard))
 		sess.Forget(helpers.RememberIntentKey(guard))
 	}
 	if len(methods) == 0 {
 		methods = []string{"pwd"}
 	}
 	helpers.RecordAuthentication(ctx, guard, methods, user)
+	tracking := helpers.NewSessionToken()
+	selector := ""
+	if tracking == "" {
+		return ctx.Response().Json(http.StatusInternalServerError, responses.ErrorResponse{Error: "internal_error", Message: "Internal server error"})
+	}
 	if remember != nil && wantRemember {
-		if value, err := remember.Issue(ctx.Context(), user.ID); err != nil {
+		if value, err := remember.IssueVerified(ctx.Context(), user.ID, user.PasswordChangedAt, tracking); err != nil {
 			facades.Log().Errorf("auth: issue remember token: %v", err)
 		} else {
+			selector, _, _ = strings.Cut(value, ":")
 			helpers.SetRememberCookie(ctx, rememberCookieName, value, remember.TTL())
 		}
 	}
@@ -138,10 +150,14 @@ func completeLogin(ctx contractshttp.Context, guard, rememberCookieName string, 
 			if old := helpers.SessionTrackingToken(ctx, guard); old != "" {
 				_ = sessions.Forget(ctx.Context(), old)
 			}
-			token := helpers.NewSessionToken()
+			token := tracking
 			sess.Put(helpers.SessionTrackingTokenKey(guard), token)
-			if err := sessions.Track(ctx.Context(), token, user.ID, ctx.Request().Ip(), ctx.Request().Header("User-Agent", "")); err != nil {
+			if err := sessions.Track(ctx.Context(), token, user.ID, ctx.Request().Ip(), ctx.Request().Header("User-Agent", ""), selector); err != nil {
 				facades.Log().Errorf("auth: track session: %v", err)
+				_ = facades.Auth(ctx).Guard(guard).Logout()
+				helpers.ClearAuthentication(ctx, guard)
+				helpers.ClearRememberCookie(ctx, rememberCookieName)
+				return ctx.Response().Json(http.StatusServiceUnavailable, responses.ErrorResponse{Error: "authentication_unavailable", Message: "Authentication service unavailable"})
 			}
 		}
 	}

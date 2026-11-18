@@ -160,13 +160,6 @@ func (s *APITokens) issue(ctx context.Context, cmd IssueAPITokenCommand, actor *
 		}
 	}
 
-	count, err := s.repo.CountActiveByUser(ctx, user.ID, now)
-	if err != nil {
-		return nil, errors.Join(ErrInternal, err)
-	}
-	if count >= int64(s.maxPerUser) {
-		return nil, ErrTokenLimit
-	}
 	selector, err := randomAPITokenPart(apiTokenSelectorBytes)
 	if err != nil {
 		return nil, errors.Join(ErrInternal, err)
@@ -176,8 +169,12 @@ func (s *APITokens) issue(ctx context.Context, cmd IssueAPITokenCommand, actor *
 		return nil, errors.Join(ErrInternal, err)
 	}
 	token := &models.APIToken{ID: uuid.New(), UserID: user.ID, Name: name, Selector: selector, ValidatorHash: hashAPITokenValidator(validator), Scopes: models.StringSlice(scopes), ExpiresAt: expiresAt, CreatedAt: now}
-	if err := s.repo.Create(ctx, token); err != nil {
+	created, err := s.repo.CreateWithinLimit(ctx, token, s.maxPerUser)
+	if err != nil {
 		return nil, errors.Join(ErrInternal, err)
+	}
+	if !created {
+		return nil, ErrTokenLimit
 	}
 	return &IssuedAPIToken{Token: token, Plaintext: apiTokenPrefix + selector + "." + validator, DelegatedBy: actor}, nil
 }

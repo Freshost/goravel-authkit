@@ -268,3 +268,27 @@ displayed IP comes from Goravel's trusted request IP resolution.
 
 This is authentication code. If you find a security issue, please report it
 privately to the maintainers rather than opening a public issue.
+
+## Credential lifecycle updates
+
+Password changes use a conditional locked update against the verified password
+version. Pending 2FA proofs expire after five minutes and remain bound to that
+password and MFA generation. Impersonation retains the actor's verified password
+version, including when the feature is later disabled.
+
+MFA enrollment confirmation and disable operations advance a persistent version;
+disabling MFA never restores the validity of older OIDC credentials. Enrollment,
+recovery inventory and replay state changes serialize on the user row.
+
+New remember credentials carry their verified password epoch and stable browser
+session binding. Legacy unbound cookies require interactive login after upgrade.
+Remote session termination revokes the associated persistent credential, including
+concurrent restores. Host route helpers enforce the same termination checks as
+Authkit endpoints. `auth:prune-remember-tokens` covers every configured guard and
+uses the host session lifetime.
+
+Custom repository implementations must implement `APITokensRepository.CreateWithinLimit`
+and `oidc.Store.HasConsent`. Manual custom-table session/token repository callers
+must pass the matching remember/users table as the optional second constructor
+argument. Existing `Remember.Issue` and `Resolve` remain available for trusted
+programmatic callers; HTTP uses `IssueVerified` and `ResolveVerified`.

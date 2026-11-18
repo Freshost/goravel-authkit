@@ -137,7 +137,7 @@ func RegisterOIDC(router route.Router) {
 	users := repositories.NewUsersWithTable(opts.UsersTable)
 	var sessions *services.Sessions
 	if opts.EnableSessions {
-		sessions = services.NewSessions(repositories.NewSessionsWithTable(opts.SessionsTable), opts.SessionActiveWindow)
+		sessions = services.NewSessions(repositories.NewSessionsWithTable(opts.SessionsTable, opts.RememberTokensTable), opts.SessionActiveWindow)
 	}
 	if opts.EnableRememberMe {
 		remember := services.NewRemember(repositories.NewRememberWithTable(opts.RememberTokensTable), opts.RememberLifetime)

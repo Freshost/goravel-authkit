@@ -162,7 +162,7 @@ func (r *Users) UpdateProfile(ctx context.Context, id uuid.UUID, email string, n
 }
 
 func (r *Users) UpdateManaged(ctx context.Context, id uuid.UUID, email string, name *string, role string, disabledAt *time.Time, setDisabled bool, passwordChangedAt *time.Time) error {
-	values := map[string]any{"email": email, "name": name, "role": role}
+	values := map[string]any{"email": email, "name": name, "role": role, "email_verified": gorm.Expr("CASE WHEN email = ? THEN email_verified ELSE NULL END", email)}
 	if setDisabled {
 		values["disabled_at"] = disabledAt
 	}
@@ -194,27 +194,28 @@ func (r *Users) updateCredentialEpoch(ctx context.Context, id uuid.UUID, values 
 		if user.ID == uuid.Nil {
 			return gorm.ErrRecordNotFound
 		}
-		epoch := requested.UTC().Truncate(time.Microsecond)
-		if !epoch.After(user.PasswordChangedAt) {
-			epoch = user.PasswordChangedAt.UTC().Truncate(time.Microsecond).Add(time.Microsecond)
-		}
-		values["password_changed_at"] = epoch
+		user.AdvancePasswordEpoch(requested)
+		values["password_changed_at"] = user.PasswordChangedAt
 		_, err := tx.query(ctx).Model(&models.User{}).Where("id", id).Update(values)
 		return err
 	})
 }
 
 func (r *Users) UpdateTwoFactor(ctx context.Context, id uuid.UUID, secret, recoveryCodes *string, confirmedAt *time.Time) error {
-	_, err := r.query(ctx).Model(&models.User{}).Where("id", id).Update(map[string]any{
-		"two_factor_secret":         secret,
-		"two_factor_recovery_codes": recoveryCodes,
-		"two_factor_confirmed_at":   confirmedAt,
+	return r.MutateLocked(ctx, id, func(u *models.User) error {
+		oldStamp := u.TwoFactorCredentialStamp()
+		u.TwoFactorSecret, u.TwoFactorRecoveryCodes, u.TwoFactorConfirmedAt = secret, recoveryCodes, confirmedAt
+		if u.TwoFactorCredentialStamp() != oldStamp {
+			u.TwoFactorVersion++
+			u.TwoFactorLastUsedAt = nil
+		}
+		return nil
 	})
-	return err
 }
 
 func (r *Users) MutateLocked(ctx context.Context, id uuid.UUID, fn func(u *models.User) error) error {
-	return facades.Orm().WithContext(ctx).Transaction(func(tx ormcontract.Query) error {
+	return r.WithinTransaction(ctx, func(repo UsersRepository) error {
+		tx := repo.(*Users).tx
 		var u models.User
 		if err := tx.Table(r.table).Where("id", id).LockForUpdate().First(&u); err != nil {
 			return err

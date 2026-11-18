@@ -26,6 +26,13 @@ func (f *fakeAPITokensRepo) Create(_ context.Context, token *models.APIToken) er
 	return nil
 }
 
+func (f *fakeAPITokensRepo) CreateWithinLimit(ctx context.Context, token *models.APIToken, limit int) (bool, error) {
+	count, err := f.CountActiveByUser(ctx, token.UserID, token.CreatedAt)
+	if err != nil || count >= int64(limit) {
+		return false, err
+	}
+	return true, f.Create(ctx, token)
+}
 func (f *fakeAPITokensRepo) FindBySelector(_ context.Context, selector string) (*models.APIToken, error) {
 	for _, token := range f.tokens {
 		if token.Selector == selector {
