@@ -57,22 +57,22 @@ jobs:
         with:
           python-version: "3.13"
       - name: Official suite source
-        run: git clone --depth 1 --branch release-v5.3.4 https://gitlab.com/openid/conformance-suite.git "$RUNNER_TEMP/oidf"
+        run: git clone --depth 1 --branch release-v5.3.4 https://gitlab.com/openid/conformance-suite.git "$GITHUB_WORKSPACE/.oidf-suite"
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "21"
           cache: maven
-          cache-dependency-path: ${{ runner.temp }}/oidf/pom.xml
+          cache-dependency-path: .oidf-suite/pom.xml
       - name: Apply suite request transport fix
-        run: git -C "$RUNNER_TEMP/oidf" apply "$GITHUB_WORKSPACE/.ci/oidf/outer-response-mode.patch"
+        run: git -C "$GITHUB_WORKSPACE/.oidf-suite" apply "$GITHUB_WORKSPACE/.ci/oidf/outer-response-mode.patch"
       - name: Build and test suite transport fix
-        working-directory: ${{ runner.temp }}/oidf
+        working-directory: ${{ github.workspace }}/.oidf-suite
         run: mvn --batch-mode -Dtest='BuildRequestObjectBy*Redirect*_UnitTest' -Dpmd.skip=true -Dcheckstyle.skip=true package
       - name: Package corrected suite
-        run: docker build -t authkit-oidf-suite:5.3.4-response-mode "$RUNNER_TEMP/oidf"
+        run: docker build -t authkit-oidf-suite:5.3.4-response-mode "$GITHUB_WORKSPACE/.oidf-suite"
       - name: Official runner dependencies
-        run: pip install -r "$RUNNER_TEMP/oidf/scripts/requirements.txt"
+        run: pip install -r "$GITHUB_WORKSPACE/.oidf-suite/scripts/requirements.txt"
       - name: Isolated hostnames
         run: echo '127.0.0.1 localhost.emobix.co.uk' | sudo tee -a /etc/hosts
       - name: Build host integration
@@ -92,8 +92,8 @@ jobs:
       - name: Start Authkit host
         working-directory: demo
         env:
-          OIDF_TLS_CERT: ${{ runner.temp }}/oidf.crt
-          OIDF_TLS_KEY: ${{ runner.temp }}/oidf.key
+          OIDF_TLS_CERT: ${{ github.workspace }}/.oidf-suite.crt
+          OIDF_TLS_KEY: ${{ github.workspace }}/.oidf-suite.key
         run: '"$RUNNER_TEMP/authkit-oidf" > "$RUNNER_TEMP/authkit-oidf.log" 2>&1 &'
       - name: Start suite with request transport fix
         run: >-
@@ -111,44 +111,52 @@ jobs:
           --add-host server:127.0.0.1
           registry.gitlab.com/openid/conformance-suite/nginx:release-v5.3.4
       - name: Wait for HTTPS endpoints
+        id: endpoints
         run: |
           curl --insecure --fail --retry 30 --retry-delay 2 --retry-all-errors https://localhost.emobix.co.uk:9443/oidc/.well-known/openid-configuration
           curl --insecure --fail --retry 60 --retry-delay 2 --retry-all-errors https://localhost.emobix.co.uk:8443/api/runner/available -o /dev/null
       - name: Config OP plan
         run: |
           mkdir -p oidf-results
-          python "$RUNNER_TEMP/oidf/scripts/run-test-plan.py" --no-parallel --export-dir oidf-results \
+          python "$GITHUB_WORKSPACE/.oidf-suite/scripts/run-test-plan.py" --no-parallel --export-dir oidf-results \
             oidcc-config-certification-test-plan .ci/oidf/config.json
       - name: Basic OP plan
         run: >-
-          python "$RUNNER_TEMP/oidf/scripts/run-test-plan.py" --no-parallel --export-dir oidf-results
+          python "$GITHUB_WORKSPACE/.oidf-suite/scripts/run-test-plan.py" --no-parallel --export-dir oidf-results
           --expected-failures-file .ci/oidf/expected-warnings.json --expected-skips-file .ci/oidf/expected-skips.json
           'oidcc-basic-certification-test-plan[server_metadata=discovery][client_registration=static_client]' .ci/oidf/config.json
       - name: Form Post Basic OP plan
         run: >-
-          python "$RUNNER_TEMP/oidf/scripts/run-test-plan.py" --no-parallel --export-dir oidf-results
+          python "$GITHUB_WORKSPACE/.oidf-suite/scripts/run-test-plan.py" --no-parallel --export-dir oidf-results
           --expected-failures-file .ci/oidf/expected-warnings.json --expected-skips-file .ci/oidf/expected-skips.json
           'oidcc-formpost-basic-certification-test-plan[server_metadata=discovery][client_registration=static_client]' .ci/oidf/config.json
       - name: Public PKCE module
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.endpoints.outcome == 'success' }}
         run: |
           jq '.client = {client_id: "oidf-public", scope: "openid profile email"}' .ci/oidf/config.json > .ci/oidf/public.json
-          python "$RUNNER_TEMP/oidf/scripts/run-test-plan.py" --no-parallel --export-dir oidf-results \
+          python "$GITHUB_WORKSPACE/.oidf-suite/scripts/run-test-plan.py" --no-parallel --export-dir oidf-results \
             'oidcc-test-plan[client_auth_type=none][response_type=code][response_mode=default][client_registration=static_client]:oidcc-ensure-request-with-valid-pkce-succeeds' .ci/oidf/public.json
       - name: Export suite diagnostics
         if: always()
         run: |
           mkdir -p oidf-results
           docker logs oidf-server > oidf-results/suite.log 2>&1 || true
-          cp "$RUNNER_TEMP/authkit-oidf.log" oidf-results/host.log
-          git -C "$RUNNER_TEMP/oidf" rev-parse HEAD > oidf-results/suite-revision.txt
+          if [ -f "$RUNNER_TEMP/authkit-oidf.log" ]; then
+            cp "$RUNNER_TEMP/authkit-oidf.log" oidf-results/host.log
+          fi
+          if [ -d "$GITHUB_WORKSPACE/.oidf-suite/target/surefire-reports" ]; then
+            cp -r "$GITHUB_WORKSPACE/.oidf-suite/target/surefire-reports" oidf-results/suite-unit-tests
+          fi
+          git -C "$GITHUB_WORKSPACE/.oidf-suite" rev-parse HEAD > oidf-results/suite-revision.txt
           git rev-parse HEAD > oidf-results/host-revision.txt
           cp .ci/oidf/outer-response-mode.patch oidf-results/
           sha256sum .ci/oidf/outer-response-mode.patch > oidf-results/suite-patch-sha256.txt
-          curl --insecure --fail "${CONFORMANCE_SERVER}api/plan" -o oidf-results/plans.json
-          jq -r '.data[] | .id // ._id' oidf-results/plans.json | while read -r plan_id; do
-            curl --insecure --fail "${CONFORMANCE_SERVER}api/plan/export/$plan_id" -o "oidf-results/$plan_id.zip"
-          done
+          if [ "${{ steps.endpoints.outcome }}" = success ]; then
+            curl --insecure --fail "${CONFORMANCE_SERVER}api/plan" -o oidf-results/plans.json
+            jq -r '.data[] | .id // ._id' oidf-results/plans.json | while read -r plan_id; do
+              curl --insecure --fail "${CONFORMANCE_SERVER}api/plan/export/$plan_id" -o "oidf-results/$plan_id.zip"
+            done
+          fi
       - uses: actions/upload-artifact@v6
         if: always()
         with:
