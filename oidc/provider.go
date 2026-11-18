@@ -93,7 +93,7 @@ func New(c Config, store Store, users UserStore, hasher PasswordHasher) (*Provid
 	if c.AllowInsecureLoopback {
 		options = append(options, op.WithAllowInsecure())
 	}
-	sdk, err := op.NewProvider(&op.Config{CodeMethodS256: true, GrantTypeRefreshToken: true, SupportedScopes: c.Scopes, SupportedClaims: []string{"iss", "sub", "aud", "exp", "iat", "auth_time", "nonce", "amr", "azp", "at_hash", "name", "picture", "email", "email_verified"}}, s, op.StaticIssuer(c.Issuer), options...)
+	sdk, err := op.NewProvider(&op.Config{CodeMethodS256: true, GrantTypeRefreshToken: true, AuthMethodPost: true, SupportedScopes: c.Scopes, SupportedClaims: []string{"iss", "sub", "aud", "exp", "iat", "auth_time", "nonce", "amr", "azp", "at_hash", "name", "picture", "email", "email_verified"}}, s, op.StaticIssuer(c.Issuer), options...)
 	if err != nil {
 		return nil, fmt.Errorf("OIDC provider initialization failed: %w", err)
 	}
@@ -157,10 +157,10 @@ func (p *Provider) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if scheme, _, ok := strings.Cut(r.Header.Get("Authorization"), " "); ok && strings.EqualFold(scheme, "Basic") {
 			w = basicChallengeWriter{w}
 		}
-		if !tokenForm(w, r) {
+		if !p.tokenForm(w, r) {
 			return
 		}
-		if r.PostForm.Get("grant_type") == "authorization_code" && !validVerifier(r.PostForm.Get("code_verifier")) {
+		if r.PostForm.Get("grant_type") == "authorization_code" && r.PostForm.Has("code_verifier") && !validVerifier(r.PostForm.Get("code_verifier")) {
 			op.RequestError(w, r, protocol.ErrInvalidGrant(), nil)
 			return
 		}
@@ -169,7 +169,7 @@ func (p *Provider) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if scheme, _, ok := strings.Cut(r.Header.Get("Authorization"), " "); ok && strings.EqualFold(scheme, "Basic") {
 			w = basicChallengeWriter{w}
 		}
-		if !tokenForm(w, r) {
+		if !p.tokenForm(w, r) {
 			return
 		}
 		op.Revoke(w, r, p.protocol)
@@ -180,11 +180,7 @@ func (p *Provider) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if !parseForm(w, r) {
 			return
 		}
-		if r.Form.Has("access_token") {
-			op.RequestError(w, r, protocol.ErrInvalidRequest(), nil)
-			return
-		}
-		op.Userinfo(w, r, p.protocol)
+		p.userinfo(w, r)
 	default:
 		http.NotFound(w, r)
 	}
@@ -220,7 +216,7 @@ func parseForm(w http.ResponseWriter, r *http.Request) bool {
 	}
 	return true
 }
-func tokenForm(w http.ResponseWriter, r *http.Request) bool {
+func (p *Provider) tokenForm(w http.ResponseWriter, r *http.Request) bool {
 	if !method(w, r, http.MethodPost) {
 		return false
 	}
@@ -232,7 +228,39 @@ func tokenForm(w http.ResponseWriter, r *http.Request) bool {
 	if !parseForm(w, r) {
 		return false
 	}
-	if r.PostForm.Has("client_secret") || r.PostForm.Has("client_assertion") || r.PostForm.Has("client_assertion_type") {
+	if r.PostForm.Has("client_assertion") || r.PostForm.Has("client_assertion_type") {
+		op.RequestError(w, r, protocol.ErrInvalidClient(), nil)
+		return false
+	}
+	id := r.PostForm.Get("client_id")
+	auth := r.Header.Get("Authorization")
+	if auth != "" {
+		var ok bool
+		id, _, ok = r.BasicAuth()
+		if !ok || r.PostForm.Has("client_secret") {
+			op.RequestError(w, r, protocol.ErrInvalidRequest(), nil)
+			return false
+		}
+		var err error
+		id, err = url.QueryUnescape(id)
+		if err != nil {
+			op.RequestError(w, r, protocol.ErrInvalidClient(), nil)
+			return false
+		}
+		if supplied := r.PostForm.Get("client_id"); supplied != "" && supplied != id {
+			op.RequestError(w, r, protocol.ErrInvalidClient(), nil)
+			return false
+		}
+	}
+	c, err := p.Service.client(r.Context(), id)
+	if err != nil {
+		op.RequestError(w, r, protocolError(err), nil)
+		return false
+	}
+	valid := c.AuthMethod == "none" && auth == "" && !r.PostForm.Has("client_secret") ||
+		c.AuthMethod == "client_secret_basic" && auth != "" ||
+		c.AuthMethod == "client_secret_post" && auth == "" && r.PostForm.Has("client_secret")
+	if !valid {
 		op.RequestError(w, r, protocol.ErrInvalidClient(), nil)
 		return false
 	}
@@ -291,14 +319,16 @@ func (p *Provider) validateAuthRequest(ctx context.Context, req *protocol.AuthRe
 	if req.ResponseType != protocol.ResponseTypeCode {
 		return "", &protocol.Error{ErrorType: "unsupported_response_type"}
 	}
-	if req.CodeChallengeMethod != protocol.CodeChallengeMethodS256 || len(req.CodeChallenge) != 43 {
+	c := client.(*clientSnapshot).row
+	if req.CodeChallenge == "" && req.CodeChallengeMethod == "" && !c.requiresPKCE() {
+		// A confidential client may explicitly opt into the Core flow without PKCE.
+	} else if req.CodeChallengeMethod != protocol.CodeChallengeMethodS256 || len(req.CodeChallenge) != 43 {
 		return "", protocol.ErrInvalidRequest()
 	}
 	decoded, err := base64.RawURLEncoding.DecodeString(req.CodeChallenge)
-	if err != nil || len(decoded) != 32 {
+	if req.CodeChallenge != "" && (err != nil || len(decoded) != 32) {
 		return "", protocol.ErrInvalidRequest()
 	}
-	c := client.(*clientSnapshot).row
 	if !slices.Contains(req.Scopes, "openid") || !subset(req.Scopes, c.Scopes) {
 		return "", protocol.ErrInvalidScope()
 	}

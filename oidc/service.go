@@ -37,7 +37,7 @@ func (s *Service) RegisterClient(ctx context.Context, client Client, secret stri
 	if client.ApplicationType != "web" && client.ApplicationType != "native" {
 		return ErrValidation
 	}
-	if client.AuthMethod != "none" && client.AuthMethod != "client_secret_basic" {
+	if client.AuthMethod != "none" && client.AuthMethod != "client_secret_basic" && client.AuthMethod != "client_secret_post" {
 		return ErrValidation
 	}
 	if client.ApplicationType == "native" && client.AuthMethod != "none" {
@@ -46,7 +46,10 @@ func (s *Service) RegisterClient(ctx context.Context, client Client, secret stri
 	if client.AuthMethod == "none" && secret != "" {
 		return ErrValidation
 	}
-	if client.AuthMethod == "client_secret_basic" && (len(secret) < 32 || len(secret) > 72) {
+	if client.AuthMethod == "none" && client.RequirePKCE != nil && !*client.RequirePKCE {
+		return ErrValidation
+	}
+	if client.AuthMethod != "none" && (len(secret) < 32 || len(secret) > 72) {
 		return ErrValidation
 	}
 	if len(client.RedirectURIs) == 0 || len(client.Audience) == 0 || !slices.Contains(client.Scopes, "openid") || !subset(client.Scopes, s.config.Scopes) {

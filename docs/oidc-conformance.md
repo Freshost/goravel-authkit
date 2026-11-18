@@ -32,3 +32,26 @@ The public client must use S256 without a client secret. The confidential client
 must authenticate even when using PKCE. A client should require only discovery
 and ordinary OAuth/OIDC configuration; any necessary proprietary client-side
 workaround indicates an integration defect.
+
+## Reproducible CI run
+
+The `OIDC conformance` workflow runs the unmodified OpenID Foundation suite
+`release-v5.3.4` (source revision `23353b36957d6466010de767c812d2c91ed37638`)
+and its official Python runner. It runs Config OP, Basic OP and Form Post Basic
+OP with static registration against the actual Goravel/Authkit integration and
+PostgreSQL. The workflow uses official prebuilt suite images; all host builds
+and verification run in CI.
+
+`demo/conformance` is a separate CI executable. It supplies a minimal HTML login
+form backed by the existing Authkit login endpoint and session middleware. It
+creates isolated synthetic accounts/clients, ephemeral signing/encryption keys
+and a self-signed HTTPS endpoint. No production credentials or hosted
+certification account are required. This exercises protocol HTTPS transport;
+it does not establish public certificate-chain trust for a production domain.
+
+The Basic clients explicitly allow the legacy confidential code flow without
+PKCE. Separate standard PKCE modules exercise public and confidential S256; the
+default client policy remains mandatory PKCE. The `oidf-results` artifact retains
+the official module results and browser evidence for seven days, including
+warnings, skips and review outcomes. A workflow result alone is not a certificate:
+review the full module results and evidence before making conformance claims.

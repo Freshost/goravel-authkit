@@ -50,6 +50,9 @@ func (a *requestSnapshot) GetAudience() []string  { return []string{a.row.Client
 func (a *requestSnapshot) GetAuthTime() time.Time { return a.row.AuthTime }
 func (a *requestSnapshot) GetClientID() string    { return a.row.ClientID }
 func (a *requestSnapshot) GetCodeChallenge() *protocol.CodeChallenge {
+	if a.original.CodeChallenge == "" {
+		return nil
+	}
 	return &protocol.CodeChallenge{Challenge: a.original.CodeChallenge, Method: a.original.CodeChallengeMethod}
 }
 func (a *requestSnapshot) GetNonce() string                       { return a.original.Nonce }
@@ -132,7 +135,7 @@ func (s *storage) AuthorizeClientIDSecret(ctx context.Context, id, secret string
 	if err != nil {
 		return protocolError(err)
 	}
-	if c.AuthMethod != "client_secret_basic" || !s.service.hasher.Check(secret, c.SecretHash) {
+	if (c.AuthMethod != "client_secret_basic" && c.AuthMethod != "client_secret_post") || !s.service.hasher.Check(secret, c.SecretHash) {
 		return protocol.ErrInvalidClient()
 	}
 	return nil

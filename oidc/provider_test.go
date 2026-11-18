@@ -634,3 +634,47 @@ func TestClientPolicyCannotChangeBetweenValidationAndPersistence(t *testing.T) {
 	_, err = p.storage.CreateAuthRequest(ctx, &protocol.AuthRequest{ClientID: "public", RedirectURI: "https://app.example/callback", ResponseType: protocol.ResponseTypeCode, Scopes: protocol.SpaceDelimitedArray{"openid"}, CodeChallenge: protocol.NewSHACodeChallenge(strings.Repeat("v", 43)), CodeChallengeMethod: protocol.CodeChallengeMethodS256}, "")
 	require.Error(t, err)
 }
+
+func TestConfidentialPKCEOptOutAndAuthenticationBinding(t *testing.T) {
+	p, b, _ := testProvider(t)
+	ctx := context.Background()
+	client, err := p.Service.client(ctx, "public")
+	require.NoError(t, err)
+	optional := false
+	client.RequirePKCE = &optional
+	require.ErrorIs(t, p.Service.RegisterClient(ctx, *client, ""), ErrValidation)
+	client.ID = "legacy-confidential"
+	client.AuthMethod = "client_secret_post"
+	secret := strings.Repeat("s", 43)
+	require.NoError(t, p.Service.RegisterClient(ctx, *client, secret))
+	code, _ := authorizeCode(t, p, b, url.Values{"client_id": {client.ID}, "code_challenge": {""}, "code_challenge_method": {""}})
+	form := url.Values{"grant_type": {"authorization_code"}, "client_id": {client.ID}, "redirect_uri": {"https://app.example/callback"}, "code": {code}}
+	require.Equal(t, 401, request(p, Browser{}, http.MethodPost, "/oauth/token", form).Code)
+	r := httptest.NewRequest(http.MethodPost, p.Issuer()+"/oauth/token", strings.NewReader(form.Encode()))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r.SetBasicAuth(client.ID, secret)
+	w := httptest.NewRecorder()
+	p.ServeHTTP(w, r)
+	require.Equal(t, 401, w.Code, "POST clients cannot switch to Basic authentication")
+	form.Set("client_secret", secret)
+	tokens(t, request(p, Browser{}, http.MethodPost, "/oauth/token", form))
+	client.RequirePKCE = nil
+	require.NoError(t, p.Service.RegisterClient(ctx, *client, secret))
+	w = request(p, b, http.MethodGet, "/authorize?"+url.Values{"client_id": {client.ID}, "response_type": {"code"}, "redirect_uri": {client.RedirectURIs[0]}, "scope": {"openid"}}.Encode(), nil)
+	require.Contains(t, w.Header().Get("Location"), "error=invalid_request", "PKCE remains the default")
+}
+
+func TestUserinfoBearerChallengesAndBodyTransport(t *testing.T) {
+	p, b, _ := testProvider(t)
+	code, verifier := authorizeCode(t, p, b, nil)
+	out := tokens(t, exchange(p, code, verifier, "public"))
+	w := request(p, Browser{}, http.MethodPost, "/userinfo", url.Values{"access_token": {out.AccessToken}})
+	require.Equal(t, 200, w.Code)
+	w = request(p, Browser{}, http.MethodGet, "/userinfo?access_token="+url.QueryEscape(out.AccessToken), nil)
+	require.Equal(t, 400, w.Code)
+	require.Contains(t, w.Header().Get("WWW-Authenticate"), "invalid_request")
+	require.NoError(t, p.Service.RevokeAll(context.Background(), b.UserID))
+	w = request(p, Browser{}, http.MethodPost, "/userinfo", url.Values{"access_token": {out.AccessToken}})
+	require.Equal(t, 401, w.Code)
+	require.Contains(t, w.Header().Get("WWW-Authenticate"), "invalid_token")
+}

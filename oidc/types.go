@@ -118,6 +118,7 @@ type Client struct {
 	Name            string             `json:"client_name"`
 	ApplicationType string             `json:"application_type"`
 	AuthMethod      string             `json:"token_endpoint_auth_method"`
+	RequirePKCE     *bool              `json:"require_pkce,omitempty"`
 	SecretHash      string             `json:"-"`
 	RedirectURIs    models.StringSlice `json:"redirect_uris"`
 	Scopes          models.StringSlice `json:"scopes"`
@@ -126,6 +127,10 @@ type Client struct {
 	SkipConsent     bool               `json:"skip_consent"`
 	Disabled        bool               `json:"disabled"`
 	Version         int64              `json:"-"`
+}
+
+func (c *Client) requiresPKCE() bool {
+	return c.AuthMethod == "none" || c.RequirePKCE == nil || *c.RequirePKCE
 }
 
 type authorization struct {

@@ -22,7 +22,9 @@ func (p *Provider) authorize(w http.ResponseWriter, r *http.Request) {
 	}
 	client, err := p.storage.GetClientByClientID(r.Context(), req.ClientID)
 	if err != nil || !registeredRedirect(client.RedirectURIs(), req.RedirectURI, client.ApplicationType() == op.ApplicationTypeNative) {
-		p.authorizationError(w, r, nil, protocol.ErrInvalidRequestRedirectURI())
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte("<!doctype html><html lang=\"en\"><title>Authorization failed</title><h1>Invalid client or redirect URI</h1></html>"))
 		return
 	}
 	subject, err := p.validateAuthRequest(r.Context(), req, client)

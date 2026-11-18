@@ -17,7 +17,7 @@ import (
 // Exercise real HTTPS discovery, code exchange, JWKS verification, UserInfo and
 // refresh through an independent OIDC client, with no Authkit client adapter.
 func TestIndependentOIDCClient(t *testing.T) {
-	for _, method := range []string{"none", "client_secret_basic"} {
+	for _, method := range []string{"none", "client_secret_basic", "client_secret_post"} {
 		t.Run(method, func(t *testing.T) {
 			base, b, users := testProvider(t)
 			var provider *Provider
@@ -37,7 +37,7 @@ func TestIndependentOIDCClient(t *testing.T) {
 			require.NoError(t, err)
 			client.AuthMethod = method
 			secret := ""
-			if method == "client_secret_basic" {
+			if method != "none" {
 				secret = strings.Repeat("s", 43)
 			}
 			require.NoError(t, provider.Service.RegisterClient(context.Background(), *client, secret))
@@ -47,7 +47,7 @@ func TestIndependentOIDCClient(t *testing.T) {
 			discovered, err := clientoidc.NewProvider(ctx, provider.Issuer())
 			require.NoError(t, err)
 			oauth := oauth2.Config{ClientID: client.ID, ClientSecret: secret, RedirectURL: client.RedirectURIs[0], Endpoint: discovered.Endpoint(), Scopes: []string{"openid", "profile", "email", "offline_access", "api:read"}}
-			if method == "none" {
+			if method != "client_secret_basic" {
 				oauth.Endpoint.AuthStyle = oauth2.AuthStyleInParams
 			} else {
 				oauth.Endpoint.AuthStyle = oauth2.AuthStyleInHeader

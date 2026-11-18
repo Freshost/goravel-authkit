@@ -146,9 +146,9 @@ func RegisterOIDC(router route.Router) {
 	chain = append(chain, &oidcBrowserMiddleware{guard: opts.Guard, users: users, sessions: sessions})
 	router.Middleware(chain...).Group(func(r route.Router) {
 		r.Get(p.Path()+"/authorize", serve)
+		r.Post(p.Path()+"/authorize", serve)
 		r.Get(p.Path()+"/interaction", serve)
 		r.Middleware(middleware.VerifyRequestOrigin(opts.TrustedOrigins)).Group(func(post route.Router) {
-			post.Post(p.Path()+"/authorize", serve)
 			post.Post(p.Path()+"/interaction", serve)
 		})
 	})

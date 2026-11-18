@@ -51,7 +51,7 @@ func (*ManageOIDCClient) Handle(ctx console.Context) error {
 		return errors.New("invalid client metadata JSON")
 	}
 	secret := ""
-	if client.AuthMethod == "client_secret_basic" {
+	if client.AuthMethod == "client_secret_basic" || client.AuthMethod == "client_secret_post" {
 		secret = os.Getenv("AUTHKIT_OIDC_CLIENT_SECRET")
 	}
 	if err = p.Service.RegisterClient(context.Background(), client, secret); err != nil {

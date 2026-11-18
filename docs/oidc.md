@@ -11,9 +11,9 @@ OIDC provider. That future feature is the OIDC **client** role. Registered
 
 ## Supported profile
 
-- OIDC Authorization Code Flow; PKCE `S256` is required for every client.
+- OIDC Authorization Code Flow; PKCE `S256` is required by default and always for public clients.
 - Public web/native clients (`token_endpoint_auth_method: none`) and confidential
-  web clients (`client_secret_basic`). PKCE does not replace client authentication.
+  web clients (`client_secret_basic` or `client_secret_post`). PKCE does not replace client authentication.
 - Discovery, JWKS, UserInfo, refresh grants and RFC 7009 revocation.
 - `query` and `form_post` authorization responses; `none`, `login`, `consent` and
   `select_account` prompts. The host login UI must support interactive account
@@ -123,13 +123,21 @@ Dynamic Client Registration endpoint. Example administrative metadata file:
 ./artisan auth:oidc-client --disable=example-web
 ```
 
-For confidential web clients, use `client_secret_basic` and supply the secret in
+For confidential web clients, prefer `client_secret_basic` and supply the secret in
 `AUTHKIT_OIDC_CLIENT_SECRET` to the command. Use a random 32–72 byte secret.
 Only a password hash is persisted;
 the command never prints credentials. Public clients must not have a secret.
 Programmatic callers can obtain `routes.NewOIDCProvider()` and call
 `provider.Service.RegisterClient(ctx, client, secret)` or `DisableClient`.
 Every update advances the client version and invalidates its previous grants.
+
+A confidential client can explicitly select `client_secret_post`, or set
+`"require_pkce": false` for compatibility with the original OIDC Core code flow.
+Omitting `require_pkce` requires S256. Public clients cannot disable PKCE. A
+client registered for Basic cannot authenticate using a body secret, and a POST
+client cannot switch to Basic. Multiple authentication methods are rejected.
+A client opting out of mandatory PKCE still uses S256 whenever it supplies a
+challenge; the option does not enable `plain`.
 
 Redirects match registered values exactly. Native loopback redirects allow a
 different port only; scheme, literal host, path and query remain bound. Native
@@ -164,9 +172,12 @@ applications, including any permitted offline access. It is false by default.
 `prompt=none` returns standard interaction errors when login or consent is needed.
 
 Authorizations are refused while impersonating, including cross-guard switches.
-Browser mutations retain origin/CSRF protection; token and revocation requests
+Authorization requests support cross-origin GET and POST as required by OIDC.
+Consent and connection-management mutations retain origin/CSRF protection; token and revocation requests
 use protocol credentials and do not require a browser Origin header. Stateless
-CORS origins are configured separately and do not enable cookies.
+CORS origins are configured separately and do not enable cookies. UserInfo accepts
+a Bearer header or an encoded POST body token, rejects query tokens and multiple
+credential transports, and returns RFC 6750 challenges for invalid credentials.
 
 ## Protect API routes
 

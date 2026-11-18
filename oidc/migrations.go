@@ -22,6 +22,7 @@ func (*providerMigration) Up() error {
 			t.String("name", 200)
 			t.String("application_type", 20)
 			t.String("auth_method", 40)
+			t.Boolean("require_pkce").Nullable()
 			t.Text("secret_hash")
 			t.Jsonb("redirect_uris")
 			t.Jsonb("scopes")
