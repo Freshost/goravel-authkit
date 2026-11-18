@@ -48,7 +48,8 @@ func (c *ImpersonationController) Start(ctx contractshttp.Context) contractshttp
 		return c.unauthorized(ctx)
 	}
 	actor, err := c.repo(c.guard).FindByID(stdctx, actorID)
-	if err != nil || actor == nil {
+	sess := ctx.Request().Session()
+	if err != nil || actor == nil || sess == nil || sess.Get(helpers.PasswordChangedAtKey(c.guard)) != middleware.FormatPasswordTimestamp(actor.PasswordChangedAt) {
 		return c.unauthorized(ctx)
 	}
 
@@ -104,7 +105,7 @@ func (c *ImpersonationController) Start(ctx contractshttp.Context) contractshttp
 		return c.internal(ctx)
 	}
 	helpers.SetImpersonator(ctx, targetGuard, helpers.ImpersonatorMarker{
-		Guard: c.guard, UserID: actor.ID, Email: actor.Email, SameGuard: sameGuard,
+		Guard: c.guard, UserID: actor.ID, Email: actor.Email, SameGuard: sameGuard, PasswordStamp: actor.PasswordChangedAt,
 	})
 	if err := helpers.RegenerateAndPersistSession(ctx); err != nil {
 		facades.Log().Errorf("impersonate: regenerate session: %v", err)
@@ -135,7 +136,7 @@ func (c *ImpersonationController) Stop(ctx contractshttp.Context) contractshttp.
 	if marker.SameGuard {
 		// Restore the original actor as this guard's user.
 		actor, err := c.repo(marker.Guard).FindByID(stdctx, marker.UserID)
-		if err == nil && actor != nil {
+		if err == nil && actor != nil && !actor.IsDisabled() && actor.PasswordChangedAt.Equal(marker.PasswordStamp) {
 			if _, err := facades.Auth(ctx).Guard(c.guard).Login(actor); err != nil {
 				facades.Log().Errorf("impersonate stop: restore session: %v", err)
 				return c.internal(ctx)

@@ -6,8 +6,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 
 	"github.com/freshost/goravel-authkit/models"
+	"github.com/freshost/goravel-authkit/repositories"
 )
 
 var errBoom = errors.New("boom")
@@ -88,7 +90,7 @@ func (f *fakeRepo) Create(_ context.Context, u *models.User) error {
 	return nil
 }
 
-func (f *fakeRepo) Save(_ context.Context, u *models.User) error {
+func (f *fakeRepo) save(u *models.User) {
 	// Re-key by email in case it changed.
 	for e, existing := range f.byEmail {
 		if existing.ID == u.ID {
@@ -96,6 +98,34 @@ func (f *fakeRepo) Save(_ context.Context, u *models.User) error {
 		}
 	}
 	f.seed(u)
+}
+
+func (f *fakeRepo) UpdateProfile(_ context.Context, id uuid.UUID, email string, name *string, clearEmailVerified bool) error {
+	u := f.byID[id]
+	u.Email = email
+	u.Name = name
+	if clearEmailVerified {
+		u.EmailVerified = nil
+	}
+	f.save(u)
+	return nil
+}
+
+func (f *fakeRepo) UpdateManaged(_ context.Context, id uuid.UUID, email string, name *string, role string, disabledAt *time.Time, setDisabled bool, passwordChangedAt *time.Time) error {
+	u := f.byID[id]
+	if u.Email != email {
+		u.EmailVerified = nil
+	}
+	u.Email = email
+	u.Name = name
+	u.Role = role
+	if setDisabled {
+		u.DisabledAt = disabledAt
+	}
+	if passwordChangedAt != nil {
+		u.PasswordChangedAt = *passwordChangedAt
+	}
+	f.save(u)
 	return nil
 }
 
@@ -123,12 +153,21 @@ func (f *fakeRepo) UpdateTwoFactor(_ context.Context, id uuid.UUID, secret, reco
 }
 
 func (f *fakeRepo) MutateLocked(_ context.Context, id uuid.UUID, fn func(u *models.User) error) error {
+	if f.failOp {
+		return errBoom
+	}
 	u, ok := f.byID[id]
 	if !ok {
-		return errBoom
+		return gorm.ErrRecordNotFound
 	}
 	return fn(u) // mutates the stored user in place (persisted)
 }
+
+func (f *fakeRepo) WithinTransaction(_ context.Context, fn func(tx repositories.UsersRepository) error) error {
+	return fn(f)
+}
+
+func (f *fakeRepo) LockManagementInvariant(_ context.Context, _ []string) error { return nil }
 
 // fakeHasher treats "hash:"+value as the hash; no crypto, fully deterministic.
 type fakeHasher struct{}

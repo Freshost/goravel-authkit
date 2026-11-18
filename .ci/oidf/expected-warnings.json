@@ -1,0 +1,38 @@
+[
+  {
+    "test-name": "oidcc-server",
+    "variant": "*",
+    "configuration-filename": ".ci/oidf/config.json",
+    "current-block": "",
+    "condition": "EnsureIdTokenDoesNotContainNonRequestedClaims",
+    "expected-result": "warning",
+    "comment": "The pinned SDK emits the registered JWT client_id claim in addition to aud/azp. OIDC Core permits additional claims. Package tests assert the complete allowed claim set; user attributes and credentials are not exposed."
+  },
+  {
+    "test-name": "oidcc-scope-profile",
+    "variant": "*",
+    "configuration-filename": ".ci/oidf/config.json",
+    "current-block": "",
+    "condition": "VerifyScopesReturnedInUserInfoClaims",
+    "expected-result": "warning",
+    "comment": "Authkit has a name and optional image, not birthdate, gender, nickname, timezone or the rest of the optional profile attributes. Core 5.4 permits omitting unavailable information. No synthetic claims are invented."
+  },
+  {
+    "test-name": "oidcc-ensure-request-with-acr-values-succeeds",
+    "variant": "*",
+    "configuration-filename": ".ci/oidf/config.json",
+    "current-block": "Verify authorization endpoint response",
+    "condition": "ValidateIdTokenACRClaimAgainstAcrValuesRequest",
+    "expected-result": "warning",
+    "comment": "The provider does not define ACR assurance classes and does not advertise acr_values_supported. It returns actual authentication methods in amr and does not invent a class for the arbitrary requested values 1 and 2."
+  },
+  {
+    "test-name": "oidcc-claims-essential",
+    "variant": "*",
+    "configuration-filename": ".ci/oidf/config.json",
+    "current-block": "",
+    "condition": "EnsureUserInfoContainsName",
+    "expected-result": "warning",
+    "comment": "The optional claims request parameter is not supported or advertised. Name is returned for profile scope; this test asks for it through claims while requesting only openid."
+  }
+]

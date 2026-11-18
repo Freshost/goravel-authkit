@@ -24,9 +24,9 @@ type RememberRepository interface {
 	FindBySelector(ctx context.Context, selector string) (*models.RememberToken, error)
 	// RotateValidator atomically swaps the validator only if the row still holds
 	// expectedCurrentHash (a compare-and-set), moving it to previous_validator_hash
-	// and sliding the expiry. Returns the number of rows updated (0 = another
-	// request already rotated it, so the caller must not treat the mismatch as
-	// theft).
+	// and sliding the expiry. Returns the number of rows updated. A zero can mean
+	// either a concurrent rotation or deletion/revocation, so callers must re-read
+	// and distinguish those states before authenticating.
 	RotateValidator(ctx context.Context, id uuid.UUID, expectedCurrentHash, newCurrentHash, newPreviousHash string, rotatedAt, expiresAt time.Time) (int64, error)
 	Delete(ctx context.Context, id uuid.UUID) error
 	DeleteByUser(ctx context.Context, userID uuid.UUID) error

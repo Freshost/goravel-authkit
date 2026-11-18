@@ -1,0 +1,165 @@
+name: OIDC conformance (transport fix)
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  oidf:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: authkit_oidf
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: [5432:5432]
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+      mongodb:
+        image: mongo:6.0.13
+        ports: [27017:27017]
+    env:
+      APP_ENV: testing
+      APP_NAME: AuthkitConformance
+      APP_KEY: 0123456789abcdef0123456789abcdef
+      APP_DEBUG: "false"
+      BCRYPT_ROUNDS: "4"
+      HTTP_REQUEST_TIMEOUT: "30"
+      DB_CONNECTION: postgres
+      DB_HOST: 127.0.0.1
+      DB_PORT: "5432"
+      DB_DATABASE: authkit_oidf
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      DB_SCHEMA: public
+      SESSION_SECURE: "true"
+      AUTHKIT_RATE_LIMIT_IP_ATTEMPTS: "100000"
+      AUTHKIT_RATE_LIMIT_ACCOUNT_ATTEMPTS: "100000"
+      AUTHKIT_RATE_LIMIT_PASSWORD_ATTEMPTS: "100000"
+      CONFORMANCE_SERVER: https://localhost.emobix.co.uk:8443/
+      CONFORMANCE_SERVER_MTLS: https://localhost.emobix.co.uk:8443/
+      CONFORMANCE_DEV_MODE: "1"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.26.x"
+          cache-dependency-path: |
+            go.sum
+            demo/go.sum
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Official suite source
+        run: git clone --depth 1 --branch release-v5.3.4 https://gitlab.com/openid/conformance-suite.git "$GITHUB_WORKSPACE/.oidf-suite"
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+          cache-dependency-path: .oidf-suite/pom.xml
+      - name: Apply suite request transport fix
+        run: git -C "$GITHUB_WORKSPACE/.oidf-suite" apply "$GITHUB_WORKSPACE/.ci/oidf/outer-response-mode.patch"
+      - name: Build and test suite transport fix
+        working-directory: ${{ github.workspace }}/.oidf-suite
+        run: mvn --batch-mode -Dtest='BuildRequestObjectBy*Redirect*_UnitTest' -Dpmd.skip=true -Dcheckstyle.skip=true package
+      - name: Package corrected suite
+        run: docker build -t authkit-oidf-suite:5.3.4-response-mode "$GITHUB_WORKSPACE/.oidf-suite"
+      - name: Official runner dependencies
+        run: pip install -r "$GITHUB_WORKSPACE/.oidf-suite/scripts/requirements.txt"
+      - name: Isolated hostnames
+        run: echo '127.0.0.1 localhost.emobix.co.uk' | sudo tee -a /etc/hosts
+      - name: Build host integration
+        working-directory: demo
+        run: |
+          cp .env.example .env
+          go build -o "$RUNNER_TEMP/authkit-oidf" ./conformance
+      - name: Migrate PostgreSQL
+        working-directory: demo
+        run: go run . artisan migrate
+      - name: Isolated TLS certificate
+        run: >-
+          openssl req -x509 -nodes -newkey rsa:2048 -days 1
+          -keyout "$RUNNER_TEMP/oidf.key" -out "$RUNNER_TEMP/oidf.crt"
+          -subj /CN=localhost.emobix.co.uk
+          -addext subjectAltName=DNS:localhost.emobix.co.uk
+      - name: Start Authkit host
+        working-directory: demo
+        env:
+          OIDF_TLS_CERT: ${{ runner.temp }}/oidf.crt
+          OIDF_TLS_KEY: ${{ runner.temp }}/oidf.key
+        run: '"$RUNNER_TEMP/authkit-oidf" > "$RUNNER_TEMP/authkit-oidf.log" 2>&1 &'
+      - name: Start suite with request transport fix
+        run: >-
+          docker run -d --name oidf-server --network host
+          --add-host localhost.emobix.co.uk:127.0.0.1
+          -e BASE_URL=https://localhost.emobix.co.uk:8443
+          -e BASE_MTLS_URL=https://localhost.emobix.co.uk:8443
+          -e MONGODB_HOST=127.0.0.1 -e SPRING_PROFILES_ACTIVE=dev
+          -e OIDC_GOOGLE_CLIENTID=ci-google -e OIDC_GOOGLE_SECRET=ci-google
+          -e OIDC_GITLAB_CLIENTID=ci-gitlab -e OIDC_GITLAB_SECRET=ci-gitlab
+          authkit-oidf-suite:5.3.4-response-mode
+      - name: Start suite HTTPS endpoint
+        run: >-
+          docker run -d --name oidf-https --network host
+          --add-host server:127.0.0.1
+          registry.gitlab.com/openid/conformance-suite/nginx:release-v5.3.4
+      - name: Wait for HTTPS endpoints
+        id: endpoints
+        run: |
+          curl --insecure --fail --retry 30 --retry-delay 2 --retry-all-errors https://localhost.emobix.co.uk:9443/oidc/.well-known/openid-configuration
+          curl --insecure --fail --retry 60 --retry-delay 2 --retry-all-errors https://localhost.emobix.co.uk:8443/api/runner/available -o /dev/null
+      - name: Config OP plan
+        run: |
+          mkdir -p oidf-results
+          python "$GITHUB_WORKSPACE/.oidf-suite/scripts/run-test-plan.py" --no-parallel --export-dir oidf-results \
+            oidcc-config-certification-test-plan .ci/oidf/config.json
+      - name: Basic OP plan
+        run: >-
+          python "$GITHUB_WORKSPACE/.oidf-suite/scripts/run-test-plan.py" --no-parallel --export-dir oidf-results
+          --expected-failures-file .ci/oidf/expected-warnings.json --expected-skips-file .ci/oidf/expected-skips.json
+          'oidcc-basic-certification-test-plan[server_metadata=discovery][client_registration=static_client]' .ci/oidf/config.json
+      - name: Form Post Basic OP plan
+        run: >-
+          python "$GITHUB_WORKSPACE/.oidf-suite/scripts/run-test-plan.py" --no-parallel --export-dir oidf-results
+          --expected-failures-file .ci/oidf/expected-warnings.json --expected-skips-file .ci/oidf/expected-skips.json
+          'oidcc-formpost-basic-certification-test-plan[server_metadata=discovery][client_registration=static_client]' .ci/oidf/config.json
+      - name: Public PKCE module
+        if: ${{ !cancelled() && steps.endpoints.outcome == 'success' }}
+        run: |
+          jq '.client = {client_id: "oidf-public", scope: "openid profile email"}' .ci/oidf/config.json > .ci/oidf/public.json
+          python "$GITHUB_WORKSPACE/.oidf-suite/scripts/run-test-plan.py" --no-parallel --export-dir oidf-results \
+            'oidcc-test-plan[client_auth_type=none][response_type=code][response_mode=default][client_registration=static_client]:oidcc-ensure-request-with-valid-pkce-succeeds' .ci/oidf/public.json
+      - name: Export suite diagnostics
+        if: always()
+        run: |
+          mkdir -p oidf-results
+          docker logs oidf-server > oidf-results/suite.log 2>&1 || true
+          if [ -f "$RUNNER_TEMP/authkit-oidf.log" ]; then
+            cp "$RUNNER_TEMP/authkit-oidf.log" oidf-results/host.log
+          fi
+          if [ -d "$GITHUB_WORKSPACE/.oidf-suite/target/surefire-reports" ]; then
+            cp -r "$GITHUB_WORKSPACE/.oidf-suite/target/surefire-reports" oidf-results/suite-unit-tests
+          fi
+          git -C "$GITHUB_WORKSPACE/.oidf-suite" rev-parse HEAD > oidf-results/suite-revision.txt
+          git rev-parse HEAD > oidf-results/host-revision.txt
+          cp .ci/oidf/outer-response-mode.patch oidf-results/
+          sha256sum .ci/oidf/outer-response-mode.patch > oidf-results/suite-patch-sha256.txt
+          if [ "${{ steps.endpoints.outcome }}" = success ]; then
+            curl --insecure --fail "${CONFORMANCE_SERVER}api/plan" -o oidf-results/plans.json
+            jq -r '.data[] | .id // ._id' oidf-results/plans.json | while read -r plan_id; do
+              curl --insecure --fail "${CONFORMANCE_SERVER}api/plan/export/$plan_id" -o "oidf-results/$plan_id.zip"
+            done
+          fi
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: oidf-results
+          path: oidf-results/
+          retention-days: 7

@@ -17,6 +17,7 @@ const DefaultAPITokensTable = "api_tokens"
 
 type APITokensRepository interface {
 	Create(ctx context.Context, token *models.APIToken) error
+	CreateWithinLimit(ctx context.Context, token *models.APIToken, limit int) (bool, error)
 	FindBySelector(ctx context.Context, selector string) (*models.APIToken, error)
 	ListByUser(ctx context.Context, userID uuid.UUID) ([]models.APIToken, error)
 	CountActiveByUser(ctx context.Context, userID uuid.UUID, now time.Time) (int64, error)
@@ -26,15 +27,19 @@ type APITokensRepository interface {
 	DeletePrunable(ctx context.Context, before time.Time) error
 }
 
-type APITokens struct{ table string }
+type APITokens struct{ table, usersTable string }
 
 func NewAPITokens() *APITokens { return NewAPITokensWithTable(DefaultAPITokensTable) }
 
-func NewAPITokensWithTable(table string) *APITokens {
+func NewAPITokensWithTable(table string, usersTables ...string) *APITokens {
 	if table == "" {
 		table = DefaultAPITokensTable
 	}
-	return &APITokens{table: table}
+	users := DefaultUsersTable
+	if len(usersTables) > 0 && usersTables[0] != "" {
+		users = usersTables[0]
+	}
+	return &APITokens{table: table, usersTable: users}
 }
 
 var _ APITokensRepository = (*APITokens)(nil)
@@ -47,6 +52,32 @@ func (r *APITokens) Create(ctx context.Context, token *models.APIToken) error {
 	return r.query(ctx).Create(token)
 }
 
+// CreateWithinLimit serializes the quota check and insert on the owning user row.
+func (r *APITokens) CreateWithinLimit(ctx context.Context, token *models.APIToken, limit int) (bool, error) {
+	created := false
+	err := facades.Orm().WithContext(ctx).Transaction(func(tx ormcontract.Query) error {
+		var user models.User
+		if err := tx.Table(r.usersTable).Where("id", token.UserID).LockForUpdate().First(&user); err != nil {
+			return err
+		}
+		if user.ID == uuid.Nil || user.IsDisabled() {
+			return gorm.ErrRecordNotFound
+		}
+		count, err := tx.Table(r.table).Where("user_id", token.UserID).WhereNull("revoked_at").Where("expires_at > ?", token.CreatedAt).Count()
+		if err != nil {
+			return err
+		}
+		if count >= int64(limit) {
+			return nil
+		}
+		if err := tx.Table(r.table).Create(token); err != nil {
+			return err
+		}
+		created = true
+		return nil
+	})
+	return created, err
+}
 func (r *APITokens) FindBySelector(ctx context.Context, selector string) (*models.APIToken, error) {
 	var token models.APIToken
 	err := r.query(ctx).Where("selector", selector).First(&token)

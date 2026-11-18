@@ -42,13 +42,19 @@ API tokens are off by default. When enabled, Authkit issues opaque
   once at creation and cannot be recovered.
 - Creation/list/revocation endpoints accept session authentication only, retain
   CSRF checks, and creation requires the current password plus TOTP when enabled.
-  All management is rejected during impersonation.
+  Management is rejected during impersonation by default. Enabling the target
+  guard's `impersonation.allow_sensitive_actions` permits normal management;
+  additionally enabling `api_tokens.allow_impersonated_creation` allows issuance
+  through the original actor's revalidated impersonation authority instead of
+  the target's credentials. OIDC authorization remains forbidden during any
+  impersonation, independently of these PAT policies.
 - Allowed scopes are configured per guard. Required middleware scopes only
   restrict a token; they never grant permissions beyond the live user's role and
   the host application's normal resource authorization.
 - Every request loads the live owner. Deleted or disabled owners are denied.
-  Password changes/resets and disabling/deleting a user revoke all tokens by
-  default.
+  By default a token issued before the owner's current `password_changed_at`
+  credential epoch is rejected, so password changes/resets and account disable
+  remain effective even if physical token cleanup fails.
 - `ProtectToken` is stateless. `ProtectAny` prefers any supplied Authorization
   header and never falls back to a session after an invalid token. Browser/session
   requests still receive CSRF protection.
@@ -71,6 +77,11 @@ API tokens are off by default. When enabled, Authkit issues opaque
   it to the live DB value on every request. A password change bumps the DB value,
   so every *other* session is rejected (`401 session_expired`) on its next
   request. The session that changed the password is re-stamped and stays in.
+- **Persistent-credential epoch.** Remember tokens and, by default, API tokens
+  carry an issuance time that must not predate the user's live
+  `password_changed_at`. Password reset and account disable therefore invalidate
+  old credentials atomically with the user update; deleting their rows is only
+  cleanup, not the security boundary.
 - **Atomic multi-dimensional rate-limiting.** Login and 2FA must pass both an IP
   bucket (default 20/min) and a hash-keyed account/user bucket (default 5/min).
   Change-password must pass IP and authenticated-user buckets. Bucket identifiers
@@ -167,6 +178,10 @@ Because this **bypasses the target's password by design**, authorization is the
   from a stored cookie; it lives only for the current session and ends on "stop".
 - **Target must be live.** The target user must exist and must not be disabled;
   `protected_roles` blocks impersonating privileged accounts.
+- **Actor authorization stays live.** Every impersonated request reloads the
+  actor and target and re-applies the actor guard's current role, target-guard,
+  protected-role and host-policy rules. Deleting, disabling or demoting the
+  actor revokes an already-open impersonation on its next request.
 - **Configurable account actions.** By default, while a switch is active, the guard blocks the
   credential- and privilege-sensitive routes — password change
   (`PUT /auth/password`), user management (`/auth/users*`) and a nested
@@ -178,6 +193,11 @@ Because this **bypasses the target's password by design**, authorization is the
   A switched regular user therefore has the same account actions as a direct
   regular-user login. The session supports one switch at a time; nested switches
   remain unsupported so the original actor can be restored.
+- **Delegated account support.** Profile changes, active-session management and
+  two-factor enrollment/recovery operations intentionally remain available to
+  the impersonator. Enabling impersonation therefore delegates those support
+  powers to every authorized actor; configure the gate and host policy
+  accordingly.
 - **Session-id regeneration** happens on both the switch and the stop
   (anti-fixation), the same as login. `GET /auth/me` exposes `impersonatedBy` while
   impersonating so a UI can show a banner and an exit control.
@@ -203,6 +223,8 @@ session cookie name/path is an optional knob for single-origin setups.
   `authkit.user_management_roles`). The `/users` endpoints are gated behind it
   (fail-closed default `["admin"]`), and the package keeps at least one active
   admin (you cannot delete, disable, demote, or self-disable the last admin).
+  Count-and-mutate operations are serialized inside a database transaction so
+  concurrent requests cannot both remove the final management users.
   Reaching `/users` already requires admin, so an admin assigning any allowed
   `role` is intended. Full roles/permissions tables (multiple privileges,
   per-resource grants) are a later phase.
@@ -246,3 +268,27 @@ displayed IP comes from Goravel's trusted request IP resolution.
 
 This is authentication code. If you find a security issue, please report it
 privately to the maintainers rather than opening a public issue.
+
+## Credential lifecycle updates
+
+Password changes use a conditional locked update against the verified password
+version. Pending 2FA proofs expire after five minutes and remain bound to that
+password and MFA generation. Impersonation retains the actor's verified password
+version, including when the feature is later disabled.
+
+MFA enrollment confirmation and disable operations advance a persistent version;
+disabling MFA never restores the validity of older OIDC credentials. Enrollment,
+recovery inventory and replay state changes serialize on the user row.
+
+New remember credentials carry their verified password epoch and stable browser
+session binding. Legacy unbound cookies require interactive login after upgrade.
+Remote session termination revokes the associated persistent credential, including
+concurrent restores. Host route helpers enforce the same termination checks as
+Authkit endpoints. `auth:prune-remember-tokens` covers every configured guard and
+uses the host session lifetime.
+
+Custom repository implementations must implement `APITokensRepository.CreateWithinLimit`
+and `oidc.Store.HasConsent`. Manual custom-table session/token repository callers
+must pass the matching remember/users table as the optional second constructor
+argument. Existing `Remember.Issue` and `Resolve` remain available for trusted
+programmatic callers; HTTP uses `IssueVerified` and `ResolveVerified`.

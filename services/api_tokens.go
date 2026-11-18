@@ -56,19 +56,24 @@ type APITokenDelegationGuard struct {
 }
 
 type APITokens struct {
-	repo             repositories.APITokensRepository
-	users            repositories.UsersRepository
-	hasher           Hasher
-	twoFactor        *TwoFactor
-	allowedScopes    map[string]struct{}
-	maxLifetime      time.Duration
-	maxPerUser       int
-	now              func() time.Time
-	delegationGuard  string
-	delegationActors map[string]APITokenDelegationGuard
+	repo                       repositories.APITokensRepository
+	users                      repositories.UsersRepository
+	hasher                     Hasher
+	twoFactor                  *TwoFactor
+	allowedScopes              map[string]struct{}
+	maxLifetime                time.Duration
+	maxPerUser                 int
+	invalidateOnPasswordChange bool
+	now                        func() time.Time
+	delegationGuard            string
+	delegationActors           map[string]APITokenDelegationGuard
 }
 
-func NewAPITokens(repo repositories.APITokensRepository, users repositories.UsersRepository, hasher Hasher, twoFactor *TwoFactor, allowedScopes []string, maxLifetime time.Duration, maxPerUser int) *APITokens {
+func NewAPITokens(repo repositories.APITokensRepository, users repositories.UsersRepository, hasher Hasher, twoFactor *TwoFactor, allowedScopes []string, maxLifetime time.Duration, maxPerUser int, invalidateOnPasswordChange ...bool) *APITokens {
+	invalidate := true
+	if len(invalidateOnPasswordChange) > 0 {
+		invalidate = invalidateOnPasswordChange[0]
+	}
 	if maxLifetime <= 0 {
 		maxLifetime = DefaultMaxAPITokenLifetime
 	}
@@ -79,7 +84,7 @@ func NewAPITokens(repo repositories.APITokensRepository, users repositories.User
 	for _, scope := range allowedScopes {
 		allowed[strings.TrimSpace(scope)] = struct{}{}
 	}
-	return &APITokens{repo: repo, users: users, hasher: hasher, twoFactor: twoFactor, allowedScopes: allowed, maxLifetime: maxLifetime, maxPerUser: maxPerUser, now: func() time.Time { return time.Now().UTC() }}
+	return &APITokens{repo: repo, users: users, hasher: hasher, twoFactor: twoFactor, allowedScopes: allowed, maxLifetime: maxLifetime, maxPerUser: maxPerUser, invalidateOnPasswordChange: invalidate, now: func() time.Time { return time.Now().UTC() }}
 }
 
 func (s *APITokens) Issue(ctx context.Context, cmd IssueAPITokenCommand) (*IssuedAPIToken, error) {
@@ -155,13 +160,6 @@ func (s *APITokens) issue(ctx context.Context, cmd IssueAPITokenCommand, actor *
 		}
 	}
 
-	count, err := s.repo.CountActiveByUser(ctx, user.ID, now)
-	if err != nil {
-		return nil, errors.Join(ErrInternal, err)
-	}
-	if count >= int64(s.maxPerUser) {
-		return nil, ErrTokenLimit
-	}
 	selector, err := randomAPITokenPart(apiTokenSelectorBytes)
 	if err != nil {
 		return nil, errors.Join(ErrInternal, err)
@@ -171,8 +169,12 @@ func (s *APITokens) issue(ctx context.Context, cmd IssueAPITokenCommand, actor *
 		return nil, errors.Join(ErrInternal, err)
 	}
 	token := &models.APIToken{ID: uuid.New(), UserID: user.ID, Name: name, Selector: selector, ValidatorHash: hashAPITokenValidator(validator), Scopes: models.StringSlice(scopes), ExpiresAt: expiresAt, CreatedAt: now}
-	if err := s.repo.Create(ctx, token); err != nil {
+	created, err := s.repo.CreateWithinLimit(ctx, token, s.maxPerUser)
+	if err != nil {
 		return nil, errors.Join(ErrInternal, err)
+	}
+	if !created {
+		return nil, ErrTokenLimit
 	}
 	return &IssuedAPIToken{Token: token, Plaintext: apiTokenPrefix + selector + "." + validator, DelegatedBy: actor}, nil
 }
@@ -188,6 +190,15 @@ func (s *APITokens) Resolve(ctx context.Context, plaintext string) (*models.APIT
 	}
 	if token == nil || subtle.ConstantTimeCompare([]byte(hashAPITokenValidator(validator)), []byte(token.ValidatorHash)) != 1 || !token.Active(s.now()) {
 		return nil, ErrInvalidAPIToken
+	}
+	if s.invalidateOnPasswordChange {
+		user, err := s.users.FindByID(ctx, token.UserID)
+		if err != nil {
+			return nil, errors.Join(ErrInternal, err)
+		}
+		if user == nil || user.IsDisabled() || token.CreatedAt.Before(user.PasswordChangedAt) {
+			return nil, ErrInvalidAPIToken
+		}
 	}
 	now := s.now()
 	if err := s.repo.TouchLastUsed(ctx, token.ID, now.Add(-apiTokenLastUsedInterval), now); err != nil {

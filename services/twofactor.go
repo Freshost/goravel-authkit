@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
+	"gorm.io/gorm"
 
 	"github.com/freshost/goravel-authkit/models"
 	"github.com/freshost/goravel-authkit/repositories"
@@ -73,65 +74,64 @@ func NewTwoFactor(repo repositories.UsersRepository, crypter Crypter, issuer str
 // (not yet confirmed), and returns the secret + otpauth URL for the user to
 // scan. Re-enrolling a confirmed user returns ErrTwoFactorAlreadyEnabled.
 func (s *TwoFactor) Enable(ctx context.Context, id uuid.UUID) (*Enrollment, error) {
-	u, err := s.repo.FindByID(ctx, id)
+	var key *otp.Key
+	err := s.repo.MutateLocked(ctx, id, func(u *models.User) error {
+		if u.TwoFactorEnabled() {
+			return ErrTwoFactorAlreadyEnabled
+		}
+		var err error
+		key, err = totp.Generate(totp.GenerateOpts{Issuer: s.issuer, AccountName: u.Email})
+		if err != nil {
+			return err
+		}
+		enc, err := s.crypter.Encrypt(key.Secret())
+		if err != nil {
+			return err
+		}
+		u.TwoFactorSecret, u.TwoFactorRecoveryCodes, u.TwoFactorConfirmedAt = &enc, nil, nil
+		u.TwoFactorLastUsedAt = nil
+		return nil
+	})
 	if err != nil {
-		return nil, errors.Join(ErrInternal, err)
-	}
-	if u == nil {
-		return nil, ErrNotFound
-	}
-	if u.TwoFactorEnabled() {
-		return nil, ErrTwoFactorAlreadyEnabled
+		return nil, twoFactorMutationError(err)
 	}
 
-	key, err := totp.Generate(totp.GenerateOpts{Issuer: s.issuer, AccountName: u.Email})
-	if err != nil {
-		return nil, errors.Join(ErrInternal, err)
-	}
-	enc, err := s.crypter.Encrypt(key.Secret())
-	if err != nil {
-		return nil, errors.Join(ErrInternal, err)
-	}
-	// Store the pending secret; confirmed_at stays nil until Confirm.
-	if err := s.repo.UpdateTwoFactor(ctx, id, &enc, nil, nil); err != nil {
-		return nil, errors.Join(ErrInternal, err)
-	}
 	return &Enrollment{Secret: key.Secret(), OtpauthURL: key.URL()}, nil
 }
 
 // Confirm verifies a code against the pending secret, activates 2FA, and returns
 // freshly generated recovery codes (shown to the user once).
 func (s *TwoFactor) Confirm(ctx context.Context, id uuid.UUID, code string) ([]string, error) {
-	u, err := s.repo.FindByID(ctx, id)
+	var plain []string
+	err := s.repo.MutateLocked(ctx, id, func(u *models.User) error {
+		if u.TwoFactorSecret == nil || *u.TwoFactorSecret == "" {
+			return ErrTwoFactorNotEnrolled
+		}
+		if u.TwoFactorEnabled() {
+			return ErrTwoFactorAlreadyEnabled
+		}
+		secret, err := s.crypter.Decrypt(*u.TwoFactorSecret)
+		if err != nil {
+			return err
+		}
+		if !totp.Validate(strings.TrimSpace(code), secret) {
+			return ErrInvalidCode
+		}
+		var encrypted string
+		plain, encrypted, err = s.generateRecoveryCodes()
+		if err != nil {
+			return err
+		}
+		now := time.Now().UTC()
+		u.TwoFactorConfirmedAt, u.TwoFactorRecoveryCodes = &now, &encrypted
+		u.TwoFactorVersion++
+		u.TwoFactorLastUsedAt = nil
+		return nil
+	})
 	if err != nil {
-		return nil, errors.Join(ErrInternal, err)
-	}
-	if u == nil {
-		return nil, ErrNotFound
-	}
-	if u.TwoFactorSecret == nil || *u.TwoFactorSecret == "" {
-		return nil, ErrTwoFactorNotEnrolled
-	}
-	if u.TwoFactorEnabled() {
-		return nil, ErrTwoFactorAlreadyEnabled
+		return nil, twoFactorMutationError(err)
 	}
 
-	secret, err := s.crypter.Decrypt(*u.TwoFactorSecret)
-	if err != nil {
-		return nil, errors.Join(ErrInternal, err)
-	}
-	if !totp.Validate(strings.TrimSpace(code), secret) {
-		return nil, ErrInvalidCode
-	}
-
-	plain, enc, err := s.generateRecoveryCodes()
-	if err != nil {
-		return nil, errors.Join(ErrInternal, err)
-	}
-	now := time.Now().UTC()
-	if err := s.repo.UpdateTwoFactor(ctx, id, u.TwoFactorSecret, &enc, &now); err != nil {
-		return nil, errors.Join(ErrInternal, err)
-	}
 	return plain, nil
 }
 
@@ -247,17 +247,13 @@ func (s *TwoFactor) matchTOTPStep(secret, code string, now time.Time) (time.Time
 
 // Disable clears all two-factor state for the user.
 func (s *TwoFactor) Disable(ctx context.Context, id uuid.UUID) error {
-	u, err := s.repo.FindByID(ctx, id)
-	if err != nil {
-		return errors.Join(ErrInternal, err)
-	}
-	if u == nil {
-		return ErrNotFound
-	}
-	if err := s.repo.UpdateTwoFactor(ctx, id, nil, nil, nil); err != nil {
-		return errors.Join(ErrInternal, err)
-	}
-	return nil
+	err := s.repo.MutateLocked(ctx, id, func(u *models.User) error {
+		u.TwoFactorSecret, u.TwoFactorRecoveryCodes, u.TwoFactorConfirmedAt = nil, nil, nil
+		u.TwoFactorLastUsedAt = nil
+		u.TwoFactorVersion++
+		return nil
+	})
+	return twoFactorMutationError(err)
 }
 
 // RemainingRecoveryCodes returns how many unused recovery codes the user has
@@ -286,20 +282,27 @@ func (s *TwoFactor) RemainingRecoveryCodes(ctx context.Context, id uuid.UUID) (i
 
 // RegenerateRecoveryCodes replaces the recovery codes, invalidating the old set.
 func (s *TwoFactor) RegenerateRecoveryCodes(ctx context.Context, id uuid.UUID) ([]string, error) {
-	u, err := s.repo.FindByID(ctx, id)
-	if err != nil {
-		return nil, errors.Join(ErrInternal, err)
-	}
-	if u == nil || !u.TwoFactorEnabled() {
+	var plain []string
+	err := s.repo.MutateLocked(ctx, id, func(u *models.User) error {
+		if !u.TwoFactorEnabled() {
+			return ErrTwoFactorNotEnrolled
+		}
+		var enc string
+		var err error
+		plain, enc, err = s.generateRecoveryCodes()
+		if err != nil {
+			return err
+		}
+		u.TwoFactorRecoveryCodes = &enc
+		return nil
+	})
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, ErrTwoFactorNotEnrolled
 	}
-	plain, enc, err := s.generateRecoveryCodes()
 	if err != nil {
-		return nil, errors.Join(ErrInternal, err)
+		return nil, twoFactorMutationError(err)
 	}
-	if err := s.repo.UpdateTwoFactor(ctx, id, u.TwoFactorSecret, &enc, u.TwoFactorConfirmedAt); err != nil {
-		return nil, errors.Join(ErrInternal, err)
-	}
+
 	return plain, nil
 }
 
@@ -373,4 +376,17 @@ func randomRecoveryCode() (string, error) {
 		out = append(out, recoveryAlphabet[int(buf[0])%alphabetLen])
 	}
 	return string(out), nil
+}
+
+func twoFactorMutationError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return ErrNotFound
+	}
+	if errors.Is(err, ErrTwoFactorNotEnrolled) || errors.Is(err, ErrTwoFactorAlreadyEnabled) || errors.Is(err, ErrInvalidCode) {
+		return err
+	}
+	return errors.Join(ErrInternal, err)
 }

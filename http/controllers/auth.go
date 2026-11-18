@@ -5,9 +5,11 @@
 package controllers
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	contractshttp "github.com/goravel/framework/contracts/http"
@@ -82,11 +84,15 @@ func (c *AuthController) Login(ctx contractshttp.Context) contractshttp.Response
 	// session yet. Regenerate the session id (anti-fixation) before stashing the
 	// pending user id; the session stays unauthenticated until the challenge.
 	if c.twoFactor != nil && user.TwoFactorEnabled() {
+		helpers.ClearAuthentication(ctx, c.guard)
 		if err := helpers.RegenerateAndPersistSession(ctx); err != nil {
 			facades.Log().Errorf("auth: regenerate session: %v", err)
 		}
 		if sess := ctx.Request().Session(); sess != nil {
 			sess.Put(helpers.TwoFactorUserIDKey(c.guard), user.ID.String())
+			pending, _ := json.Marshal(helpers.PendingAuthentication{PasswordStamp: user.PasswordChangedAt, TwoFactorStamp: user.TwoFactorCredentialStamp(), ExpiresAt: time.Now().Add(5 * time.Minute)})
+			sess.Put(helpers.PendingAuthenticationKey(c.guard), string(pending))
+			sess.Forget(helpers.RememberIntentKey(c.guard))
 			if req.Remember {
 				sess.Put(helpers.RememberIntentKey(c.guard), "1")
 			}
@@ -102,7 +108,7 @@ func (c *AuthController) Login(ctx contractshttp.Context) contractshttp.Response
 // user response. Shared by password-only login and the 2FA challenge. When
 // remember is non-nil and wantRemember is true it also issues a persistent
 // "remember me" cookie.
-func completeLogin(ctx contractshttp.Context, guard, rememberCookieName string, audit *services.Audit, remember *services.Remember, sessions *services.Sessions, wantRemember bool, user *models.User) contractshttp.Response {
+func completeLogin(ctx contractshttp.Context, guard, rememberCookieName string, audit *services.Audit, remember *services.Remember, sessions *services.Sessions, wantRemember bool, user *models.User, methods ...string) contractshttp.Response {
 	if _, err := facades.Auth(ctx).Guard(guard).Login(user); err != nil {
 		facades.Log().Errorf("auth: establish session: %v", err)
 		return ctx.Response().Json(http.StatusInternalServerError, responses.ErrorResponse{
@@ -115,12 +121,23 @@ func completeLogin(ctx contractshttp.Context, guard, rememberCookieName string, 
 	if sess := ctx.Request().Session(); sess != nil {
 		sess.Put(helpers.PasswordChangedAtKey(guard), middleware.FormatPasswordTimestamp(user.PasswordChangedAt))
 		sess.Forget(helpers.TwoFactorUserIDKey(guard))
+		sess.Forget(helpers.PendingAuthenticationKey(guard))
 		sess.Forget(helpers.RememberIntentKey(guard))
 	}
+	if len(methods) == 0 {
+		methods = []string{"pwd"}
+	}
+	helpers.RecordAuthentication(ctx, guard, methods, user)
+	tracking := helpers.NewSessionToken()
+	selector := ""
+	if tracking == "" {
+		return ctx.Response().Json(http.StatusInternalServerError, responses.ErrorResponse{Error: "internal_error", Message: "Internal server error"})
+	}
 	if remember != nil && wantRemember {
-		if value, err := remember.Issue(ctx.Context(), user.ID); err != nil {
+		if value, err := remember.IssueVerified(ctx.Context(), user.ID, user.PasswordChangedAt, tracking); err != nil {
 			facades.Log().Errorf("auth: issue remember token: %v", err)
 		} else {
+			selector, _, _ = strings.Cut(value, ":")
 			helpers.SetRememberCookie(ctx, rememberCookieName, value, remember.TTL())
 		}
 	}
@@ -133,10 +150,14 @@ func completeLogin(ctx contractshttp.Context, guard, rememberCookieName string, 
 			if old := helpers.SessionTrackingToken(ctx, guard); old != "" {
 				_ = sessions.Forget(ctx.Context(), old)
 			}
-			token := helpers.NewSessionToken()
+			token := tracking
 			sess.Put(helpers.SessionTrackingTokenKey(guard), token)
-			if err := sessions.Track(ctx.Context(), token, user.ID, ctx.Request().Ip(), ctx.Request().Header("User-Agent", "")); err != nil {
+			if err := sessions.Track(ctx.Context(), token, user.ID, ctx.Request().Ip(), ctx.Request().Header("User-Agent", ""), selector); err != nil {
 				facades.Log().Errorf("auth: track session: %v", err)
+				_ = facades.Auth(ctx).Guard(guard).Logout()
+				helpers.ClearAuthentication(ctx, guard)
+				helpers.ClearRememberCookie(ctx, rememberCookieName)
+				return ctx.Response().Json(http.StatusServiceUnavailable, responses.ErrorResponse{Error: "authentication_unavailable", Message: "Authentication service unavailable"})
 			}
 		}
 	}
@@ -155,6 +176,7 @@ func completeLogin(ctx contractshttp.Context, guard, rememberCookieName string, 
 // Logout invalidates the current session and clears the session cookie. Handles
 // POST {prefix}/auth/logout.
 func (c *AuthController) Logout(ctx contractshttp.Context) contractshttp.Response {
+	helpers.ClearAuthentication(ctx, c.guard)
 	// Best-effort load of the current user (for the audit row) from the instance's
 	// table; the id was injected by Authenticated.
 	user, _ := c.auth.Me(ctx.Context(), helpers.AuthUserID(ctx))

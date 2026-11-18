@@ -51,6 +51,18 @@ func NewRemember(repo repositories.RememberRepository, ttl time.Duration) *Remem
 // Issue creates a new remember token for the user and returns the cookie value
 // ("selector:validator") to set on the response.
 func (s *Remember) Issue(ctx context.Context, userID uuid.UUID) (string, error) {
+	return s.issue(ctx, userID, nil, "")
+}
+
+// IssueVerified binds the credential to the password proof and browser session.
+func (s *Remember) IssueVerified(ctx context.Context, userID uuid.UUID, stamp time.Time, sessionID string) (string, error) {
+	if stamp.IsZero() || sessionID == "" {
+		return "", ErrUnauthorized
+	}
+	return s.issue(ctx, userID, &stamp, sessionID)
+}
+
+func (s *Remember) issue(ctx context.Context, userID uuid.UUID, stamp *time.Time, sessionID string) (string, error) {
 	selector, err := randomToken(rememberSelectorBytes)
 	if err != nil {
 		return "", errors.Join(ErrInternal, err)
@@ -60,12 +72,15 @@ func (s *Remember) Issue(ctx context.Context, userID uuid.UUID) (string, error) 
 		return "", errors.Join(ErrInternal, err)
 	}
 
+	now := time.Now().UTC()
 	token := &models.RememberToken{
-		ID:            uuid.New(),
-		UserID:        userID,
-		Selector:      selector,
-		ValidatorHash: hashValidator(validator),
-		ExpiresAt:     time.Now().Add(s.ttl).UTC(),
+		ID:              uuid.New(),
+		UserID:          userID,
+		Selector:        selector,
+		ValidatorHash:   hashValidator(validator),
+		ExpiresAt:       now.Add(s.ttl),
+		CreatedAt:       now,
+		CredentialStamp: stamp, SessionID: sessionID,
 	}
 	if err := s.repo.Create(ctx, token); err != nil {
 		return "", errors.Join(ErrInternal, err)
@@ -73,9 +88,9 @@ func (s *Remember) Issue(ctx context.Context, userID uuid.UUID) (string, error) 
 	return joinToken(selector, validator), nil
 }
 
-// Resolve validates a remember cookie value and returns the user id plus, when
-// the validator was rotated, a fresh cookie value the caller must set (empty
-// means "leave the cookie unchanged"). Behaviour:
+// Resolve validates a remember cookie value and returns the user id, original
+// issuance time and, when the validator was rotated, a fresh cookie value the
+// caller must set (empty means "leave the cookie unchanged"). Behaviour:
 //
 //   - current validator → rotate via an atomic compare-and-set and return the
 //     new cookie value. If a concurrent request rotated first (0 rows updated),
@@ -85,23 +100,23 @@ func (s *Remember) Issue(ctx context.Context, userID uuid.UUID) (string, error) 
 //   - anything else (unknown/expired/wrong/too-old) → ErrInvalidRememberToken;
 //     a known selector with a stale-beyond-grace validator is treated as theft
 //     and revokes the user's whole token family.
-func (s *Remember) Resolve(ctx context.Context, cookieValue string) (uuid.UUID, string, error) {
+func (s *Remember) Resolve(ctx context.Context, cookieValue string) (uuid.UUID, time.Time, string, error) {
 	selector, validator, ok := splitToken(cookieValue)
 	if !ok {
-		return uuid.Nil, "", ErrInvalidRememberToken
+		return uuid.Nil, time.Time{}, "", ErrInvalidRememberToken
 	}
 
 	token, err := s.repo.FindBySelector(ctx, selector)
 	if err != nil {
-		return uuid.Nil, "", errors.Join(ErrInternal, err)
+		return uuid.Nil, time.Time{}, "", errors.Join(ErrInternal, err)
 	}
 	if token == nil {
-		return uuid.Nil, "", ErrInvalidRememberToken
+		return uuid.Nil, time.Time{}, "", ErrInvalidRememberToken
 	}
 	now := time.Now().UTC()
 	if now.After(token.ExpiresAt) {
 		_ = s.repo.Delete(ctx, token.ID)
-		return uuid.Nil, "", ErrInvalidRememberToken
+		return uuid.Nil, time.Time{}, "", ErrInvalidRememberToken
 	}
 
 	presented := hashValidator(validator)
@@ -110,19 +125,30 @@ func (s *Remember) Resolve(ctx context.Context, cookieValue string) (uuid.UUID, 
 	if subtle.ConstantTimeCompare([]byte(presented), []byte(token.ValidatorHash)) == 1 {
 		newValidator, err := randomToken(rememberValidatorBytes)
 		if err != nil {
-			return uuid.Nil, "", errors.Join(ErrInternal, err)
+			return uuid.Nil, time.Time{}, "", errors.Join(ErrInternal, err)
 		}
 		rows, err := s.repo.RotateValidator(ctx, token.ID, token.ValidatorHash,
 			hashValidator(newValidator), token.ValidatorHash, now, now.Add(s.ttl))
 		if err != nil {
-			return uuid.Nil, "", errors.Join(ErrInternal, err)
+			return uuid.Nil, time.Time{}, "", errors.Join(ErrInternal, err)
 		}
 		if rows == 0 {
-			// Lost the race: a concurrent request already rotated. Authenticate
-			// but don't overwrite the cookie the winning response set.
-			return token.UserID, "", nil
+			// A zero-row CAS can mean either a benign concurrent rotation or that
+			// logout/password change deleted the token. Re-read and accept only the
+			// former; revocation must never lose this race.
+			current, err := s.repo.FindBySelector(ctx, selector)
+			if err != nil {
+				return uuid.Nil, time.Time{}, "", errors.Join(ErrInternal, err)
+			}
+			if current == nil || current.UserID != token.UserID || now.After(current.ExpiresAt) ||
+				current.PreviousValidatorHash == "" || current.RotatedAt == nil ||
+				now.Sub(*current.RotatedAt) > s.grace ||
+				subtle.ConstantTimeCompare([]byte(presented), []byte(current.PreviousValidatorHash)) != 1 {
+				return uuid.Nil, time.Time{}, "", ErrInvalidRememberToken
+			}
+			return current.UserID, current.CreatedAt, "", nil
 		}
-		return token.UserID, joinToken(token.Selector, newValidator), nil
+		return token.UserID, token.CreatedAt, joinToken(token.Selector, newValidator), nil
 	}
 
 	// Just-superseded validator within the grace window: a concurrent request
@@ -130,13 +156,13 @@ func (s *Remember) Resolve(ctx context.Context, cookieValue string) (uuid.UUID, 
 	if token.PreviousValidatorHash != "" && token.RotatedAt != nil &&
 		now.Sub(*token.RotatedAt) <= s.grace &&
 		subtle.ConstantTimeCompare([]byte(presented), []byte(token.PreviousValidatorHash)) == 1 {
-		return token.UserID, "", nil
+		return token.UserID, token.CreatedAt, "", nil
 	}
 
 	// Neither current nor a recent previous: likely a stolen/stale cookie. Revoke
 	// the whole family as a precaution.
 	_ = s.repo.DeleteByUser(ctx, token.UserID)
-	return uuid.Nil, "", ErrInvalidRememberToken
+	return uuid.Nil, time.Time{}, "", ErrInvalidRememberToken
 }
 
 // Revoke deletes the token identified by the cookie value's selector (logout of
@@ -205,4 +231,21 @@ func randomToken(n int) (string, error) {
 		return "", err
 	}
 	return base64.RawURLEncoding.EncodeToString(b), nil
+}
+
+// ResolveVerified never upgrades legacy cookies that have no verified password proof.
+func (s *Remember) ResolveVerified(ctx context.Context, cookie string) (*models.RememberToken, string, error) {
+	id, _, rotated, err := s.Resolve(ctx, cookie)
+	if err != nil {
+		return nil, "", err
+	}
+	selector, _, _ := splitToken(cookie)
+	token, err := s.repo.FindBySelector(ctx, selector)
+	if err != nil {
+		return nil, "", errors.Join(ErrInternal, err)
+	}
+	if token == nil || token.UserID != id || token.CredentialStamp == nil || token.SessionID == "" {
+		return nil, "", ErrInvalidRememberToken
+	}
+	return token, rotated, nil
 }

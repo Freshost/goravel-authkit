@@ -2,6 +2,11 @@ package feature
 
 import (
 	"bytes"
+	"context"
+	"github.com/freshost/goravel-authkit/repositories"
+	authroutes "github.com/freshost/goravel-authkit/routes"
+	frameworkhttp "github.com/goravel/framework/contracts/http"
+	"github.com/goravel/framework/contracts/route"
 	"net/http"
 	"testing"
 	"time"
@@ -222,6 +227,30 @@ func (s *ImpersonationTestSuite) TestRejectsSensitiveActionsWhileImpersonating()
 		Post("/api/client/v1/auth/impersonate", bytes.NewBufferString(`{"userId":"`+s.clientID.String()+`"}`))
 	s.Require().NoError(err)
 	nested.AssertForbidden()
+
+	// Profile management is intentionally delegated to the impersonator.
+	profile, err := s.Http(t).WithHeader("Content-Type", "application/json").WithCookie(both).
+		Put("/api/client/v1/auth/me", bytes.NewBufferString(`{"email":"`+s.clientEmail+`","name":"Updated by support"}`))
+	s.Require().NoError(err)
+	profile.AssertOk()
+}
+
+func (s *ImpersonationTestSuite) TestDemotedActorRevokesOpenImpersonation() {
+	t := s.T()
+	cookie := s.login(t, "/api/v1", s.adminEmail)
+	resp := s.impersonate(t, "/api/v1", cookie, "client", s.clientID.String())
+	resp.AssertOk()
+	both := cookieNamed(resp, "authkit_demo_session")
+	s.Require().NotNil(both)
+
+	_, err := facades.Orm().Query().Model(&authmodels.User{}).Where("id", s.adminID).Update("role", "user")
+	s.Require().NoError(err)
+
+	me, _ := s.me(t, "/api/client/v1", both)
+	me.AssertForbidden()
+	body, err := me.Json()
+	s.Require().NoError(err)
+	s.Equal("impersonation_revoked", body["error"])
 }
 
 // Impersonation must not issue a persistent remember cookie.
@@ -232,4 +261,33 @@ func (s *ImpersonationTestSuite) TestNoRememberCookie() {
 	resp.AssertOk()
 	s.Nil(cookieNamed(resp, "authkit_remember"), "no admin remember cookie")
 	s.Nil(cookieNamed(resp, "authkit_client_remember"), "no client remember cookie")
+}
+
+func (s *ImpersonationTestSuite) TestPasswordResetRevokesSwitchedActor() {
+	cookie := s.login(s.T(), "/api/v1", s.adminEmail)
+	response := s.impersonate(s.T(), "/api/v1", cookie, "admin", s.userID.String())
+	response.AssertOk()
+	switched := cookieNamed(response, "authkit_demo_session")
+	actor, err := repositories.NewUsers().FindByID(context.Background(), s.adminID)
+	s.Require().NoError(err)
+	s.Require().NoError(repositories.NewUsers().UpdatePassword(context.Background(), actor.ID, *actor.PasswordHash, time.Now()))
+	stopped, err := s.Http(s.T()).WithCookie(switched).Post("/api/v1/auth/impersonate/stop", nil)
+	s.Require().NoError(err)
+	stopped.AssertForbidden()
+}
+func (s *ImpersonationTestSuite) TestDisabledImpersonationRevokesExistingTargetOnNewRoutes() {
+	cookie := s.login(s.T(), "/api/v1", s.adminEmail)
+	response := s.impersonate(s.T(), "/api/v1", cookie, "client", s.clientID.String())
+	response.AssertOk()
+	switched := cookieNamed(response, "authkit_demo_session")
+	old := facades.Config().Get("authkit.impersonation.enabled")
+	facades.Config().Add("authkit.impersonation.enabled", false)
+	defer facades.Config().Add("authkit.impersonation.enabled", old)
+	path := "/ci-impersonation-disabled-" + uuid.NewString()
+	facades.Route().Prefix(path).Middleware(authroutes.Protect("client")...).Group(func(r route.Router) {
+		r.Get("", func(ctx frameworkhttp.Context) frameworkhttp.Response { return ctx.Response().Json(200, nil) })
+	})
+	result, err := s.Http(s.T()).WithCookie(switched).Get(path)
+	s.Require().NoError(err)
+	result.AssertForbidden()
 }

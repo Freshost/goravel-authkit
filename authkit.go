@@ -79,7 +79,7 @@ func New(cfg Config) *Authkit {
 	repo := repositories.NewUsersWithTable(cfg.UsersTable)
 	hasher := services.NewFacadeHasher()
 	twoFactor := services.NewTwoFactor(repo, services.NewFacadeCrypter(), cfg.TwoFactorIssuer, recoveryCount)
-	apiTokens := services.NewAPITokens(repositories.NewAPITokensWithTable(cfg.APITokensTable), repo, hasher, twoFactor, cfg.APITokenAllowedScopes, cfg.APITokenMaxLifetime, cfg.APITokenMaxPerUser)
+	apiTokens := services.NewAPITokens(repositories.NewAPITokensWithTable(cfg.APITokensTable, cfg.UsersTable), repo, hasher, twoFactor, cfg.APITokenAllowedScopes, cfg.APITokenMaxLifetime, cfg.APITokenMaxPerUser, !cfg.KeepAPITokensOnPasswordChange)
 	return &Authkit{
 		auth:                            services.NewAuth(repo, hasher, minPwLen),
 		users:                           services.NewUsers(repo, hasher, minPwLen, cfg.Roles, managementRoles, apiTokens, !cfg.KeepAPITokensOnPasswordChange),

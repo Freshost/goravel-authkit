@@ -56,6 +56,30 @@ func init() {
 			"max_per_user":                20,
 			"revoke_on_password_change":   true,
 		},
+		// Optional OIDC provider. This does not enable external OIDC login.
+		// Key material belongs in the host's secret store; see docs/oidc.md.
+		"oidc": map[string]any{
+			"provider": map[string]any{
+				"enabled":                           false,
+				"guard":                             "admin",
+				"issuer":                            "",
+				"login_url":                         "/login",
+				"signing_key_id":                    "",
+				"signing_keys":                      config.Env("AUTHKIT_OIDC_SIGNING_KEYS", ""),
+				"encryption_key_id":                 "",
+				"encryption_keys":                   map[string]any{},
+				"scopes":                            []string{},
+				"cors":                              map[string]any{"allowed_origins": []string{}},
+				"rate_limit":                        map[string]any{"ip_attempts": 120},
+				"access_token_lifetime_seconds":     300,
+				"id_token_lifetime_seconds":         300,
+				"code_lifetime_seconds":             120,
+				"request_lifetime_seconds":          600,
+				"refresh_idle_lifetime_seconds":     2592000,
+				"refresh_absolute_lifetime_seconds": 7776000,
+				"allow_insecure_loopback":           false,
+			},
+		},
 		// Table overrides for legacy single-guard mode. In multi-guard mode use
 		// api_tokens_table inside each guard; it defaults to <guard>_api_tokens.
 		"tables": map[string]any{

@@ -64,6 +64,7 @@ bcrypt (cost 12), and keeps everything server-side.
 | **Remember-me** persistent login — rotating selector/validator tokens, per-guard cookie |
 | **Active-session tracking** — device list + remote termination, keyed by a stable per-guard token |
 | **Personal API tokens** (opt-in) — per-guard tables, mandatory expiry, scopes, one-time plaintext display |
+| **OIDC provider** (opt-in) — standard code flow with PKCE, registered clients, refresh rotation and revocation; see [OIDC integration](docs/oidc.md) |
 | **Admin user management** CRUD behind a fail-closed role gate; keeps at least one active admin (toggleable) |
 | **User impersonation** ("login as user") — same-guard or cross-guard, role/guard-gated and fail-closed, audited (opt-in) |
 | Per-guard **audit log** table + writer |
@@ -76,7 +77,7 @@ bcrypt (cost 12), and keeps everything server-side.
 
 ## Requirements
 
-- **Go** 1.25+
+- **Go** 1.26+
 - **Goravel** v1.18.x
 - A database supported by Goravel (PostgreSQL / MySQL / SQLite), with the session
   and hashing components enabled
@@ -281,8 +282,11 @@ This mounts two endpoints behind the session guard:
 A cross-guard switch keeps the actor signed in to its own guard; same-guard
 replaces the user and "stop" restores them. No remember cookie is issued (the
 switch is ephemeral), both ends are audited, and `GET /auth/me` exposes
-`impersonatedBy` for a UI banner. For finer rules than the config gate, register a
-host hook (it can only tighten the decision):
+`impersonatedBy` for a UI banner. Profile, session and 2FA support operations are
+intentionally delegated; password change, user administration and nested switches
+are blocked by default. Nested switches remain unsupported. The actor and policy are revalidated on every switched request,
+so disabling/demoting the actor revokes the open switch. For finer rules than the
+config gate, register a host hook (it can only tighten the decision):
 
 ```go
 authkit.RegisterImpersonationPolicy(myPolicy{}) // implements authkit.Impersonator
@@ -291,7 +295,10 @@ authkit.RegisterImpersonationPolicy(myPolicy{}) // implements authkit.Impersonat
 To expose the target user's normal account actions during a switch, set
 `impersonation.allow_sensitive_actions: true` globally or on the target guard.
 This includes password changes and PAT management, with the same role, password
-and TOTP checks as direct login. `/auth/meta` reports the setting as
+and TOTP checks as direct login. Additionally enabling
+`api_tokens.allow_impersonated_creation` authorizes PAT issuance through the
+original actor's current impersonation authority instead of target credentials.
+`/auth/meta` reports the sensitive-actions setting as
 `features.impersonationSensitiveActions` for the companion UI.
 
 See [docs/configuration.md](docs/configuration.md#impersonation) and
@@ -373,8 +380,9 @@ Read before deploying:
   (anti-fixation) and `password_changed_at` multi-session invalidation. Set
   `session.same_site` to `lax`/`strict` and `session.secure=true` in production.
 - **API tokens are credentials.** Never log or persist the returned plaintext.
-  Token management requires a live session, CSRF protection, the current password,
-  and TOTP when enabled. Password changes revoke tokens by default.
+  Management requires a live session and CSRF protection. Direct creation also
+  verifies the password and TOTP when enabled; delegated issuance follows the
+  explicitly enabled impersonation policy. Password changes revoke tokens by default.
 
 ## Documentation
 

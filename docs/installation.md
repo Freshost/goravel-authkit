@@ -1,13 +1,24 @@
 # Installation
 
 `goravel-authkit` is a backend Go module for [Goravel](https://www.goravel.dev)
-apps (tested against Goravel **v1.18.x**, Go **1.25+**, PostgreSQL). It owns the
+apps (targeting Goravel **v1.18.x**, Go **1.26+**, PostgreSQL). It owns the
 `users` and `audit_logs` tables (plus a guard's remember-token and session
 tables) — or, in multi-guard mode, the per-guard tables you declare.
 
 Goravel 1.18 changed `http.Middleware` from a function to an interface. Normal
 Authkit factory usage through `router.Middleware(...)` is unchanged; code that
 manually invoked a returned middleware value must use `middleware.Handle(ctx)`.
+
+Existing installations must run the new credential binding and timestamp precision migrations
+for each guard before starting the upgraded application. They retain existing
+values and increase user password epochs and remember/personal-token issuance
+timestamps to microsecond precision. Repository mutations now serialize and
+strictly advance password epochs, including repeated changes within one second.
+
+The credential binding migration adds a persistent MFA generation and binds new
+remember credentials to the password version actually verified at login. Existing
+unbound remember cookies and pending 2FA/impersonation sessions require interactive
+login after upgrade. Apply migrations before starting the upgraded application.
 
 ## Quick install (fresh app)
 

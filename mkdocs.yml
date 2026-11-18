@@ -40,6 +40,8 @@ nav:
   - Home: index.md
   - Installation: installation.md
   - Configuration: configuration.md
+  - OIDC provider: oidc.md
+  - OIDC conformance: oidc-conformance.md
   - API reference: api-reference.md
   - Security: security.md
   - Architecture: architecture.md

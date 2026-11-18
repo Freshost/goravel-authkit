@@ -8,6 +8,42 @@ While the package is pre-1.0, minor versions may contain breaking changes.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-18
+
+### Added
+
+- Optional embedded OIDC provider with Authorization Code + PKCE S256, public
+  and confidential clients, discovery/JWKS/UserInfo, rotating refresh tokens,
+  revocation and session-protected connection management.
+- PostgreSQL integration and concurrency coverage for authorization-code and
+  refresh-token single use, plus CI race and demo feature gates.
+
+### Changed
+
+- Go 1.26 is the minimum supported toolchain, including consumers with OIDC
+  disabled. Goravel remains on the existing 1.18 baseline.
+- Existing installations must apply the credential binding and timestamp precision
+  migrations before starting the upgraded application.
+- Existing unbound remember cookies and pending 2FA/impersonation sessions
+  require interactive login after upgrading.
+- Custom repositories must implement `APITokensRepository.CreateWithinLimit`
+  and `oidc.Store.HasConsent`. Manual custom-table session/token repositories
+  accept the matching remember/users table as the optional second constructor
+  argument; see [upgrade guidance](docs/security.md#credential-lifecycle-updates).
+
+### Fixed
+
+- Bind pending login, impersonation and remember credentials to the verified
+  password version; retain a monotonic MFA generation through disable/re-enrollment.
+- Enforce remote session termination on application routes and revoke linked
+  remember credentials atomically with concurrent restoration.
+- Serialize MFA changes and personal-token quotas; clear replay state on key
+  replacement and email verification on administrator address changes.
+- Bound OIDC consent queries, fix orphan request cleanup, respect all guard tables
+  and session lifetimes during pruning, and repair the demo container build.
+- Serialize and strictly advance credential epochs so rapid password changes
+  and account disable/re-enable cycles invalidate existing credentials.
+
 ## [0.8.0] - 2026-11-04
 
 ### Added
@@ -214,7 +250,10 @@ set — in one Goravel app, while a single-domain app keeps working unchanged.
 - Initial release: session-based auth, user management, TOTP two-factor, audit log,
   remember-me, active-session tracking — single guard.
 
-[Unreleased]: https://github.com/Freshost/goravel-authkit/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/Freshost/goravel-authkit/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/Freshost/goravel-authkit/releases/tag/v0.9.0
+[0.8.0]: https://github.com/Freshost/goravel-authkit/releases/tag/v0.8.0
+[0.7.0]: https://github.com/Freshost/goravel-authkit/releases/tag/v0.7.0
 [0.6.0]: https://github.com/Freshost/goravel-authkit/releases/tag/v0.6.0
 [0.5.0]: https://github.com/Freshost/goravel-authkit/releases/tag/v0.5.0
 [0.4.0]: https://github.com/Freshost/goravel-authkit/releases/tag/v0.4.0

@@ -106,6 +106,23 @@ func TestUpdateProfile_Success(t *testing.T) {
 	assert.Equal(t, "new@example.com", repo.byID[u.ID].Email)
 }
 
+func TestUpdateProfile_DoesNotOverwriteCredentialState(t *testing.T) {
+	repo := newFakeRepo()
+	u := seedUser(repo, "admin@example.com", "secret123")
+	secret := "encrypted-totp"
+	u.TwoFactorSecret = &secret
+	repo.seed(u)
+	originalHash := *u.PasswordHash
+	originalChangedAt := u.PasswordChangedAt
+
+	_, _, err := NewAuth(repo, fakeHasher{}, 8).UpdateProfile(context.Background(), u.ID, "new@example.com", "New")
+	require.NoError(t, err)
+	stored := repo.byID[u.ID]
+	assert.Equal(t, originalHash, *stored.PasswordHash)
+	assert.Equal(t, originalChangedAt, stored.PasswordChangedAt)
+	assert.Equal(t, secret, *stored.TwoFactorSecret)
+}
+
 func TestUpdateProfile_EmailChangeClearsVerified(t *testing.T) {
 	repo := newFakeRepo()
 	u := seedUser(repo, "admin@example.com", "secret123")
@@ -191,4 +208,43 @@ func TestMe_RepoErrorWrapsInternal(t *testing.T) {
 	svc := NewAuth(repo, fakeHasher{}, 8)
 	_, err := svc.Me(context.Background(), uuid.New())
 	assert.True(t, errors.Is(err, ErrInternal))
+}
+
+type resetDuringHash struct {
+	fakeHasher
+	users *fakeRepo
+	id    uuid.UUID
+}
+
+func (h resetDuringHash) Make(password string) (string, error) {
+	user := h.users.byID[h.id]
+	replacement := "hash:admin-reset"
+	user.PasswordHash = &replacement
+	user.AdvancePasswordEpoch(time.Now())
+	return h.fakeHasher.Make(password)
+}
+func TestPasswordChangeCannotOverwriteConcurrentReset(t *testing.T) {
+	repo := newFakeRepo()
+	user := seedUser(repo, "reset@example.com", "old-password")
+	svc := NewAuth(repo, resetDuringHash{users: repo, id: user.ID}, 8)
+	_, err := svc.ChangePassword(context.Background(), user.ID, "old-password", "attacker-password")
+	require.ErrorIs(t, err, ErrWrongPassword)
+	require.Equal(t, "hash:admin-reset", *repo.byID[user.ID].PasswordHash)
+}
+func TestPendingLoginRejectsChangedPasswordAndMFA(t *testing.T) {
+	repo := newFakeRepo()
+	user := seedUser(repo, "pending@example.com", "old-password")
+	svc := NewAuth(repo, fakeHasher{}, 8)
+	stamp, mfa := user.PasswordChangedAt, user.TwoFactorCredentialStamp()
+	_, err := svc.PendingLogin(context.Background(), user.ID, stamp, mfa, time.Now().Add(time.Minute))
+	require.NoError(t, err)
+	repo.byID[user.ID].TwoFactorVersion++
+	_, err = svc.PendingLogin(context.Background(), user.ID, stamp, mfa, time.Now().Add(time.Minute))
+	require.ErrorIs(t, err, ErrUnauthorized)
+	repo.byID[user.ID].TwoFactorVersion--
+	repo.byID[user.ID].AdvancePasswordEpoch(time.Now())
+	_, err = svc.PendingLogin(context.Background(), user.ID, stamp, mfa, time.Now().Add(time.Minute))
+	require.ErrorIs(t, err, ErrUnauthorized)
+	_, err = svc.PendingLogin(context.Background(), user.ID, repo.byID[user.ID].PasswordChangedAt, mfa, time.Now().Add(-time.Minute))
+	require.ErrorIs(t, err, ErrUnauthorized)
 }

@@ -188,6 +188,7 @@ func RegisterAll(router route.Router) {
 	for _, o := range options {
 		register(router, o, options)
 	}
+	RegisterOIDC(router)
 }
 
 // optionsByGuard returns the resolved Options for a configured guard, matching how
@@ -200,6 +201,30 @@ func optionsByGuard(name string) Options {
 		}
 	}
 	return OptionsForGuard(name)
+}
+
+// impersonationValidation builds the live authorization check for sessions
+// currently impersonating a user in targetGuard. It is nil when no configured
+// actor guard can target this guard.
+func impersonationValidation(targetGuard string, overrides ...Options) contractshttp.Middleware {
+	users := make(map[string]repositories.UsersRepository)
+	gates := make(map[string]*services.Impersonation)
+	resolved := make(map[string]Options)
+	for _, opts := range GuardOptions() {
+		resolved[opts.Guard] = opts
+	}
+	for _, opts := range overrides {
+		resolved[opts.Guard] = opts
+	}
+	for _, opts := range resolved {
+		users[opts.Guard] = repositories.NewUsersWithTable(opts.UsersTable)
+		if !opts.EnableImpersonation {
+			continue
+		}
+		gate := services.NewImpersonation(opts.ImpersonationRoles, opts.ImpersonationTargetGuards, opts.ImpersonationProtectedRoles)
+		gates[opts.Guard] = gate
+	}
+	return middleware.ValidateImpersonationSession(targetGuard, users, gates)
 }
 
 // Protect returns the middleware chain that guards the HOST's own routes behind
@@ -219,7 +244,14 @@ func Protect(guard string) []contractshttp.Middleware {
 	if opts.EnableCSRF {
 		chain = append(chain, middleware.VerifyRequestOrigin(opts.TrustedOrigins))
 	}
-	return append(chain, middleware.Authenticated(guard, repo))
+	chain = append(chain, middleware.Authenticated(guard, repo))
+	if validate := impersonationValidation(guard); validate != nil {
+		chain = append(chain, validate)
+	}
+	if opts.EnableSessions {
+		chain = append(chain, middleware.TrackSession(guard, services.NewSessions(repositories.NewSessionsWithTable(opts.SessionsTable, opts.RememberTokensTable), opts.SessionActiveWindow)))
+	}
+	return chain
 }
 
 // ProtectRole is Protect plus a role gate: the authenticated user's role must be
@@ -227,11 +259,7 @@ func Protect(guard string) []contractshttp.Middleware {
 func ProtectRole(guard string, roles ...string) []contractshttp.Middleware {
 	opts := optionsByGuard(guard)
 	repo := repositories.NewUsersWithTable(opts.UsersTable)
-	chain := []contractshttp.Middleware{sessionmiddleware.StartSession()}
-	if opts.EnableCSRF {
-		chain = append(chain, middleware.VerifyRequestOrigin(opts.TrustedOrigins))
-	}
-	return append(chain, middleware.Authenticated(guard, repo), middleware.RequireRole(guard, repo, roles...))
+	return append(Protect(guard), middleware.RequireRole(guard, repo, roles...))
 }
 
 // ProtectToken guards a host route using only an API token from the named guard.
@@ -241,7 +269,7 @@ func ProtectToken(guard string, requiredScopes ...string) []contractshttp.Middle
 	users := repositories.NewUsersWithTable(opts.UsersTable)
 	var tokens *services.APITokens
 	if opts.EnableAPITokens {
-		tokens = services.NewAPITokens(repositories.NewAPITokensWithTable(opts.APITokensTable), users, nil, nil, opts.APITokenAllowedScopes, opts.APITokenMaxLifetime, opts.APITokenMaxPerUser)
+		tokens = services.NewAPITokens(repositories.NewAPITokensWithTable(opts.APITokensTable, opts.UsersTable), users, nil, nil, opts.APITokenAllowedScopes, opts.APITokenMaxLifetime, opts.APITokenMaxPerUser, !opts.KeepAPITokensOnPasswordChange)
 	}
 	return []contractshttp.Middleware{middleware.BearerAuthenticated(guard, tokens, users, requiredScopes...)}
 }
@@ -253,7 +281,7 @@ func ProtectAny(guard string, requiredScopes ...string) []contractshttp.Middlewa
 	users := repositories.NewUsersWithTable(opts.UsersTable)
 	var tokens *services.APITokens
 	if opts.EnableAPITokens {
-		tokens = services.NewAPITokens(repositories.NewAPITokensWithTable(opts.APITokensTable), users, nil, nil, opts.APITokenAllowedScopes, opts.APITokenMaxLifetime, opts.APITokenMaxPerUser)
+		tokens = services.NewAPITokens(repositories.NewAPITokensWithTable(opts.APITokensTable, opts.UsersTable), users, nil, nil, opts.APITokenAllowedScopes, opts.APITokenMaxLifetime, opts.APITokenMaxPerUser, !opts.KeepAPITokensOnPasswordChange)
 	}
 	chain := []contractshttp.Middleware{
 		middleware.UnlessBearer(sessionmiddleware.StartSession(), guard+".session"),
@@ -261,7 +289,15 @@ func ProtectAny(guard string, requiredScopes ...string) []contractshttp.Middlewa
 	if opts.EnableCSRF {
 		chain = append(chain, middleware.UnlessBearer(middleware.VerifyRequestOrigin(opts.TrustedOrigins), guard+".csrf"))
 	}
-	return append(chain, middleware.AuthenticateAny(guard, tokens, users, requiredScopes...))
+	chain = append(chain, middleware.AuthenticateAny(guard, tokens, users, requiredScopes...))
+	if validate := impersonationValidation(guard); validate != nil {
+		chain = append(chain, middleware.UnlessBearer(validate, guard+".impersonation"))
+	}
+	if opts.EnableSessions {
+		tracking := middleware.TrackSession(guard, services.NewSessions(repositories.NewSessionsWithTable(opts.SessionsTable, opts.RememberTokensTable), opts.SessionActiveWindow))
+		chain = append(chain, middleware.UnlessBearer(tracking, guard+".tracking"))
+	}
+	return chain
 }
 
 // AuthUserID returns the id of the user authenticated by Protect/ProtectRole on

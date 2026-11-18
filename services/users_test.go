@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -143,9 +144,11 @@ func TestUsersUpdate_DisableAndEnable(t *testing.T) {
 	svc := newUsersSvc(repo, nil)
 
 	disabled := true
+	previousCredentialEpoch := admin.PasswordChangedAt
 	got, err := svc.Update(context.Background(), admin.ID, "admin@example.com", "Admin", "admin", &disabled, uuid.Nil)
 	require.NoError(t, err)
 	assert.True(t, got.IsDisabled())
+	assert.True(t, got.PasswordChangedAt.After(previousCredentialEpoch), "disable must invalidate credentials permanently")
 
 	enabled := false
 	got, err = svc.Update(context.Background(), admin.ID, "admin@example.com", "Admin", "admin", &enabled, uuid.Nil)
@@ -217,4 +220,18 @@ func TestUsersGetByID_NotFound(t *testing.T) {
 	svc := newUsersSvc(newFakeRepo(), nil)
 	_, err := svc.GetByID(context.Background(), seedUser(newFakeRepo(), "x@example.com", "secret123").ID)
 	assert.ErrorIs(t, err, ErrNotFound)
+}
+
+func TestManagedEmailChangeClearsVerification(t *testing.T) {
+	repo := newFakeRepo()
+	user := seedUser(repo, "verified@example.com", "password123")
+	now := time.Now()
+	repo.byID[user.ID].EmailVerified = &now
+	svc := NewUsers(repo, fakeHasher{}, 8, nil, []string{"admin"}, nil, true)
+	updated, err := svc.Update(context.Background(), user.ID, user.Email, "New name", "", nil, uuid.Nil)
+	require.NoError(t, err)
+	require.NotNil(t, updated.EmailVerified)
+	updated, err = svc.Update(context.Background(), user.ID, "unverified@example.com", "New name", "", nil, uuid.Nil)
+	require.NoError(t, err)
+	require.Nil(t, updated.EmailVerified)
 }

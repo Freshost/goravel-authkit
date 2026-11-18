@@ -46,19 +46,23 @@ func NewSessions(repo repositories.SessionRepository, activeWindow time.Duration
 
 // Track records the row for a freshly established session (login / remember
 // login). It replaces any existing row for the same session id.
-func (s *Sessions) Track(ctx context.Context, sessionID string, userID uuid.UUID, ip, userAgent string) error {
+func (s *Sessions) Track(ctx context.Context, sessionID string, userID uuid.UUID, ip, userAgent string, rememberSelector ...string) error {
 	if sessionID == "" {
 		return nil
 	}
-	_ = s.repo.DeleteBySessionID(ctx, sessionID)
+	selector := ""
+	if len(rememberSelector) > 0 {
+		selector = rememberSelector[0]
+	}
 	now := time.Now().UTC()
 	if err := s.repo.Create(ctx, &models.AuthSession{
-		ID:           uuid.New(),
-		SessionID:    sessionID,
-		UserID:       userID,
-		IP:           ip,
-		UserAgent:    userAgent,
-		LastActiveAt: now,
+		ID:               uuid.New(),
+		SessionID:        sessionID,
+		RememberSelector: selector,
+		UserID:           userID,
+		IP:               ip,
+		UserAgent:        userAgent,
+		LastActiveAt:     now,
 	}); err != nil {
 		return errors.Join(ErrInternal, err)
 	}
@@ -114,7 +118,7 @@ func (s *Sessions) Terminate(ctx context.Context, userID, publicID uuid.UUID, cu
 	if row.SessionID == currentSessionID {
 		return errors.Join(ErrValidation, errors.New("cannot terminate the current session"))
 	}
-	if err := s.repo.DeleteByID(ctx, publicID); err != nil {
+	if err := s.repo.DeleteBySessionID(ctx, row.SessionID); err != nil {
 		return errors.Join(ErrInternal, err)
 	}
 	return nil

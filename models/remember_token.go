@@ -23,6 +23,8 @@ type RememberToken struct {
 	// mistaken for theft. Empty before the first rotation.
 	PreviousValidatorHash string     `gorm:"type:varchar(64);not null;default:''" json:"-"`
 	RotatedAt             *time.Time `gorm:"type:timestamptz" json:"-"`
+	CredentialStamp       *time.Time `gorm:"type:timestamptz" json:"-"`
+	SessionID             string     `gorm:"type:varchar(255);not null;default:'';index" json:"-"`
 	ExpiresAt             time.Time  `gorm:"type:timestamptz;not null" json:"expiresAt"`
 	CreatedAt             time.Time  `json:"createdAt"`
 }

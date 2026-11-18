@@ -1,0 +1,73 @@
+--- a/src/main/java/net/openid/conformance/condition/client/AbstractBuildRequestObjectRedirectToAuthorizationEndpoint.java
++++ b/src/main/java/net/openid/conformance/condition/client/AbstractBuildRequestObjectRedirectToAuthorizationEndpoint.java
+@@ -87,7 +87,9 @@
+ 			}
+ 
+ 			if (includeDuplicates) {
++				// Keep response transport available when the OP rejects the optional Request Object.
+ 				if (REQUIRED_DUPLICATES.contains(key)
++					|| key.equals("response_mode")
+ 					|| requestObjectValue == null
+ 					|| !requestParameterValue.equals(requestObjectValue)) {
+ 					params.put(key, requestParameterValue);
+--- a/src/test/java/net/openid/conformance/condition/client/BuildRequestObjectByValueRedirectToAuthorizationEndpoint_UnitTest.java
++++ b/src/test/java/net/openid/conformance/condition/client/BuildRequestObjectByValueRedirectToAuthorizationEndpoint_UnitTest.java
+@@ -154,7 +154,37 @@
+ 		assertThat(redirectUriParams.get("redirect_uri")).containsExactly(UriUtils.encodeQueryParam("https://client.example.org/cb", Charset.defaultCharset().name()));
+ 		assertThat(redirectUriParams.get("state")).isNull();
+ 		assertThat(redirectUriParams.get("nonce")).isNull();
+-
++		assertThat(redirectUriParams.get("response_mode")).isNull();
++
++	}
++
++	@Test
++	public void testEvaluate_preservesOuterResponseModeWhenDuplicatedInRequestObject() {
++		authorizationEndpointRequest.addProperty("response_mode", "form_post");
++		env.putObject("authorization_endpoint_request", authorizationEndpointRequest);
++		env.putString("request_object", requestObject);
++		env.putObject("request_object_claims", requestObjectClaims);
++		env.putObject("server", server);
++
++		cond.execute(env);
++
++		var query = UriComponentsBuilder.fromUriString(env.getString("redirect_to_authorization_endpoint")).build().getQueryParams();
++		assertThat(query.get("response_mode")).containsExactly("form_post");
++	}
++
++	@Test
++	public void testEvaluate_doesNotInventOuterResponseModeFromRequestObject() {
++		requestObjectClaims = authorizationEndpointRequest.deepCopy();
++		requestObjectClaims.addProperty("response_mode", "form_post");
++		env.putObject("authorization_endpoint_request", authorizationEndpointRequest);
++		env.putString("request_object", requestObject);
++		env.putObject("request_object_claims", requestObjectClaims);
++		env.putObject("server", server);
++
++		cond.execute(env);
++
++		var query = UriComponentsBuilder.fromUriString(env.getString("redirect_to_authorization_endpoint")).build().getQueryParams();
++		assertThat(query).doesNotContainKey("response_mode");
+ 	}
+ 
+ 	/**
+--- a/src/test/java/net/openid/conformance/condition/client/BuildRequestObjectByReferenceRedirectToAuthorizationEndpointWithoutDuplicatesReorderedParams_UnitTest.java
++++ b/src/test/java/net/openid/conformance/condition/client/BuildRequestObjectByReferenceRedirectToAuthorizationEndpointWithoutDuplicatesReorderedParams_UnitTest.java
+@@ -46,6 +46,17 @@
+ 	}
+ 
+ 	@Test
++	public void testResponseModeIsNotDuplicatedForJarRequests() {
++		setupEnvironment("https://wallet.example.com/authorize", "https://verifier.example.com", "urn:ietf:params:oauth:request_uri:abc123");
++		env.getObject("authorization_endpoint_request").addProperty("response_mode", "form_post");
++		env.getObject("request_object_claims").addProperty("response_mode", "form_post");
++
++		cond.execute(env);
++
++		assertTrue(!env.getString("redirect_to_authorization_endpoint").contains("response_mode="));
++	}
++
++	@Test
+ 	public void testReverseAlphabeticalOrder() {
+ 		setupEnvironment("https://wallet.example.com/authorize", "https://verifier.example.com", "urn:ietf:params:oauth:request_uri:abc123");
+ 

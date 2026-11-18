@@ -27,7 +27,7 @@ func (r *CreateAuthRememberTokens) Up() error {
 		table.String("selector", 64)
 		table.String("validator_hash", 64)
 		table.TimestampTz("expires_at")
-		table.TimestampTz("created_at").UseCurrent()
+		table.TimestampTz("created_at", 6).UseCurrent()
 		table.Unique("selector")
 		table.Index("user_id")
 		table.Index("expires_at")

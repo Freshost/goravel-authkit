@@ -2,6 +2,9 @@ package feature
 
 import (
 	"bytes"
+	"context"
+	"github.com/freshost/goravel-authkit/repositories"
+	"github.com/freshost/goravel-authkit/services"
 	"net/http"
 	"testing"
 	"time"
@@ -98,4 +101,50 @@ func (s *RememberTestSuite) TestDisabledAccountRememberRefused() {
 	resp, err := s.Http(t).WithCookie(remember).Get("/api/v1/auth/me")
 	s.Require().NoError(err)
 	resp.AssertStatus(http.StatusUnauthorized)
+}
+
+func (s *RememberTestSuite) TestPasswordEpochInvalidatesRememberCookieWithoutCleanup() {
+	t := s.T()
+	remember := s.loginRemember()
+
+	// Simulate the atomic part of an admin password reset. Even if deleting the
+	// remember row later fails, the credential epoch alone must reject the cookie.
+	_, err := facades.Orm().Query().Model(&authmodels.User{}).
+		Where("email", s.email).Update("password_changed_at", time.Now().Add(time.Second).UTC())
+	s.Require().NoError(err)
+
+	resp, err := s.Http(t).WithCookie(remember).Get("/api/v1/auth/me")
+	s.Require().NoError(err)
+	resp.AssertStatus(http.StatusUnauthorized)
+}
+
+func (s *RememberTestSuite) TestRemoteSignOutRevokesPersistentCredential() {
+	remember := s.loginRemember()
+	restored, err := s.Http(s.T()).WithCookie(remember).Get("/api/v1/auth/me")
+	s.Require().NoError(err)
+	restored.AssertOk()
+	remember = restored.Cookie("authkit_remember")
+	s.Require().NotNil(remember)
+	var user authmodels.User
+	s.Require().NoError(facades.Orm().Query().Where("email", s.email).First(&user))
+	sessions := repositories.NewSessions()
+	s.Require().NoError(sessions.DeleteByUser(context.Background(), user.ID))
+	for i := 0; i < 2; i++ {
+		denied, err := s.Http(s.T()).WithCookie(remember).Get("/api/v1/auth/me")
+		s.Require().NoError(err)
+		denied.AssertUnauthorized()
+	}
+}
+func (s *RememberTestSuite) TestRememberCannotBorrowPasswordResetEpoch() {
+	var verified authmodels.User
+	s.Require().NoError(facades.Orm().Query().Where("email", s.email).First(&verified))
+	repo := repositories.NewUsers()
+	s.Require().NoError(repo.UpdatePassword(context.Background(), verified.ID, *verified.PasswordHash, time.Now()))
+	remember := services.NewRemember(repositories.NewRemember(), time.Hour)
+	// Issued after reset, using only the password proof captured before reset.
+	value, err := remember.IssueVerified(context.Background(), verified.ID, verified.PasswordChangedAt, "late-proof-"+uuid.NewString())
+	s.Require().NoError(err)
+	response, err := s.Http(s.T()).WithCookie(&http.Cookie{Name: "authkit_remember", Value: value}).Get("/api/v1/auth/me")
+	s.Require().NoError(err)
+	response.AssertUnauthorized()
 }
