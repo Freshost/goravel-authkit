@@ -93,7 +93,7 @@ func (s *TwoFactor) Enable(ctx context.Context, id uuid.UUID) (*Enrollment, erro
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, twoFactorMutationError(err)
 	}
 
 	return &Enrollment{Secret: key.Secret(), OtpauthURL: key.URL()}, nil
@@ -129,7 +129,7 @@ func (s *TwoFactor) Confirm(ctx context.Context, id uuid.UUID, code string) ([]s
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, twoFactorMutationError(err)
 	}
 
 	return plain, nil
@@ -296,8 +296,11 @@ func (s *TwoFactor) RegenerateRecoveryCodes(ctx context.Context, id uuid.UUID) (
 		u.TwoFactorRecoveryCodes = &enc
 		return nil
 	})
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrTwoFactorNotEnrolled
+	}
 	if err != nil {
-		return nil, err
+		return nil, twoFactorMutationError(err)
 	}
 
 	return plain, nil
