@@ -92,8 +92,8 @@ jobs:
       - name: Start Authkit host
         working-directory: demo
         env:
-          OIDF_TLS_CERT: ${{ github.workspace }}/.oidf-suite.crt
-          OIDF_TLS_KEY: ${{ github.workspace }}/.oidf-suite.key
+          OIDF_TLS_CERT: ${{ runner.temp }}/oidf.crt
+          OIDF_TLS_KEY: ${{ runner.temp }}/oidf.key
         run: '"$RUNNER_TEMP/authkit-oidf" > "$RUNNER_TEMP/authkit-oidf.log" 2>&1 &'
       - name: Start suite with request transport fix
         run: >-
