@@ -104,10 +104,12 @@ jobs:
       - name: Run official Config and Basic OP plans
         run: |
           mkdir -p oidf-results
+          jq '.client = {client_id: "oidf-public", scope: "openid profile email"}' .ci/oidf/config.json > .ci/oidf/public.json
           python "$RUNNER_TEMP/oidf/scripts/run-test-plan.py" --no-parallel --export-dir oidf-results \
             oidcc-config-certification-test-plan .ci/oidf/config.json \
             'oidcc-basic-certification-test-plan[server_metadata=discovery][client_registration=static_client]' .ci/oidf/config.json \
-            'oidcc-formpost-basic-certification-test-plan[server_metadata=discovery][client_registration=static_client]' .ci/oidf/config.json
+            'oidcc-formpost-basic-certification-test-plan[server_metadata=discovery][client_registration=static_client]' .ci/oidf/config.json \
+            'oidcc-test-plan[client_auth_type=none][response_type=code][response_mode=default][client_registration=static_client]:oidcc-ensure-request-with-valid-pkce-succeeds' .ci/oidf/public.json
       - name: Export suite diagnostics
         if: always()
         run: |

@@ -7,7 +7,22 @@ import (
 
 // Migrations is registered only when the provider is enabled. Hosts owning
 // migration registration may explicitly include it alongside Authkit migrations.
-func Migrations() []schema.Migration { return []schema.Migration{&providerMigration{}} }
+func Migrations() []schema.Migration {
+	return []schema.Migration{&providerMigration{}, &clientPKCEPolicyMigration{}}
+}
+
+type clientPKCEPolicyMigration struct{}
+
+func (*clientPKCEPolicyMigration) Signature() string { return "authkit_oidc_client_pkce_20261118" }
+func (*clientPKCEPolicyMigration) Up() error {
+	if !facades.Schema().HasTable(clientsTable) || facades.Schema().HasColumn(clientsTable, "require_pkce") {
+		return nil
+	}
+	return facades.Schema().Table(clientsTable, func(t schema.Blueprint) {
+		t.Boolean("require_pkce").Nullable()
+	})
+}
+func (*clientPKCEPolicyMigration) Down() error { return nil }
 
 type providerMigration struct{}
 

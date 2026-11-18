@@ -71,21 +71,25 @@
           ]
         },
         {
+          "task": "Approve requested scopes",
+          "match": "https://localhost.emobix.co.uk:9443/oidc/interaction*",
+          "optional": true,
+          "commands": [
+            [
+              "click",
+              "css",
+              "button[value=\"approve\"]"
+            ]
+          ]
+        },
+        {
           "task": "Complete authorization",
-          "match": "https://localhost.emobix.co.uk:8443/test/*/callback*"
+          "match": "https://localhost.emobix.co.uk:8443/test/*/callback*",
+          "optional": true
         }
       ]
     }
   ],
-  "override": {
-    "oidcc-server-client-secret-post": {
-      "client": {
-        "client_id": "oidf-post",
-        "client_secret": "oidf-isolated-client-secret-not-for-production",
-        "scope": "openid profile email"
-      }
-    }
-  },
   "options": {
     "browsercontrol_css_enable": false
   }
