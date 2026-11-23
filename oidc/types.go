@@ -34,6 +34,7 @@ type Config struct {
 	Issuer                  string
 	Guard                   string
 	LoginURL                string
+	ConsentTemplate         string // Optional, trusted html/template source for the consent page.
 	SigningKeyID            string
 	SigningKeysJSON         string
 	EncryptionKeyID         string

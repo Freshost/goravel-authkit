@@ -31,6 +31,7 @@ func OIDCProviderConfig() oidc.Config {
 	base := "authkit.oidc.provider."
 	c := oidc.Config{Enabled: true, Issuer: cfg.GetString(base + "issuer"), Guard: cfg.GetString(base + "guard"), LoginURL: cfg.GetString(base + "login_url"), SigningKeyID: cfg.GetString(base + "signing_key_id"), SigningKeysJSON: cfg.GetString(base + "signing_keys"), EncryptionKeyID: cfg.GetString(base + "encryption_key_id"), EncryptionKeys: map[string]string{}, Scopes: toStringSlice(cfg.Get(base + "scopes")), AllowInsecureLoopback: cfg.GetBool(base+"allow_insecure_loopback", false)}
 	c.AllowedOrigins = toStringSlice(cfg.Get(base + "cors.allowed_origins"))
+	c.ConsentTemplate = cfg.GetString(base + "consent_template")
 	if values, ok := cfg.Get(base + "encryption_keys").(map[string]any); ok {
 		for k, v := range values {
 			if value, ok := v.(string); ok {

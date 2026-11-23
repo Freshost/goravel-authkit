@@ -8,6 +8,13 @@ While the package is pre-1.0, minor versions may contain breaking changes.
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-23
+
+### Added
+
+- Optional OIDC consent HTML template with escaped client, account and scope
+  data and CSP support for same-origin stylesheets.
+
 ## [0.9.0] - 2026-11-18
 
 ### Added
@@ -250,7 +257,8 @@ set — in one Goravel app, while a single-domain app keeps working unchanged.
 - Initial release: session-based auth, user management, TOTP two-factor, audit log,
   remember-me, active-session tracking — single guard.
 
-[Unreleased]: https://github.com/Freshost/goravel-authkit/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/Freshost/goravel-authkit/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/Freshost/goravel-authkit/releases/tag/v0.10.0
 [0.9.0]: https://github.com/Freshost/goravel-authkit/releases/tag/v0.9.0
 [0.8.0]: https://github.com/Freshost/goravel-authkit/releases/tag/v0.8.0
 [0.7.0]: https://github.com/Freshost/goravel-authkit/releases/tag/v0.7.0

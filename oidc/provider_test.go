@@ -496,6 +496,95 @@ func TestConsentCannotChangeAccountOrAuthentication(t *testing.T) {
 	require.Equal(t, "authorized", approved.next)
 }
 
+func TestConsentTemplates(t *testing.T) {
+	const custom = `<link rel="stylesheet" href="/assets/oidc-consent.css">
+<h1>Connect to {{.ClientName}}</h1><p>{{.Account}}</p>
+<ul>{{range .Scopes}}<li>{{.}}</li>{{end}}</ul>
+<form method="post" action="{{.Action}}">
+<input type="hidden" name="id" value="{{.RequestID}}">
+<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+<button name="decision" value="approve">Connect</button>
+<button name="decision" value="deny">Cancel</button>
+</form>`
+	for _, tc := range []struct {
+		name, source, heading, scope string
+	}{
+		{"default", "", "<h1>Authorize Example &lt;app&gt;</h1>", "Requested scopes: openid"},
+		{"custom", custom, "<h1>Connect to Example &lt;app&gt;</h1>", "<li>openid</li>"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fixture, browser, users := testProvider(t)
+			cfg := fixture.Service.config
+			cfg.ConsentTemplate = tc.source
+			p, err := New(cfg, fixture.Service.store, users, testHasher{})
+			require.NoError(t, err)
+			client, err := p.Service.store.Client(t.Context(), "public", false)
+			require.NoError(t, err)
+			client.Name = "Example <app>"
+			require.NoError(t, p.Service.RegisterClient(t.Context(), *client, ""))
+
+			for _, decision := range []string{"deny", "approve"} {
+				id, verifier := authorize(t, p, browser, url.Values{"prompt": {"consent"}, "scope": {"openid profile"}})
+				page := request(p, browser, http.MethodGet, "/interaction?id="+id, nil)
+				fields := formFields(t, page)
+				require.Equal(t, id, fields.Get("id"))
+				require.NotEmpty(t, fields.Get("csrf_token"))
+				require.Contains(t, page.Body.String(), tc.heading)
+				require.Contains(t, page.Body.String(), tc.scope)
+				require.Contains(t, page.Body.String(), users.user.Email)
+				require.Contains(t, page.Body.String(), `method="post" action="`+p.Issuer()+`/interaction"`)
+				require.Contains(t, page.Body.String(), `name="decision" value="`+decision+`"`)
+				csp := "default-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
+				if tc.source != "" {
+					csp += "; style-src 'self'"
+					require.Contains(t, page.Body.String(), `href="/assets/oidc-consent.css"`)
+				}
+				require.Equal(t, csp, page.Header().Get("Content-Security-Policy"))
+				require.Equal(t, "DENY", page.Header().Get("X-Frame-Options"))
+				require.Equal(t, "no-store", page.Header().Get("Cache-Control"))
+
+				fields.Set("decision", decision)
+				other := browser
+				other.Binding = "different-browser"
+				require.Equal(t, 400, request(p, other, http.MethodPost, "/interaction", fields).Code)
+				badCSRF := url.Values{"decision": {"approve"}, "id": {id}, "csrf_token": {"invalid"}}
+				require.Equal(t, 400, request(p, browser, http.MethodPost, "/interaction", badCSRF).Code)
+
+				res := request(p, browser, http.MethodPost, "/interaction", fields)
+				require.Equal(t, 302, res.Code)
+				callback, err := url.Parse(res.Header().Get("Location"))
+				require.NoError(t, err)
+				require.Equal(t, "opaque-state", callback.Query().Get("state"))
+				code := callback.Query().Get("code")
+				if decision == "deny" {
+					require.Equal(t, "access_denied", callback.Query().Get("error"))
+					require.Empty(t, code)
+					continue
+				}
+				require.NotEmpty(t, code)
+				require.Equal(t, 400, exchange(p, code, strings.Repeat("w", 43), "public").Code)
+				tokens(t, exchange(p, code, verifier, "public"))
+			}
+		})
+	}
+}
+
+func TestInvalidConsentTemplate(t *testing.T) {
+	p, b, users := testProvider(t)
+	cfg := p.Service.config
+	cfg.ConsentTemplate = "{{if}}"
+	_, err := New(cfg, p.Service.store, users, testHasher{})
+	require.ErrorIs(t, err, ErrValidation)
+
+	cfg.ConsentTemplate = "<p>Partial page</p>{{.UnknownField}}"
+	custom, err := New(cfg, p.Service.store, users, testHasher{})
+	require.NoError(t, err)
+	id, _ := authorize(t, custom, b, url.Values{"prompt": {"consent"}})
+	page := request(custom, b, http.MethodGet, "/interaction?id="+id, nil)
+	require.Equal(t, 500, page.Code)
+	require.Equal(t, "Unable to render the consent page\n", page.Body.String())
+}
+
 func TestBackendErrorsFailClosed(t *testing.T) {
 	p, b, u := testProvider(t)
 	code, v := authorizeCode(t, p, b, nil)

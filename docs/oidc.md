@@ -179,6 +179,57 @@ CORS origins are configured separately and do not enable cookies. UserInfo accep
 a Bearer header or an encoded POST body token, rejects query tokens and multiple
 credential transports, and returns RFC 6750 challenges for invalid credentials.
 
+### Custom consent page
+
+Set `authkit.oidc.provider.consent_template` to trusted Go `html/template`
+source. Omit the setting or use an empty string for the built-in page. To
+embed a file beside `config/authkit.go`, add this to the config package.
+
+```go
+import _ "embed"
+
+//go:embed oidc-consent.html
+var oidcConsentTemplate string
+```
+
+Add `"consent_template": oidcConsentTemplate,` to the existing `oidc.provider`
+map. Use the following as `config/oidc-consent.html`.
+
+```html
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Authorize application</title>
+  <link rel="stylesheet" href="/assets/oidc-consent.css">
+</head>
+<body>
+  <main>
+    <h1>Authorize {{.ClientName}}</h1>
+    <p>Signed in as {{.Account}}</p>
+    <ul>{{range .Scopes}}<li>{{.}}</li>{{end}}</ul>
+    <form method="post" action="{{.Action}}">
+      <input type="hidden" name="id" value="{{.RequestID}}">
+      <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+      <button type="submit" name="decision" value="approve">Allow access</button>
+      <button type="submit" name="decision" value="deny">Deny</button>
+    </form>
+  </main>
+</body>
+</html>
+```
+
+`Account` is the authenticated email address and `Scopes` is a string slice.
+Keep the form action, method and field names in the example. Authkit validates
+the session, authorization request and CSRF token, processes the decision,
+and checks PKCE at code exchange.
+
+Serve `/assets/oidc-consent.css` with `Content-Type: text/css` on the issuer's
+origin. The custom page's CSP allows same-origin stylesheets and same-origin
+form submissions. It blocks inline styles, scripts, remote stylesheets,
+images, web fonts and framing. Template data is escaped by `html/template`.
+
 ## Protect API routes
 
 ```go

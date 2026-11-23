@@ -1,6 +1,7 @@
 package oidc
 
 import (
+	"bytes"
 	"context"
 	"crypto/rsa"
 	"encoding/base64"
@@ -23,10 +24,12 @@ import (
 // Provider adapts the protocol SDK to Authkit services. The SDK and its types
 // are implementation details; host applications use Config, Client and Service.
 type Provider struct {
-	protocol *op.Provider
-	Service  *Service
-	storage  *storage
-	path     string
+	protocol   *op.Provider
+	Service    *Service
+	storage    *storage
+	path       string
+	consent    *template.Template
+	consentCSP string
 }
 
 func New(c Config, store Store, users UserStore, hasher PasswordHasher) (*Provider, error) {
@@ -39,6 +42,16 @@ func New(c Config, store Store, users UserStore, hasher PasswordHasher) (*Provid
 	}
 	if store == nil || users == nil || hasher == nil {
 		return nil, ErrValidation
+	}
+	consent := consentPage
+	consentCSP := "default-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
+	if c.ConsentTemplate != "" {
+		var err error
+		consent, err = template.New("consent").Parse(c.ConsentTemplate)
+		if err != nil {
+			return nil, fmt.Errorf("%w: consent template: %v", ErrValidation, err)
+		}
+		consentCSP += "; style-src 'self'"
 	}
 	s := &storage{service: newService(c, store, users, hasher)}
 	var set jose.JSONWebKeySet
@@ -98,7 +111,7 @@ func New(c Config, store Store, users UserStore, hasher PasswordHasher) (*Provid
 		return nil, fmt.Errorf("OIDC provider initialization failed: %w", err)
 	}
 	u, _ := url.Parse(c.Issuer)
-	return &Provider{protocol: sdk, Service: s.service, storage: s, path: u.Path}, nil
+	return &Provider{protocol: sdk, Service: s.service, storage: s, path: u.Path, consent: consent, consentCSP: consentCSP}, nil
 }
 
 func (p *Provider) Issuer() string { return p.Service.config.Issuer }
@@ -403,7 +416,16 @@ func parseSubject(value string) (uuid.UUID, error) {
 	return id, nil
 }
 
-var consentPage = template.Must(template.New("consent").Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Authorize application</title><main><h1>Authorize {{.Name}}</h1><p>Continue as {{.Account}}?</p><p>Requested scopes: {{.Scopes}}</p><form method="post" action="{{.Action}}"><input type="hidden" name="id" value="{{.ID}}"><input type="hidden" name="csrf_token" value="{{.CSRF}}"><button name="decision" value="approve">Allow access</button><button name="decision" value="deny">Deny</button></form></main></html>`))
+type consentView struct {
+	ClientName string
+	Account    string
+	Scopes     []string
+	Action     string
+	RequestID  string
+	CSRFToken  string
+}
+
+var consentPage = template.Must(template.New("consent").Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Authorize application</title><main><h1>Authorize {{.ClientName}}</h1><p>Continue as {{.Account}}?</p><p>Requested scopes: {{range $i, $scope := .Scopes}}{{if $i}} {{end}}{{$scope}}{{end}}</p><form method="post" action="{{.Action}}"><input type="hidden" name="id" value="{{.RequestID}}"><input type="hidden" name="csrf_token" value="{{.CSRFToken}}"><button name="decision" value="approve">Allow access</button><button name="decision" value="deny">Deny</button></form></main></html>`))
 
 func (p *Provider) interact(w http.ResponseWriter, r *http.Request) {
 	b := browserFrom(r.Context())
@@ -425,10 +447,23 @@ func (p *Provider) interact(w http.ResponseWriter, r *http.Request) {
 		login.RawQuery = query.Encode()
 		http.Redirect(w, r, login.String(), http.StatusFound)
 	case "consent":
+		view := consentView{
+			ClientName: result.client.Name,
+			Account:    result.user.Email,
+			Scopes:     result.request.row.Scopes,
+			Action:     p.Issuer() + "/interaction",
+			RequestID:  result.request.GetID(),
+			CSRFToken:  result.csrf,
+		}
+		var body bytes.Buffer
+		if err := p.consent.Execute(&body, view); err != nil {
+			http.Error(w, "Unable to render the consent page", http.StatusInternalServerError)
+			return
+		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Header().Set("Content-Security-Policy", "default-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
+		w.Header().Set("Content-Security-Policy", p.consentCSP)
 		w.Header().Set("X-Frame-Options", "DENY")
-		_ = consentPage.Execute(w, struct{ Name, Account, Scopes, ID, CSRF, Action string }{result.client.Name, result.user.Email, strings.Join(result.request.row.Scopes, " "), result.request.GetID(), result.csrf, p.Issuer() + "/interaction"})
+		_, _ = body.WriteTo(w)
 	case "authorized":
 		p.authorizationResponse(w, r, result.request)
 	}

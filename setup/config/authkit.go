@@ -64,6 +64,7 @@ func init() {
 				"guard":                             "admin",
 				"issuer":                            "",
 				"login_url":                         "/login",
+				"consent_template":                  "", // Optional HTML template source. See docs/oidc.md.
 				"signing_key_id":                    "",
 				"signing_keys":                      config.Env("AUTHKIT_OIDC_SIGNING_KEYS", ""),
 				"encryption_key_id":                 "",
